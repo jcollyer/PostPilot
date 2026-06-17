@@ -1,0 +1,26 @@
+{
+  "name": "@saas/api",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./trpc": "./src/trpc.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf node_modules .turbo"
+  },
+  "dependencies": {
+    "@saas/db": "*",
+    "@saas/types": "*",
+    "@trpc/server": "^11.0.0-rc.660",
+    "superjson": "^2.2.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@saas/config": "*",
+    "typescript": "^5.6.3"
+  }
+}

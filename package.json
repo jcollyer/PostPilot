@@ -1,0 +1,41 @@
+{
+  "name": "saas-template",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm --workspace=@saas/web run dev",
+    "mobile": "npm --workspace=@saas/mobile exec -- expo start --clear",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "postinstall": "prisma generate --schema=packages/db/prisma/schema.prisma",
+    "db:migrate": "dotenv -e .env -- prisma migrate dev --schema=packages/db/prisma/schema.prisma",
+    "db:migrate:deploy": "dotenv -e .env -- prisma migrate deploy --schema=packages/db/prisma/schema.prisma",
+    "db:push": "dotenv -e .env -- prisma db push --schema=packages/db/prisma/schema.prisma",
+    "db:studio": "dotenv -e .env -- prisma studio --schema=packages/db/prisma/schema.prisma",
+    "db:seed": "dotenv -e .env -- tsx packages/db/prisma/seed.ts",
+    "ngrok": "ngrok http --url=jointly-topical-leech.ngrok-free.app 3000"
+  },
+  "devDependencies": {
+    "dotenv-cli": "^7.4.4",
+    "prettier": "^3.3.3",
+    "prettier-plugin-tailwindcss": "^0.6.8",
+    "prisma": "^5.22.0",
+    "tsx": "^4.19.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@10.9.0",
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}
