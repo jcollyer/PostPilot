@@ -14,12 +14,17 @@ generator client {
   // Include the Vercel/Lambda Linux engine alongside the local native engine
   // so the same generated client runs locally and on serverless hosts.
   binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  // postgresqlExtensions lets Prisma manage the pgvector extension declared on
+  // the datasource below.
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  // pgvector (built into Neon) backs duplicate detection + smart ordering.
+  extensions = [vector]
 }
 
 // ----------------------------------------------------------------------------
@@ -32,10 +37,25 @@ model User {
   email         String    @unique
   emailVerified Boolean   @default(false)
   image         String?
+  // IANA timezone (e.g. "America/Los_Angeles") used to interpret schedules.
+  timezone      String    @default("UTC")
+  // E.164 phone for urgent SMS alerts (opt-in; see Notification).
+  phoneNumber   String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+
+  // Auth
+  sessions Session[]
+  accounts Account[]
+
+  // Product
+  platformConnections PlatformConnection[]
+  videos              Video[]
+  categories          Category[]
+  uploadSessions      UploadSession[]
+  queue               Queue?
+  notifications       Notification[]
+  devices             Device[]
 
   @@map("user")
 }
@@ -88,4 +108,506 @@ model Verification {
 
   @@index([identifier])
   @@map("verification")
+}
+
+// ----------------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------------
+
+/// The only three supported destinations. Nothing else, by design.
+enum Platform {
+  TIKTOK
+  INSTAGRAM
+  YOUTUBE
+}
+
+/// Health of a connected platform account. NEEDS_RECONNECT triggers per-platform
+/// graceful degradation: that platform's publishing pauses and its videos are
+/// held, while other platforms keep going.
+enum ConnectionStatus {
+  ACTIVE
+  NEEDS_RECONNECT
+  PAUSED
+  DISCONNECTED
+}
+
+/// Lifecycle of an uploaded video file (storage/transcode), independent of the
+/// AI analysis pipeline.
+enum MediaStatus {
+  UPLOADING
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// Progress of the AI pipeline (transcription, metadata, embeddings, dedupe).
+enum AiPipelineStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+/// User-controlled global queue state. Per-platform pausing is expressed via
+/// ConnectionStatus, not here.
+enum QueueStatus {
+  ACTIVE
+  PAUSED
+}
+
+/// A queue slot's state across all of its platform publish tasks.
+enum QueueItemStatus {
+  PENDING
+  SCHEDULED
+  PUBLISHING
+  COMPLETED
+  HELD
+  SKIPPED
+  CANCELED
+}
+
+/// State of a single platform's publish of a queue item (the unit behind the
+/// Publish(Video) interface).
+enum PublishStatus {
+  PENDING
+  SCHEDULED
+  PROCESSING
+  PUBLISHED
+  FAILED
+  HELD
+  SKIPPED
+}
+
+enum DuplicateType {
+  EXACT
+  NEAR
+  TRIMMED
+  REEXPORT
+}
+
+enum DuplicateMethod {
+  PHASH
+  EMBEDDING
+}
+
+enum NotificationType {
+  RECONNECT_REQUIRED
+  CONTENT_REJECTED
+  PUBLISH_FAILED
+  QUEUE_LOW
+  QUEUE_EMPTY
+  QUEUE_RESUMED
+  SYSTEM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  SUPPRESSED
+}
+
+enum NotificationChannel {
+  EMAIL
+  PUSH
+  SMS
+}
+
+enum DeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+}
+
+// ----------------------------------------------------------------------------
+// Platform connections
+// ----------------------------------------------------------------------------
+
+/// One connected social account. OAuth credentials are stored as ciphertext
+/// (encrypted in the app layer, chunk 3) — never plaintext. TikTok rotates its
+/// refresh token on every use, so `refreshToken` is overwritten on rotation.
+model PlatformConnection {
+  id        String           @id @default(cuid())
+  userId    String
+  platform  Platform
+  status    ConnectionStatus @default(ACTIVE)
+
+  // Identity on the platform.
+  externalAccountId String
+  username          String?
+  displayName       String?
+
+  // Encrypted OAuth material.
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  tokenType             String?
+  scope                 String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+
+  // Operational state.
+  lastRefreshedAt    DateTime?
+  needsReconnectSince DateTime?
+  lastError          String?  @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  publishTasks PublishTask[]
+
+  @@unique([userId, platform, externalAccountId])
+  @@index([userId])
+  @@index([status])
+}
+
+// ----------------------------------------------------------------------------
+// Media library
+// ----------------------------------------------------------------------------
+
+/// A batch of videos uploaded together. Powers "generate metadata for the whole
+/// session with one click".
+model UploadSession {
+  id         String   @id @default(cuid())
+  userId     String
+  label      String?
+  videoCount Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos Video[]
+
+  @@index([userId])
+}
+
+/// AI-generated collection (Travel, Drone, Sunsets, …) used for filtering and
+/// for building queues.
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  slug      String
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videos Video[]
+
+  @@unique([userId, slug])
+  @@index([userId])
+}
+
+/// The core content object. Holds storage pointers, base metadata, AI outputs,
+/// and the embedding/pHash used for duplicate detection and smart ordering.
+///
+/// NOTE: `embedding` is a pgvector column. Prisma can't read/write `Unsupported`
+/// types through the client — use raw SQL ($queryRaw / $executeRaw) for vector
+/// reads, similarity search, and writes.
+model Video {
+  id     String      @id @default(cuid())
+  userId String
+  status MediaStatus @default(UPLOADING)
+
+  // Storage (Cloudflare R2 + CDN). The file is uploaded direct-to-storage; the
+  // app only records these pointers.
+  storageKey       String
+  cdnUrl           String?
+  originalFilename String?
+  mimeType         String?
+  fileSize         BigInt?
+
+  // Media properties.
+  durationSec Float?
+  width       Int?
+  height      Int?
+
+  // Cover image (optional, user-provided) + AI-selected thumbnail frame.
+  coverImageKey       String?
+  coverImageUrl       String?
+  selectedThumbnailId String? @unique
+
+  // Base metadata (platform-agnostic). Per-platform overrides live in
+  // VideoPlatformMeta.
+  title    String?
+  caption  String? @db.Text
+  hashtags String[]
+
+  // AI pipeline outputs.
+  transcript     String?          @db.Text
+  aiStatus       AiPipelineStatus @default(PENDING)
+  aiProcessedAt  DateTime?
+  categoryId     String?
+
+  // Duplicate detection / smart ordering.
+  pHash       String?
+  embedding   Unsupported("vector(1536)")?
+  isDuplicate Boolean                      @default(false)
+  duplicateOfId String?
+
+  uploadSessionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category          Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  uploadSession     UploadSession?      @relation(fields: [uploadSessionId], references: [id], onDelete: SetNull)
+  // onUpdate: NoAction breaks the referential-action cycle Prisma would
+  // otherwise detect between Video and ThumbnailCandidate (cuid ids never
+  // update, so this is purely to satisfy the validator).
+  selectedThumbnail ThumbnailCandidate? @relation("SelectedThumbnail", fields: [selectedThumbnailId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+
+  // onUpdate: NoAction breaks the self-relation cycle on this self reference.
+  duplicateOf Video?  @relation("VideoDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  duplicates  Video[] @relation("VideoDuplicates")
+
+  platformMeta        VideoPlatformMeta[]
+  thumbnailCandidates ThumbnailCandidate[] @relation("VideoThumbnails")
+  queueItems          QueueItem[]
+  matchSources        DuplicateMatch[]     @relation("MatchSource")
+  matchTargets        DuplicateMatch[]     @relation("MatchTarget")
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([categoryId])
+  @@index([uploadSessionId])
+  @@index([duplicateOfId])
+}
+
+/// Platform-specific metadata override. Captions are optimized per platform
+/// rather than reused verbatim.
+model VideoPlatformMeta {
+  id        String   @id @default(cuid())
+  videoId   String
+  platform  Platform
+  title     String?
+  caption   String?  @db.Text
+  hashtags  String[]
+  // Whether this row was AI-generated and whether the user has edited it.
+  aiGenerated Boolean @default(false)
+  edited      Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, platform])
+  @@index([videoId])
+}
+
+/// Candidate thumbnail frames extracted by ffmpeg, scored by the AI. The chosen
+/// one is referenced by Video.selectedThumbnailId.
+model ThumbnailCandidate {
+  id          String  @id @default(cuid())
+  videoId     String
+  storageKey  String
+  url         String?
+  frameTimeSec Float
+  score       Float?
+  createdAt   DateTime @default(now())
+
+  video         Video  @relation("VideoThumbnails", fields: [videoId], references: [id], onDelete: Cascade)
+  selectedFor   Video? @relation("SelectedThumbnail")
+
+  @@index([videoId])
+}
+
+/// A detected duplicate/near-duplicate relationship between two videos, with the
+/// method and similarity that produced it. Surfaced as a warning before queueing.
+model DuplicateMatch {
+  id             String          @id @default(cuid())
+  videoId        String
+  matchedVideoId String
+  type           DuplicateType
+  method         DuplicateMethod
+  similarity     Float
+  createdAt      DateTime        @default(now())
+
+  video        Video @relation("MatchSource", fields: [videoId], references: [id], onDelete: Cascade)
+  matchedVideo Video @relation("MatchTarget", fields: [matchedVideoId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, matchedVideoId, method])
+  @@index([videoId])
+  @@index([matchedVideoId])
+}
+
+// ----------------------------------------------------------------------------
+// Queue + scheduling
+// ----------------------------------------------------------------------------
+
+/// One queue per user — the heart of the app. `status` is the user-facing
+/// pause/resume switch.
+model Queue {
+  id        String      @id @default(cuid())
+  userId    String      @unique
+  status    QueueStatus @default(ACTIVE)
+  pausedAt  DateTime?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     QueueItem[]
+  schedules Schedule[]
+}
+
+/// A video's slot in the queue. `position` is a float so drag-to-reorder can
+/// insert between neighbors without renumbering the whole list. The actual
+/// per-platform publishing is tracked by the child PublishTask rows.
+model QueueItem {
+  id          String          @id @default(cuid())
+  queueId     String
+  videoId     String
+  position    Float
+  status      QueueItemStatus @default(PENDING)
+  // When the whole item is due (earliest of its publish tasks); denormalized
+  // for "upcoming posts" listing.
+  scheduledAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  queue        Queue         @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  video        Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  publishTasks PublishTask[]
+
+  @@index([queueId, position])
+  @@index([queueId, status])
+  @@index([videoId])
+}
+
+/// A simple recurring posting schedule. Avoids a calendar UI: combine
+/// `daysOfWeek` (0=Sun..6=Sat) with `times` ("09:00", "17:00") interpreted in
+/// `timezone`. Examples: every day 9am -> days 0-6, times ["09:00"]; MWF ->
+/// days [1,3,5]; twice daily -> times ["09:00","17:00"]. `platforms` scopes the
+/// schedule (empty = all connected platforms).
+model Schedule {
+  id         String     @id @default(cuid())
+  queueId    String
+  name       String?
+  timezone   String     @default("UTC")
+  daysOfWeek Int[]
+  times      String[]
+  platforms  Platform[]
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  queue Queue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+
+  @@index([queueId])
+}
+
+// ----------------------------------------------------------------------------
+// Publishing
+// ----------------------------------------------------------------------------
+
+/// One platform's publish of one queue item — the durable unit the scheduler
+/// and workers operate on. The scheduler finds tasks whose `scheduledAt` is due;
+/// workers attempt them with exponential backoff (`attemptCount`/`nextAttemptAt`)
+/// and record the resulting platform post. HELD means the platform connection
+/// needs reconnecting and the video is parked (never silently dropped).
+model PublishTask {
+  id          String        @id @default(cuid())
+  queueItemId String
+  connectionId String?
+  platform    Platform
+  status      PublishStatus @default(PENDING)
+
+  scheduledAt DateTime
+  attemptCount Int      @default(0)
+  nextAttemptAt DateTime?
+  lastError    String?  @db.Text
+
+  // Platform handles captured during the publish flow.
+  externalContainerId String? // e.g. IG media container / TikTok publish id (for polling)
+  platformPostId      String?
+  platformPostUrl     String?
+  publishedAt         DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  queueItem  QueueItem           @relation(fields: [queueItemId], references: [id], onDelete: Cascade)
+  connection PlatformConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt])
+  @@index([queueItemId])
+  @@index([connectionId])
+  @@index([nextAttemptAt])
+}
+
+// ----------------------------------------------------------------------------
+// Notifications
+// ----------------------------------------------------------------------------
+
+/// A single alert. The same surface powers queue-health alerts ("running low",
+/// "empty in 3 days") and failure alerts ("reconnect TikTok"). `dedupeKey` +
+/// `throttledUntil` let the app collapse repeats (one "reconnect TikTok", never
+/// one per failed video).
+model Notification {
+  id       String             @id @default(cuid())
+  userId   String
+  type     NotificationType
+  status   NotificationStatus @default(PENDING)
+  title    String
+  body     String?            @db.Text
+  platform Platform?
+
+  // Loose references to the subject of the alert (no FK so deleting the subject
+  // doesn't erase the alert history).
+  relatedConnectionId String?
+  relatedVideoId      String?
+
+  // Dedupe / throttle.
+  dedupeKey     String?
+  throttledUntil DateTime?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, type])
+  @@index([userId, readAt])
+  @@index([userId, dedupeKey])
+}
+
+/// Per-channel send record for a notification (Resend email, Expo push, Twilio
+/// SMS), so one alert can fan out and each channel's outcome is tracked.
+model NotificationDelivery {
+  id             String              @id @default(cuid())
+  notificationId String
+  channel        NotificationChannel
+  status         DeliveryStatus      @default(PENDING)
+  providerMessageId String?
+  error          String?             @db.Text
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, channel])
+  @@index([notificationId])
+}
+
+/// A registered mobile device for Expo push notifications.
+model Device {
+  id             String         @id @default(cuid())
+  userId         String
+  expoPushToken  String         @unique
+  platform       DevicePlatform?
+  lastSeenAt     DateTime       @default(now())
+  createdAt      DateTime       @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
