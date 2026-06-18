@@ -5,16 +5,18 @@ import superjson from 'superjson';
 
 import { API_URL } from './config';
 import { trpc } from './trpc';
-import { useAuth } from './AuthContext';
+import { authClient } from './auth-client';
 
 /**
- * Provides tRPC + React Query to the app. Sits inside <AuthProvider> so it can
- * read the current session token and inject it as a bearer header on every
- * request. When the token changes we re-create the client so in-flight clients
- * don't keep using a stale token after sign-out.
+ * Provides tRPC + React Query to the app. On every request it forwards the
+ * Better Auth session cookie (persisted in SecureStore by the Expo plugin) as
+ * a `Cookie` header, so the server resolves the same session it would for the
+ * web client. When the signed-in user changes we re-create the client so no
+ * in-flight client keeps using a stale cookie after sign-out.
  */
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
-  const { session } = useAuth();
+  const { data } = authClient.useSession();
+  const userId = data?.user?.id ?? null;
 
   const { queryClient, trpcClient } = useMemo(() => {
     const queryClient = new QueryClient({
@@ -28,13 +30,17 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         httpBatchLink({
           url: `${API_URL}/api/trpc`,
           transformer: superjson,
-          headers: () => (session?.token ? { Authorization: `Bearer ${session.token}` } : {}),
+          headers: () => {
+            const cookie = authClient.getCookie();
+            return cookie ? { Cookie: cookie } : {};
+          },
         }),
       ],
     });
 
     return { queryClient, trpcClient };
-  }, [session?.token]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>

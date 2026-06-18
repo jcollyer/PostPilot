@@ -1,54 +1,31 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { authClient } from './auth-client';
 
-import {
-  clearStoredSession,
-  getStoredSession,
-  signInWithBrowser,
-  type StoredSession,
-} from './auth';
-
-interface AuthContextValue {
-  session: StoredSession | null;
-  /** True before the persisted session has been checked. Render a splash until it flips. */
-  isLoading: boolean;
-  signIn: () => Promise<void>;
-  signOut: () => Promise<void>;
+/**
+ * Thin auth surface for the mobile app, backed by Better Auth.
+ *
+ * Better Auth's `useSession` is a store-backed hook and needs no React
+ * provider, so `AuthProvider` is just a passthrough kept for layout structure
+ * (and a stable place to hang future global auth side effects).
+ */
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
 }
 
-const AuthContext = createContext<AuthContextValue | null>(null);
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<StoredSession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Load any persisted session on mount.
-  useEffect(() => {
-    (async () => {
-      const stored = await getStoredSession();
-      setSession(stored);
-      setIsLoading(false);
-    })();
-  }, []);
-
-  const signIn = useCallback(async () => {
-    const next = await signInWithBrowser();
-    setSession(next);
-  }, []);
-
-  const signOut = useCallback(async () => {
-    await clearStoredSession();
-    setSession(null);
-  }, []);
-
-  return (
-    <AuthContext.Provider value={{ session, isLoading, signIn, signOut }}>
-      {children}
-    </AuthContext.Provider>
-  );
+export interface MobileSession {
+  session: { id: string; userId: string; expiresAt: string | Date };
+  user: { id: string; email: string; name?: string | null; image?: string | null };
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
-  return ctx;
+  const { data, isPending } = authClient.useSession();
+
+  return {
+    /** `{ session, user }` when signed in, otherwise null. */
+    session: (data as MobileSession | null) ?? null,
+    /** True until the persisted session has been resolved. */
+    isLoading: isPending,
+    signOut: async () => {
+      await authClient.signOut();
+    },
+  };
 }

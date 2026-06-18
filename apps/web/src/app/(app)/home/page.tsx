@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-import { auth } from '@/server/auth';
+import { getServerSession } from '@/server/session';
 import { getFirstName } from '@/lib/utils';
 
 /**
@@ -9,7 +9,7 @@ import { getFirstName } from '@/lib/utils';
  * your app's real content goes.
  */
 export default async function HomePage() {
-  const session = await auth();
+  const session = await getServerSession();
   if (!session?.user) redirect('/');
 
   const greetingName = getFirstName(session.user.name, session.user.email);

@@ -7,7 +7,7 @@ A blank-slate monorepo for starting new products quickly. It ships with authenti
 - **Turborepo** monorepo with npm workspaces.
 - **Next.js (App Router)** web app with React 19.
 - **Expo / React Native** mobile app (Expo Router) sharing the same typed API.
-- **Auth.js (NextAuth v5)** with Google SSO and Resend email magic links, using the Prisma adapter and database sessions.
+- **Better Auth** with email/password sign-in (email verification via Resend) and Google SSO ready to enable later, using the Prisma adapter. Its Expo plugin powers mobile auth.
 - **Neon Postgres + Prisma** for data.
 - **tRPC + TanStack React Query** for end-to-end typesafe API calls via hooks.
 - **Zod** for shared validation schemas.
@@ -93,4 +93,4 @@ The workspace scope is `@saas/*`. To rebrand, find-and-replace `@saas/` with you
 
 ## How auth works
 
-Sign-in happens on the web. The web app uses Auth.js with database sessions. The mobile app opens the web sign-in flow in an in-app browser via `/auth/mobile`, which hands back a session token that the app stores in SecureStore and sends as a bearer token on every tRPC request. Both clients therefore resolve to the exact same session shape on the server.
+Authentication is handled by Better Auth, mounted at `/api/auth/*` in the web app. Email/password is the primary method; new accounts must verify their email (link sent via Resend) before signing in. Google SSO registers automatically when its env vars are present. The mobile app authenticates against the same server through Better Auth's Expo plugin, which persists the session cookie in SecureStore; the mobile tRPC client forwards that cookie on every request. Both clients therefore resolve to the exact same session shape on the server.

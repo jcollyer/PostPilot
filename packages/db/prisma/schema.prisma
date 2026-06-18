@@ -1,13 +1,13 @@
-// SaaS template Prisma schema
+// PostPilot Prisma schema
 //
-// Models:
-//   - User / Account / Session / VerificationToken: the NextAuth (Auth.js) v5
-//     adapter models. The User table is the canonical record for a person in
-//     your app — add product columns to it as your schema grows.
+// Auth models (user / session / account / verification) follow the Better Auth
+// core schema. The `user` table is the canonical record for a person in the
+// app — product columns (videos, queue, platform connections, etc.) hang off
+// it as the schema grows in later chunks.
 //
-// Everything here is intentionally minimal. This is the blank-slate starting
-// point for a new project: authentication works end to end, and you own the
-// User model to extend however you like.
+// Field names are camelCase to match what Better Auth's Prisma adapter reads
+// and writes; `@@map` keeps the underlying SQL tables lowercase per Better
+// Auth convention. `createdAt`/`updatedAt` are managed by Prisma.
 
 generator client {
   provider = "prisma-client-js"
@@ -23,56 +23,69 @@ datasource db {
 }
 
 // ----------------------------------------------------------------------------
-// NextAuth (Auth.js) models
+// Better Auth models
 // ----------------------------------------------------------------------------
 
 model User {
   id            String    @id @default(cuid())
   name          String?
-  email         String?   @unique
-  emailVerified DateTime?
+  email         String    @unique
+  emailVerified Boolean   @default(false)
   image         String?
-  accounts      Account[]
-  sessions      Session[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-}
+  sessions      Session[]
+  accounts      Account[]
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([userId])
+  @@map("user")
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
+  id        String   @id @default(cuid())
+  expiresAt DateTime
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@map("session")
 }
 
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
+model Account {
+  id                    String    @id @default(cuid())
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  // Hashed credential password for email/password accounts (null for social).
+  password              String?   @db.Text
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  @@unique([identifier, token])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String   @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
 }

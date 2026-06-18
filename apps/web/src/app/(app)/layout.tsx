@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { NavBar } from '@/components/NavBar';
-import { auth } from '@/server/auth';
+import { getServerSession } from '@/server/session';
 
 /**
  * Layout for the authenticated area (/home, /settings). Guards access — any
@@ -9,7 +9,7 @@ import { auth } from '@/server/auth';
  * and renders the global navigation bar above every page.
  */
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const session = await getServerSession();
   if (!session?.user) redirect('/');
 
   return (

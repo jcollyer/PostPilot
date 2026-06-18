@@ -2,55 +2,34 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import type { NextRequest } from 'next/server';
 
 import { appRouter, createTRPCContext, type SessionLike } from '@saas/api';
-import { prisma } from '@saas/db';
 import { auth } from '@/server/auth';
 
 /**
- * Resolve a caller session from either:
- *   - the Auth.js cookie (web client), or
- *   - an `Authorization: Bearer <sessionToken>` header (mobile client)
+ * Resolve a caller session from the Better Auth session cookie. Both clients
+ * end up here:
+ *   - Web sends the cookie automatically.
+ *   - Mobile attaches the Better Auth cookie (managed by the Expo plugin /
+ *     SecureStore) via the tRPC client's `Cookie` header.
  *
- * Both paths end at the same `Session` table that Auth.js's Prisma adapter
- * populates, so the shared tRPC context looks identical to downstream code.
+ * Either way `auth.api.getSession` returns the same `{ session, user }` shape,
+ * so the shared tRPC context looks identical to downstream code.
  */
 async function resolveSession(req: NextRequest): Promise<SessionLike | null> {
-  // Try cookie-based Auth.js first (the web case).
-  const cookieSession = await auth();
-  if (cookieSession?.user?.id) {
-    return {
-      user: {
-        id: cookieSession.user.id,
-        email: cookieSession.user.email,
-        name: cookieSession.user.name,
-        image: cookieSession.user.image,
-      },
-      expires: cookieSession.expires,
-    };
-  }
+  const result = await auth.api.getSession({ headers: req.headers });
+  if (!result?.user?.id) return null;
 
-  // Fall back to bearer token (mobile case).
-  const authHeader = req.headers.get('authorization') ?? req.headers.get('Authorization');
-  if (authHeader?.toLowerCase().startsWith('bearer ')) {
-    const token = authHeader.slice(7).trim();
-    if (!token) return null;
-
-    const record = await prisma.session.findUnique({
-      where: { sessionToken: token },
-      include: {
-        user: {
-          select: { id: true, email: true, name: true, image: true },
-        },
-      },
-    });
-    if (!record || record.expires <= new Date()) return null;
-
-    return {
-      user: record.user,
-      expires: record.expires.toISOString(),
-    };
-  }
-
-  return null;
+  return {
+    user: {
+      id: result.user.id,
+      email: result.user.email,
+      name: result.user.name ?? null,
+      image: result.user.image ?? null,
+    },
+    expires:
+      result.session.expiresAt instanceof Date
+        ? result.session.expiresAt.toISOString()
+        : new Date(result.session.expiresAt).toISOString(),
+  };
 }
 
 const handler = async (req: NextRequest) => {

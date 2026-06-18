@@ -1,23 +1,15 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 
-import { signIn, signOut } from './auth';
+import { auth } from './auth';
 
-/** Start the Google OAuth flow, returning to /home afterwards. */
-export async function signInWithGoogle() {
-  await signIn('google', { redirectTo: '/home' });
-}
-
-/** Send a Resend magic-link email for the given address. */
-export async function signInWithEmail(formData: FormData) {
-  const email = String(formData.get('email') ?? '').trim();
-  if (!email) return;
-  await signIn('resend', { email, redirectTo: '/home' });
-}
-
-/** Sign out and return to the login page. */
+/**
+ * Sign out the current session and return to the login page. The `nextCookies`
+ * plugin clears the session cookie as part of this call.
+ */
 export async function signOutAction() {
-  await signOut({ redirect: false });
+  await auth.api.signOut({ headers: await headers() });
   redirect('/');
 }
