@@ -30,7 +30,15 @@ export function NavBar({ name, email, image }: NavBarProps) {
 
   return (
     <header className="border-b">
-      <div className="container flex h-14 items-center">
+      <div className="container flex h-14 items-center gap-4">
+        <nav className="order-2 flex items-center gap-1 text-sm font-medium">
+          <Link href="/home" className="hover:bg-accent rounded-md px-3 py-1.5">
+            Home
+          </Link>
+          <Link href="/media" className="hover:bg-accent rounded-md px-3 py-1.5">
+            Library
+          </Link>
+        </nav>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
