@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Check,
   Copy,
   Film,
+  ListPlus,
   Loader2,
   MoreVertical,
   Pencil,
@@ -94,6 +96,10 @@ export function MediaLibraryView() {
   const refresh = () => utils.media.list.invalidate();
 
   const remove = trpc.media.remove.useMutation({ onSuccess: refresh });
+  const addToQueue = trpc.queue.addVideos.useMutation({
+    onSuccess: () => utils.queue.invalidate(),
+  });
+  const [queuedIds, setQueuedIds] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<VideoDto | null>(null);
   const [previewing, setPreviewing] = useState<VideoDto | null>(null);
@@ -207,6 +213,11 @@ export function MediaLibraryView() {
                 onEdit={() => setEditing(video)}
                 onDelete={() => remove.mutate({ videoId: video.id })}
                 deleting={remove.isPending && remove.variables?.videoId === video.id}
+                onAddToQueue={() => {
+                  addToQueue.mutate({ videoIds: [video.id] });
+                  setQueuedIds((prev) => new Set(prev).add(video.id));
+                }}
+                queued={queuedIds.has(video.id)}
               />
             ))}
           </div>
@@ -269,12 +280,16 @@ function VideoCard({
   onEdit,
   onDelete,
   deleting,
+  onAddToQueue,
+  queued,
 }: {
   video: VideoDto;
   onPreview: () => void;
   onEdit: () => void;
   onDelete: () => void;
   deleting: boolean;
+  onAddToQueue: () => void;
+  queued: boolean;
 }) {
   const badge = STATUS_BADGE[video.status];
   const duration = formatDuration(video.durationSec);
@@ -359,6 +374,16 @@ function VideoCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {video.status === 'READY' ? (
+                <DropdownMenuItem onClick={onAddToQueue} disabled={queued} className="cursor-pointer">
+                  {queued ? (
+                    <Check className="mr-2 h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <ListPlus className="mr-2 h-4 w-4" />
+                  )}
+                  {queued ? 'Added to queue' : 'Add to queue'}
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem onClick={onEdit} className="cursor-pointer">
                 <Pencil className="mr-2 h-4 w-4" /> Edit details
               </DropdownMenuItem>

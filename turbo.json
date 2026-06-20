@@ -41,6 +41,8 @@
     "AI_BATCH_LIMIT",
     "FFMPEG_PATH",
     "FFPROBE_PATH",
+    "QUEUE_HORIZON_DAYS",
+    "QUEUE_MAX_SLOTS",
     "NODE_ENV"
   ],
   "tasks": {

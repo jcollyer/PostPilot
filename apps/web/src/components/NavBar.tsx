@@ -38,6 +38,9 @@ export function NavBar({ name, email, image }: NavBarProps) {
           <Link href="/media" className="hover:bg-accent rounded-md px-3 py-1.5">
             Library
           </Link>
+          <Link href="/queue" className="hover:bg-accent rounded-md px-3 py-1.5">
+            Queue
+          </Link>
         </nav>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
