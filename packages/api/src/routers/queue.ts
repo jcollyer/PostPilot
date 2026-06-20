@@ -5,6 +5,7 @@ import {
   createScheduleSchema,
   moveQueueItemSchema,
   queueItemIdSchema,
+  retryPublishSchema,
   scheduleIdSchema,
   updateScheduleSchema,
   upcomingSchema,
@@ -53,7 +54,15 @@ export const queueRouter = router({
           },
         },
         publishTasks: {
-          select: { platform: true, status: true, scheduledAt: true, connectionId: true },
+          select: {
+            id: true,
+            platform: true,
+            status: true,
+            scheduledAt: true,
+            connectionId: true,
+            platformPostUrl: true,
+            lastError: true,
+          },
           orderBy: { platform: 'asc' },
         },
       },
@@ -77,9 +86,12 @@ export const queueRouter = router({
           isDuplicate: it.video.isDuplicate,
         },
         tasks: it.publishTasks.map((t) => ({
+          id: t.id,
           platform: t.platform,
           status: t.status,
           scheduledAt: t.scheduledAt,
+          postUrl: t.platformPostUrl,
+          lastError: t.lastError,
           needsConnection: t.status === 'HELD' || !t.connectionId,
         })),
       })),
@@ -210,6 +222,31 @@ export const queueRouter = router({
     const res = await smartArrangeQueue(ctx.prisma, queue.id);
     await recomputeSchedule(ctx.prisma, queue.id);
     return res;
+  }),
+
+  /** Retry a failed/held publish task — requeues it for the next worker run. */
+  retryPublish: protectedProcedure.input(retryPublishSchema).mutation(async ({ ctx, input }) => {
+    const task = await ctx.prisma.publishTask.findFirst({
+      where: { id: input.taskId, queueItem: { queue: { userId: ctx.userId } } },
+      select: { id: true, status: true, connectionId: true },
+    });
+    if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Publish task not found.' });
+    if (task.status !== 'FAILED' && task.status !== 'HELD') {
+      return { success: false as const, reason: 'not_retryable' as const };
+    }
+    await ctx.prisma.publishTask.update({
+      where: { id: task.id },
+      data: {
+        // HELD tasks with no connection can't run until reconnected; the runner
+        // will re-hold them, which is fine.
+        status: 'SCHEDULED',
+        attemptCount: 0,
+        nextAttemptAt: null,
+        lastError: null,
+        scheduledAt: new Date(),
+      },
+    });
+    return { success: true as const };
   }),
 
   /** Upcoming scheduled/held posts, soonest first. */

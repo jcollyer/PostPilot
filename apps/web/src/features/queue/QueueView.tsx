@@ -19,12 +19,15 @@ import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
   Calendar,
+  Check,
   Copy,
+  ExternalLink,
   Film,
   GripVertical,
   Loader2,
   Pause,
   Play,
+  RefreshCw,
   RotateCcw,
   Shuffle,
   SkipForward,
@@ -52,7 +55,15 @@ const PLATFORM_SHORT: Record<Platform, string> = {
 
 export function QueueView() {
   const utils = trpc.useUtils();
-  const queue = trpc.queue.get.useQuery();
+  // Poll while anything is mid-publish so the UI tracks the worker.
+  const queue = trpc.queue.get.useQuery(undefined, {
+    refetchInterval: (q) =>
+      q.state.data?.items.some(
+        (i) => i.status === 'PUBLISHING' || i.tasks.some((t) => t.status === 'PROCESSING'),
+      )
+        ? 15000
+        : false,
+  });
   const upcoming = trpc.queue.upcoming.useQuery({ limit: 50 });
 
   const refresh = () => {
@@ -67,6 +78,7 @@ export function QueueView() {
   const removeItem = trpc.queue.removeItem.useMutation({ onSuccess: refresh });
   const skip = trpc.queue.skip.useMutation({ onSuccess: refresh });
   const unskip = trpc.queue.unskip.useMutation({ onSuccess: refresh });
+  const retryPublish = trpc.queue.retryPublish.useMutation({ onSuccess: refresh });
 
   // Local mirror of the server order so drag feels instant.
   const serverItems = queue.data?.items ?? [];
@@ -169,6 +181,7 @@ export function QueueView() {
                           item={item}
                           onSkip={() => skip.mutate({ itemId: item.id })}
                           onRemove={() => removeItem.mutate({ itemId: item.id })}
+                          onRetry={(taskId) => retryPublish.mutate({ taskId })}
                         />
                       ))}
                     </ul>
@@ -256,10 +269,12 @@ function SortableRow({
   item,
   onSkip,
   onRemove,
+  onRetry,
 }: {
   item: QueueItem;
   onSkip: () => void;
   onRemove: () => void;
+  onRetry: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -298,16 +313,7 @@ function SortableRow({
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span>{item.scheduledAt ? formatSlot(item.scheduledAt) : 'Awaiting a slot'}</span>
           {item.tasks.map((t) => (
-            <span
-              key={t.platform}
-              className={`inline-flex items-center gap-0.5 rounded px-1 ${
-                t.needsConnection ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'
-              }`}
-              title={t.needsConnection ? `${PLATFORM_LABELS[t.platform]}: reconnect needed` : PLATFORM_LABELS[t.platform]}
-            >
-              {t.needsConnection ? <AlertTriangle className="h-3 w-3" /> : null}
-              {PLATFORM_SHORT[t.platform]}
-            </span>
+            <TaskChip key={t.id} task={t} onRetry={() => onRetry(t.id)} />
           ))}
         </div>
       </div>
@@ -333,6 +339,61 @@ function SortableRow({
         </button>
       </div>
     </li>
+  );
+}
+
+type QueueTask = QueueItem['tasks'][number];
+
+function TaskChip({ task, onRetry }: { task: QueueTask; onRetry: () => void }) {
+  const label = PLATFORM_SHORT[task.platform];
+  const full = PLATFORM_LABELS[task.platform];
+  const base = 'inline-flex items-center gap-0.5 rounded px-1';
+
+  if (task.status === 'PUBLISHED') {
+    const cls = `${base} bg-emerald-100 text-emerald-700`;
+    if (task.postUrl) {
+      return (
+        <a href={task.postUrl} target="_blank" rel="noopener noreferrer" className={cls} title={`Posted to ${full}`}>
+          <Check className="h-3 w-3" /> {label} <ExternalLink className="h-3 w-3" />
+        </a>
+      );
+    }
+    return (
+      <span className={cls} title={`Posted to ${full}`}>
+        <Check className="h-3 w-3" /> {label}
+      </span>
+    );
+  }
+
+  if (task.status === 'PROCESSING') {
+    return (
+      <span className={`${base} bg-blue-100 text-blue-700`} title={`Publishing to ${full}…`}>
+        <Loader2 className="h-3 w-3 animate-spin" /> {label}
+      </span>
+    );
+  }
+
+  if (task.status === 'FAILED' || task.status === 'HELD') {
+    const title = task.needsConnection
+      ? `${full}: reconnect needed — click to retry`
+      : `${full}: ${task.lastError ?? 'failed'} — click to retry`;
+    return (
+      <button
+        type="button"
+        onClick={onRetry}
+        className={`${base} bg-red-100 text-red-700 hover:bg-red-200`}
+        title={title}
+      >
+        <AlertTriangle className="h-3 w-3" /> {label} <RefreshCw className="h-3 w-3" />
+      </button>
+    );
+  }
+
+  // SCHEDULED / PENDING
+  return (
+    <span className={`${base} bg-slate-100 text-slate-600`} title={`Scheduled for ${full}`}>
+      {label}
+    </span>
   );
 }
 

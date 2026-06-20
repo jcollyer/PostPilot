@@ -45,3 +45,7 @@ export const upcomingSchema = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 export type UpcomingInput = z.infer<typeof upcomingSchema>;
+
+/** Retry a single failed/held publish task. */
+export const retryPublishSchema = z.object({ taskId: z.string().min(1) });
+export type RetryPublishInput = z.infer<typeof retryPublishSchema>;

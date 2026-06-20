@@ -24,6 +24,8 @@
     "ai:process": "dotenv -e .env -- npm --workspace=@saas/ai-pipeline run ai:process",
     "ai:watch": "dotenv -e .env -- npm --workspace=@saas/ai-pipeline run ai:watch",
     "queue:reschedule": "dotenv -e .env -- npm --workspace=@saas/queue run queue:reschedule",
+    "publish:due": "dotenv -e .env -- npm --workspace=@saas/publishing run publish:due",
+    "publish:watch": "dotenv -e .env -- npm --workspace=@saas/publishing run publish:watch",
     "ngrok": "ngrok http --url=jointly-topical-leech.ngrok-free.app 3000"
   },
   "devDependencies": {
