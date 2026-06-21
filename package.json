@@ -32,6 +32,7 @@
     "ngrok": "ngrok http --url=jointly-topical-leech.ngrok-free.app 3000"
   },
   "devDependencies": {
+    "@trigger.dev/build": "^4.4.6",
     "dotenv-cli": "^7.4.4",
     "prettier": "^3.3.3",
     "prettier-plugin-tailwindcss": "^0.6.8",
@@ -45,6 +46,7 @@
   },
   "packageManager": "npm@10.9.0",
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "@trigger.dev/sdk": "^4.4.6"
   }
 }

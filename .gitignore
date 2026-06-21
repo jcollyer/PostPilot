@@ -40,3 +40,5 @@ coverage/
 *.tsbuildinfo
 next-env.d.ts
 expo-env.d.ts
+
+.trigger
