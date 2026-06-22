@@ -17,8 +17,8 @@ import { prismaExtension } from '@trigger.dev/build/extensions/prisma';
  *   - prismaExtension(): generates the Prisma client in the deployed image.
  */
 export default defineConfig({
-  // Replace via `trigger.dev init`, or set TRIGGER_PROJECT_REF.
-  project: process.env.TRIGGER_PROJECT_REF ?? 'proj_REPLACE_ME',
+  // Set via TRIGGER_PROJECT_REF, or the hardcoded project ref below.
+  project: process.env.TRIGGER_PROJECT_REF ?? 'proj_yijxjqynykowfgttnnts',
   dirs: ['./src/trigger'],
   maxDuration: 3600,
   build: {

@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "trigger:dev": "trigger.dev@latest dev",
-    "trigger:deploy": "trigger.dev@latest deploy",
+    "trigger:dev": "npx trigger.dev@latest dev",
+    "trigger:deploy": "npx trigger.dev@latest deploy",
     "clean": "rm -rf node_modules .turbo .trigger"
   },
   "dependencies": {
