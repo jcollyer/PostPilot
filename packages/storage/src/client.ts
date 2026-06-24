@@ -16,6 +16,12 @@ export function getS3Client(): S3Client {
     endpoint: cfg.endpoint,
     // R2 (and most S3-compatible stores) require path-style addressing.
     forcePathStyle: true,
+    // AWS SDK v3 (>=3.729) defaults to attaching a CRC32 checksum to uploads.
+    // The checksum gets baked into presigned URLs over an empty body, and R2
+    // rejects the mismatch with a 403. Only add checksums when a command
+    // actually requires one (CompleteMultipartUpload), never on UploadPart/PutObject.
+    requestChecksumCalculation: 'WHEN_REQUIRED',
+    responseChecksumValidation: 'WHEN_REQUIRED',
     credentials: {
       accessKeyId: cfg.accessKeyId,
       secretAccessKey: cfg.secretAccessKey,
