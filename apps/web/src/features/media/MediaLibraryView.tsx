@@ -29,6 +29,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { trpc } from '@/lib/trpc/client';
 import { EditMetadataDialog } from './EditMetadataDialog';
 import { UploadDialog } from './UploadDialog';
@@ -266,30 +273,38 @@ export function MediaLibraryView() {
             className="pl-9"
           />
         </div>
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value as MediaStatus | '')}
-          className="border-input bg-background h-10 rounded-md border px-3 text-sm"
+        <Select
+          value={status || 'all'}
+          onValueChange={(v) => setStatus(v === 'all' ? '' : (v as MediaStatus))}
         >
-          <option value="">All statuses</option>
-          {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>
-              {s.charAt(0) + s.slice(1).toLowerCase()}
-            </option>
-          ))}
-        </select>
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="border-input bg-background h-10 rounded-md border px-3 text-sm"
+          <SelectTrigger className="w-auto min-w-[150px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {STATUS_OPTIONS.map((s) => (
+              <SelectItem key={s} value={s}>
+                {s.charAt(0) + s.slice(1).toLowerCase()}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={categoryId || 'all'}
+          onValueChange={(v) => setCategoryId(v === 'all' ? '' : v)}
         >
-          <option value="">All categories</option>
-          {categories.data?.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger className="w-auto min-w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {categories.data?.map((c) => (
+              <SelectItem key={c.id} value={c.id}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {selectionActive ? (
@@ -545,10 +560,18 @@ function VideoCard({
       >
         <Check className="h-4 w-4" />
       </button>
-      <button
-        type="button"
-        onClick={canPreview ? onPreview : undefined}
-        className="bg-muted relative flex aspect-[9/16] w-full items-center justify-center"
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onEdit();
+          }
+        }}
+        aria-label="Edit details"
+        className="bg-muted relative flex aspect-[9/16] w-full cursor-pointer items-center justify-center"
       >
         {video.thumbnailUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -603,16 +626,24 @@ function VideoCard({
           ) : null}
         </span>
         {canPreview ? (
-          <span className="absolute inset-0 flex items-center justify-center bg-black/0 opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
-            <Play className="h-8 w-8 text-white" />
-          </span>
+          <button
+            type="button"
+            aria-label="Play video"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPreview();
+            }}
+            className="absolute left-1/2 top-1/2 z-10 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
+          >
+            <Play className="h-6 w-6" />
+          </button>
         ) : null}
         {duration ? (
-          <span className="absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          <span className="pointer-events-none absolute bottom-1.5 right-1.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white">
             {duration}
           </span>
         ) : null}
-      </button>
+      </div>
 
       <div className="space-y-2 p-3">
         <div className="flex items-start justify-between gap-2">

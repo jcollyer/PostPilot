@@ -30,6 +30,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { trpc } from '@/lib/trpc/client';
 import type { VideoDto } from './types';
 import { putObject } from './upload';
@@ -164,19 +171,22 @@ export function EditMetadataDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="video-category">Category</Label>
-            <select
-              id="video-category"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-              className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            <Select
+              value={categoryId || 'none'}
+              onValueChange={(v) => setCategoryId(v === 'none' ? '' : v)}
             >
-              <option value="">No category</option>
-              {categories.data?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              <SelectTrigger id="video-category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No category</SelectItem>
+                {categories.data?.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
@@ -557,25 +567,25 @@ function TikTokRequirementsEditor({
         <Label htmlFor="tiktok-privacy" className="text-xs">
           Who can view this video
         </Label>
-        <select
-          id="tiktok-privacy"
-          value={privacy}
-          onChange={(e) => setPrivacy(e.target.value as TikTokPrivacyLevel | '')}
-          className="border-input bg-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 text-sm focus-visible:outline-none focus-visible:ring-2"
+        <Select
+          value={privacy || undefined}
+          onValueChange={(v) => setPrivacy(v as TikTokPrivacyLevel)}
         >
-          <option value="" disabled>
-            Select who can view…
-          </option>
-          {privacyOptions.map((level) => {
-            const disableSelfOnly = level === 'SELF_ONLY' && brandedActive;
-            return (
-              <option key={level} value={level} disabled={disableSelfOnly}>
-                {TIKTOK_PRIVACY_LABELS[level]}
-                {disableSelfOnly ? ' — not allowed for branded content' : ''}
-              </option>
-            );
-          })}
-        </select>
+          <SelectTrigger id="tiktok-privacy" className="h-9">
+            <SelectValue placeholder="Select who can view…" />
+          </SelectTrigger>
+          <SelectContent>
+            {privacyOptions.map((level) => {
+              const disableSelfOnly = level === 'SELF_ONLY' && brandedActive;
+              return (
+                <SelectItem key={level} value={level} disabled={disableSelfOnly}>
+                  {TIKTOK_PRIVACY_LABELS[level]}
+                  {disableSelfOnly ? ' — not allowed for branded content' : ''}
+                </SelectItem>
+              );
+            })}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Interaction abilities — off by default; greyed when disabled in-app. */}
