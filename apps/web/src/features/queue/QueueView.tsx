@@ -110,7 +110,7 @@ export function QueueView() {
   const busy = move.isPending || smartArrange.isPending;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Queue</h1>
@@ -151,8 +151,8 @@ export function QueueView() {
         </div>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-[1.6fr_1fr]">
-        <div className="space-y-4">
+      <div className="grid gap-6 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Up next</CardTitle>
@@ -214,7 +214,7 @@ export function QueueView() {
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="min-w-0 space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Schedule</CardTitle>
