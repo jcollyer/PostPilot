@@ -514,6 +514,9 @@ function TikTokRequirementsEditor({
   const consent = tiktokConsentDeclaration(effective);
   const contentLabel = tiktokContentLabel(effective);
   const commercialNeedsChoice = commercial && !brandOrganic && !brandedContent;
+  // Privacy is the one field with no valid default — when TikTok is connected it
+  // must be chosen before the video can be added to the queue.
+  const privacyMissing = connected && !privacy;
 
   const setTiktokMeta = trpc.media.setTiktokMeta.useMutation({ onSuccess: onSaved });
 
@@ -564,14 +567,25 @@ function TikTokRequirementsEditor({
 
       {/* Privacy — no default; the user must choose. */}
       <div className="space-y-1">
-        <Label htmlFor="tiktok-privacy" className="text-xs">
-          Who can view this video
+        <Label
+          htmlFor="tiktok-privacy"
+          className={`text-xs ${privacyMissing ? 'text-destructive' : ''}`}
+        >
+          Who can view this video{privacyMissing ? ' *' : ''}
         </Label>
         <Select
           value={privacy || undefined}
           onValueChange={(v) => setPrivacy(v as TikTokPrivacyLevel)}
         >
-          <SelectTrigger id="tiktok-privacy" className="h-9">
+          <SelectTrigger
+            id="tiktok-privacy"
+            aria-invalid={privacyMissing || undefined}
+            className={`h-9 ${
+              privacyMissing
+                ? 'border-destructive text-destructive focus:ring-destructive ring-1 ring-destructive/40'
+                : ''
+            }`}
+          >
             <SelectValue placeholder="Select who can view…" />
           </SelectTrigger>
           <SelectContent>
@@ -586,6 +600,12 @@ function TikTokRequirementsEditor({
             })}
           </SelectContent>
         </Select>
+        {privacyMissing ? (
+          <p className="text-destructive flex items-start gap-1.5 text-xs">
+            <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            This can&apos;t be blank — choose who can view this video to add it to the queue.
+          </p>
+        ) : null}
       </div>
 
       {/* Interaction abilities — off by default; greyed when disabled in-app. */}
