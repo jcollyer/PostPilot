@@ -226,6 +226,7 @@ export const mediaRouter = router({
         width: input.width ?? null,
         height: input.height ?? null,
         hashtags: [],
+        targetPlatforms: [],
         uploadSessionId: input.uploadSessionId ?? null,
       },
     });
