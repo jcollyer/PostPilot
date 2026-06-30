@@ -1151,7 +1151,7 @@ function VideoCard({
               className="text-muted-foreground truncate text-[10px]"
               title={`Will post to TikTok as ${tiktokAccountLabel}`}
             >
-              TikTok: <span className="font-medium">{tiktokAccountLabel}</span>
+              TikTok: <span className="font-medium">@{tiktokAccountLabel}</span>
             </p>
           ) : null}
         </div>

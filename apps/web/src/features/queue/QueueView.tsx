@@ -47,6 +47,13 @@ type RouterOutputs = inferRouterOutputs<AppRouter>;
 type QueueItem = RouterOutputs['queue']['get']['items'][number];
 type Upcoming = RouterOutputs['queue']['upcoming'];
 
+/** The connected TikTok account, surfaced next to TikTok-bound queue items. */
+type TikTokAccount = {
+  avatarUrl: string | null;
+  username: string | null;
+  nickname: string | null;
+};
+
 const PLATFORM_SHORT: Record<Platform, string> = {
   TIKTOK: 'TikTok',
   INSTAGRAM: 'IG',
@@ -65,6 +72,16 @@ export function QueueView() {
         : false,
   });
   const upcoming = trpc.queue.upcoming.useQuery({ limit: 50 });
+
+  // The connected TikTok account (one per user) — used to badge TikTok items.
+  const tiktokInfo = trpc.connections.tiktokCreatorInfo.useQuery();
+  const tiktok: TikTokAccount | null = tiktokInfo.data?.available
+    ? {
+        avatarUrl: tiktokInfo.data.info.creatorAvatarUrl,
+        username: tiktokInfo.data.info.creatorUsername,
+        nickname: tiktokInfo.data.info.creatorNickname,
+      }
+    : null;
 
   const refresh = () => {
     utils.queue.get.invalidate();
@@ -179,6 +196,7 @@ export function QueueView() {
                         <SortableRow
                           key={item.id}
                           item={item}
+                          tiktok={tiktok}
                           onSkip={() => skip.mutate({ itemId: item.id })}
                           onRemove={() => removeItem.mutate({ itemId: item.id })}
                           onRetry={(taskId) => retryPublish.mutate({ taskId })}
@@ -235,7 +253,7 @@ export function QueueView() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <UpcomingList data={upcoming.data} loading={upcoming.isLoading} />
+              <UpcomingList data={upcoming.data} loading={upcoming.isLoading} tiktok={tiktok} />
             </CardContent>
           </Card>
         </div>
@@ -269,13 +287,28 @@ function Thumb({ url }: { url: string | null }) {
   );
 }
 
+/** Small round TikTok creator avatar shown inside the TikTok pill. */
+function TikTokAvatar({ url }: { url: string | null }) {
+  if (!url) return null;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      className="-ml-0.5 h-3.5 w-3.5 shrink-0 rounded-full object-cover"
+    />
+  );
+}
+
 function SortableRow({
   item,
+  tiktok,
   onSkip,
   onRemove,
   onRetry,
 }: {
   item: QueueItem;
+  tiktok: TikTokAccount | null;
   onSkip: () => void;
   onRemove: () => void;
   onRetry: (taskId: string) => void;
@@ -317,9 +350,11 @@ function SortableRow({
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
           <span>{item.scheduledAt ? formatSlot(item.scheduledAt) : 'Awaiting a slot'}</span>
           {item.tasks.length > 0 ? (
-            item.tasks.map((t) => <TaskChip key={t.id} task={t} onRetry={() => onRetry(t.id)} />)
+            item.tasks.map((t) => (
+              <TaskChip key={t.id} task={t} tiktok={tiktok} onRetry={() => onRetry(t.id)} />
+            ))
           ) : (
-            <Destinations platforms={item.postsTo} />
+            <Destinations platforms={item.postsTo} tiktok={tiktok} />
           )}
         </div>
       </div>
@@ -353,7 +388,13 @@ function SortableRow({
  * while it's still awaiting a slot). Once scheduled, the per-platform TaskChips
  * convey the same destinations with live status, so this is only the fallback.
  */
-function Destinations({ platforms }: { platforms: Platform[] }) {
+function Destinations({
+  platforms,
+  tiktok,
+}: {
+  platforms: Platform[];
+  tiktok: TikTokAccount | null;
+}) {
   if (platforms.length === 0) {
     return <span className="text-muted-foreground">No connected platforms</span>;
   }
@@ -363,9 +404,14 @@ function Destinations({ platforms }: { platforms: Platform[] }) {
       {platforms.map((p) => (
         <span
           key={p}
-          className="inline-flex items-center rounded bg-slate-100 px-1 text-slate-600"
-          title={PLATFORM_LABELS[p]}
+          className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1 text-slate-600"
+          title={
+            p === 'TIKTOK' && tiktok?.username
+              ? `${PLATFORM_LABELS[p]} · @${tiktok.username}`
+              : PLATFORM_LABELS[p]
+          }
         >
+          {p === 'TIKTOK' ? <TikTokAvatar url={tiktok?.avatarUrl ?? null} /> : null}
           {PLATFORM_SHORT[p]}
         </span>
       ))}
@@ -375,10 +421,22 @@ function Destinations({ platforms }: { platforms: Platform[] }) {
 
 type QueueTask = QueueItem['tasks'][number];
 
-function TaskChip({ task, onRetry }: { task: QueueTask; onRetry: () => void }) {
+function TaskChip({
+  task,
+  tiktok,
+  onRetry,
+}: {
+  task: QueueTask;
+  tiktok: TikTokAccount | null;
+  onRetry: () => void;
+}) {
   const label = PLATFORM_SHORT[task.platform];
   const full = PLATFORM_LABELS[task.platform];
   const base = 'inline-flex items-center gap-0.5 rounded px-1';
+  // For TikTok, show the connected creator avatar inside the pill.
+  const avatar =
+    task.platform === 'TIKTOK' ? <TikTokAvatar url={tiktok?.avatarUrl ?? null} /> : null;
+  const at = task.platform === 'TIKTOK' && tiktok?.username ? ` · @${tiktok.username}` : '';
 
   if (task.status === 'PUBLISHED') {
     const cls = `${base} bg-emerald-100 text-emerald-700`;
@@ -389,23 +447,23 @@ function TaskChip({ task, onRetry }: { task: QueueTask; onRetry: () => void }) {
           target="_blank"
           rel="noopener noreferrer"
           className={cls}
-          title={`Posted to ${full}`}
+          title={`Posted to ${full}${at}`}
         >
-          <Check className="h-3 w-3" /> {label} <ExternalLink className="h-3 w-3" />
+          <Check className="h-3 w-3" /> {avatar} {label} <ExternalLink className="h-3 w-3" />
         </a>
       );
     }
     return (
-      <span className={cls} title={`Posted to ${full}`}>
-        <Check className="h-3 w-3" /> {label}
+      <span className={cls} title={`Posted to ${full}${at}`}>
+        <Check className="h-3 w-3" /> {avatar} {label}
       </span>
     );
   }
 
   if (task.status === 'PROCESSING') {
     return (
-      <span className={`${base} bg-blue-100 text-blue-700`} title={`Publishing to ${full}…`}>
-        <Loader2 className="h-3 w-3 animate-spin" /> {label}
+      <span className={`${base} bg-blue-100 text-blue-700`} title={`Publishing to ${full}${at}…`}>
+        <Loader2 className="h-3 w-3 animate-spin" /> {avatar} {label}
       </span>
     );
   }
@@ -421,20 +479,28 @@ function TaskChip({ task, onRetry }: { task: QueueTask; onRetry: () => void }) {
         className={`${base} bg-red-100 text-red-700 hover:bg-red-200`}
         title={title}
       >
-        <AlertTriangle className="h-3 w-3" /> {label} <RefreshCw className="h-3 w-3" />
+        <AlertTriangle className="h-3 w-3" /> {avatar} {label} <RefreshCw className="h-3 w-3" />
       </button>
     );
   }
 
   // SCHEDULED / PENDING
   return (
-    <span className={`${base} bg-slate-100 text-slate-600`} title={`Scheduled for ${full}`}>
-      {label}
+    <span className={`${base} bg-slate-100 text-slate-600`} title={`Scheduled for ${full}${at}`}>
+      {avatar} {label}
     </span>
   );
 }
 
-function UpcomingList({ data, loading }: { data: Upcoming | undefined; loading: boolean }) {
+function UpcomingList({
+  data,
+  loading,
+  tiktok,
+}: {
+  data: Upcoming | undefined;
+  loading: boolean;
+  tiktok: TikTokAccount | null;
+}) {
   const groups = useMemo(() => {
     const map = new Map<string, Upcoming>();
     for (const post of data ?? []) {
@@ -469,20 +535,41 @@ function UpcomingList({ data, loading }: { data: Upcoming | undefined; loading: 
             {day}
           </p>
           <ul className="space-y-1.5">
-            {posts.map((p) => (
-              <li key={p.taskId} className="flex items-center gap-2 text-sm">
-                <Thumb url={p.thumbnailUrl} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate">{p.title ?? 'Untitled'}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {formatTime(p.scheduledAt)} · {PLATFORM_LABELS[p.platform]}
-                    {p.needsConnection ? (
-                      <span className="text-red-600"> · reconnect needed</span>
-                    ) : null}
-                  </p>
-                </div>
-              </li>
-            ))}
+            {posts.map((p) => {
+              const isTikTok = p.platform === 'TIKTOK';
+              const handle = tiktok?.username ?? tiktok?.nickname ?? null;
+              return (
+                <li key={p.taskId} className="flex items-center gap-2 text-sm">
+                  <Thumb url={p.thumbnailUrl} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate">{p.title ?? 'Untitled'}</p>
+                    <p className="text-muted-foreground flex items-center gap-1 text-xs">
+                      <span>
+                        {formatTime(p.scheduledAt)} · {PLATFORM_LABELS[p.platform]}
+                      </span>
+                      {isTikTok && tiktok ? (
+                        <span className="flex items-center gap-1">
+                          {tiktok.avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={tiktok.avatarUrl}
+                              alt=""
+                              className="h-4 w-4 shrink-0 rounded-full object-cover"
+                            />
+                          ) : null}
+                          {handle ? (
+                            <span className="truncate">@{handle}</span>
+                          ) : null}
+                        </span>
+                      ) : null}
+                      {p.needsConnection ? (
+                        <span className="text-red-600">· reconnect needed</span>
+                      ) : null}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         </div>
       ))}
