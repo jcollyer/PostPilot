@@ -11,15 +11,23 @@ export function SiteHeader() {
   return (
     <header className="border-border/60 sticky top-0 z-30 w-full border-b bg-background/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
+        <Link href="/" className="flex items-center gap-2" aria-label="PostPilot home">
           <Image
-            src="/postpilot-icon.png"
-            alt="PostPilot"
-            width={28}
-            height={28}
-            className="rounded-md"
+            src="/logo-small.png"
+            alt=""
+            width={32}
+            height={25}
+            className="h-7 w-auto"
+            priority
           />
-          <span>PostPilot</span>
+          <Image
+            src="/logo.png"
+            alt="PostPilot"
+            width={124}
+            height={25}
+            className="hidden h-5 w-auto sm:block"
+            priority
+          />
         </Link>
 
         <nav className="flex items-center gap-1 sm:gap-2">

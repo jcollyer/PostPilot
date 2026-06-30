@@ -16,10 +16,6 @@ export function MarketingPanel() {
   return (
     <div className="space-y-8">
       <div>
-        <div className="text-primary flex items-center gap-2 text-xl font-bold tracking-tight">
-          <Sparkles className="h-5 w-5" />
-          PostPilot
-        </div>
         <h1 className="mt-4 text-3xl font-semibold leading-tight tracking-tight">
           Upload once. Queue it. Walk away.
         </h1>

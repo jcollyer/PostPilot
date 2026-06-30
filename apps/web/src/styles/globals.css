@@ -13,7 +13,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 222 47% 31%;
+    /* Primary brand color — #096aed */
+    --primary: 214 93% 48%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 210 40% 96%;
@@ -30,7 +31,12 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 222 47% 31%;
+    --ring: 214 93% 48%;
+
+    /* Brand accent palette (teals) — used on public/marketing pages */
+    --brand-teal-dark: 178 43% 27%; /* #27615F */
+    --brand-teal: 178 49% 40%; /* #349995 */
+    --brand-teal-light: 176 19% 72%; /* #A9C5C3 */
 
     --radius: 0.625rem;
   }
@@ -45,8 +51,9 @@
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222 47% 11%;
+    /* Primary brand color — #096aed, brightened slightly for dark backgrounds */
+    --primary: 214 92% 56%;
+    --primary-foreground: 210 40% 98%;
 
     --secondary: 217 33% 17%;
     --secondary-foreground: 210 40% 98%;
@@ -62,7 +69,12 @@
 
     --border: 217 33% 17%;
     --input: 217 33% 17%;
-    --ring: 212 27% 84%;
+    --ring: 214 92% 56%;
+
+    /* Brand accent palette (teals) — used on public/marketing pages */
+    --brand-teal-dark: 178 43% 27%; /* #27615F */
+    --brand-teal: 178 49% 40%; /* #349995 */
+    --brand-teal-light: 176 19% 72%; /* #A9C5C3 */
   }
 }
 

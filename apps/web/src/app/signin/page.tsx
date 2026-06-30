@@ -29,15 +29,14 @@ export default async function SignInPage({
     <main className="flex min-h-dvh items-center justify-center p-6">
       <div className="grid w-full max-w-4xl items-center gap-10 md:grid-cols-2">
         <div className="hidden md:block">
-          <Link href="/" className="mb-6 inline-flex items-center gap-2 font-semibold tracking-tight">
+          <Link href="/" className="inline-flex items-center gap-2" aria-label="PostPilot home">
             <Image
-              src="/postpilot-icon.png"
+              src="/logo.png"
               alt="PostPilot"
-              width={28}
-              height={28}
-              className="rounded-md"
+              width={144}
+              height={29}
+              className="h-6 w-auto"
             />
-            <span>PostPilot</span>
           </Link>
           <MarketingPanel />
         </div>

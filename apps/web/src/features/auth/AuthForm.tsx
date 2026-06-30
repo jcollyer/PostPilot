@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Loader2, Mail } from 'lucide-react';
 
@@ -121,9 +122,14 @@ export function AuthForm({ hasGoogle, initialMode = 'signin' }: AuthFormProps) {
   return (
     <Card className="w-full max-w-md">
       <CardHeader className="text-center">
-        <div className="bg-primary mx-auto mb-2 flex size-10 items-center justify-center rounded-xl">
-          <span className="text-primary-foreground text-lg font-bold">P</span>
-        </div>
+        <Image
+          src="/logo-small.png"
+          alt="PostPilot"
+          width={52}
+          height={40}
+          className="mx-auto mb-2 h-10 w-auto"
+          priority
+        />
         <CardTitle className="text-2xl">{titles[mode].title}</CardTitle>
         <CardDescription>{titles[mode].description}</CardDescription>
       </CardHeader>
