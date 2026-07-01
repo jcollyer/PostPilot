@@ -1,4 +1,5 @@
 import { TRPCError } from '@trpc/server';
+import { tasks } from '@trigger.dev/sdk';
 import { Platform, Prisma, type PrismaClient } from '@postpilot/db';
 import {
   abortUploadSchema,
@@ -57,6 +58,35 @@ async function recomputeUserQueue(prisma: PrismaClient, userId: string) {
     await recomputeSchedule(prisma, queue.id);
   } catch {
     // Swallow — the cron reschedule will reconcile on its next run.
+  }
+}
+
+/**
+ * Kick the AI worker to drain this user's freshly-uploaded videos now, instead
+ * of waiting up to 5 minutes for the `ai-process` cron. Strictly best-effort:
+ * the cron is the reliable floor, so a missing TRIGGER_SECRET_KEY (e.g. local
+ * dev) or any trigger error must never fail the upload.
+ *
+ * A burst upload calls this once per file; the idempotency key + short delay
+ * consolidate them into a single per-user drain rather than one run per file.
+ */
+async function kickAiProcessing(userId: string) {
+  try {
+    await tasks.trigger(
+      'ai-process-user',
+      { userId },
+      {
+        // Collapse a rapid burst (many files finishing close together) into one
+        // run; a new run is allowed once the window passes.
+        idempotencyKey: ['ai-process-user', userId],
+        idempotencyKeyTTL: '20s',
+        // Give sibling uploads in the same batch a moment to flip to READY so
+        // the single drain sees as many of them as possible.
+        delay: '3s',
+      },
+    );
+  } catch {
+    // Swallow — the cron will pick these up on its next run.
   }
 }
 
@@ -309,6 +339,9 @@ export const mediaRouter = router({
           data: { videoCount: { increment: 1 } },
         });
       }
+
+      // Start AI processing right away instead of waiting for the 5-min cron.
+      await kickAiProcessing(ctx.userId);
 
       return toVideoDto(updated);
     }),

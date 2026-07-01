@@ -78,9 +78,12 @@ the engine needs: `DATABASE_URL`, `DIRECT_URL`, `OPENAI_API_KEY`, all `R2_*`,
 pipeline's frame/audio/pHash steps work) and the **Prisma** extension (so the
 client is generated in the deployed image).
 
-> Optional: trigger `ai-process` immediately after an upload instead of waiting
-> for the 5-minute cron — call the task from `media.completeUpload`. The cron is
-> the reliable floor.
+> New uploads start processing immediately: `media.completeUpload` fires the
+> `ai-process-user` task (a per-user drain) as soon as an upload finishes, so
+> there's no wait for the 5-minute cron. The cron remains the reliable floor.
+> For this to work, give the **web app** a `TRIGGER_SECRET_KEY` (Trigger.dev
+> dashboard → API keys). Without it the trigger is skipped and processing falls
+> back to the cron.
 
 ---
 
@@ -88,6 +91,8 @@ client is generated in the deployed image).
 
 Core (web + engine): `DATABASE_URL`, `DIRECT_URL`, `AUTH_SECRET`, `AUTH_URL`,
 `TOKEN_ENCRYPTION_KEY`.
+Web app (to start processing on upload): `TRIGGER_SECRET_KEY` — the server/secret
+key from the Trigger.dev dashboard. Optional; falls back to the cron if unset.
 Auth email: `AUTH_RESEND_KEY`, `EMAIL_FROM` (+ optional `AUTH_GOOGLE_ID/SECRET`).
 Storage: `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
 `R2_BUCKET`, `R2_PUBLIC_BASE_URL`.
