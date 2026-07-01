@@ -10,6 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "refresh:connections": "tsx src/jobs/refresh-due-connections.ts",
+    "refresh:profiles": "tsx src/jobs/refresh-profiles.ts",
     "clean": "rm -rf node_modules .turbo"
   },
   "dependencies": {

@@ -257,6 +257,16 @@ model PlatformConnection {
   needsReconnectSince DateTime?
   lastError          String?  @db.Text
 
+  // Cached "creator profile" snapshot (bio + recent post captions/hashtags)
+  // pulled from the platform's own API. Powers AI metadata generation as
+  // voice/style reference — refreshed at connect time and periodically by a
+  // background job, never fetched live during video processing. Absent
+  // (null) when the platform's fetchProfileSnapshot isn't implemented, the
+  // scope wasn't granted, or the fetch hasn't run yet.
+  profileBio         String?   @db.Text
+  profileRecentPosts Json?
+  profileFetchedAt   DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

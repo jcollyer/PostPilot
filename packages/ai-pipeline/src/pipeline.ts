@@ -9,6 +9,7 @@ import { dHashFromGray9x8 } from './phash';
 import { extractThumbnails } from './steps/frames';
 import { transcribeVideo } from './steps/transcribe';
 import { generateMetadata } from './steps/metadata';
+import { getCreatorContext } from './steps/style-examples';
 import { embedVideo } from './steps/embeddings';
 import { detectDuplicates } from './steps/duplicates';
 import { persistMetadata } from './steps/persist';
@@ -24,8 +25,8 @@ export interface ProcessResult {
 /**
  * Run the full AI pipeline for one video. Ordered steps, each isolated so a
  * later failure doesn't lose earlier work:
- *   probe → frames → transcribe → metadata (vision) → persist →
- *   embeddings → pHash → duplicate detection.
+ *   probe → frames → transcribe → creator context → metadata (vision) →
+ *   persist → embeddings → pHash → duplicate detection.
  *
  * Sets aiStatus RUNNING up front and COMPLETED/FAILED at the end. Designed to
  * be wrapped by a durable Trigger.dev task later without changing this logic.
@@ -83,13 +84,36 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         );
       }
 
-      // 4. Vision metadata + 5. persist (base, per-platform, category, thumb).
+      // 4. Creator context — bio + past posts, preferring the creator's own
+      //    connected platforms (cached by @postpilot/connectors) and topping
+      //    up with in-app library examples (via pgvector similarity on the
+      //    transcript, falling back to recent videos). Non-fatal: worst case
+      //    is generating with no bio/examples, same as before this existed.
+      let creatorContext: Awaited<ReturnType<typeof getCreatorContext>> = {
+        bio: null,
+        examples: [],
+      };
+      try {
+        creatorContext = await getCreatorContext(prisma, {
+          userId: video.userId,
+          videoId,
+          transcript,
+        });
+      } catch (err) {
+        console.warn(
+          `[ai] creator context failed for ${videoId} (continuing): ${describeOpenAIError(err)}`,
+        );
+      }
+
+      // 5. Vision metadata + 6. persist (base, per-platform, category, thumb).
       let metadata;
       try {
         metadata = await generateMetadata({
           frames: frames.map((f) => f.buffer),
           transcript,
           durationSec: info.durationSec,
+          creatorBio: creatorContext.bio,
+          styleExamples: creatorContext.examples,
         });
       } catch (err) {
         throw new Error(`vision metadata (OpenAI) failed: ${describeOpenAIError(err)}`);
@@ -102,7 +126,7 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         selectedThumbnailId,
       });
 
-      // 6. Embedding (powers dedupe + smart ordering).
+      // 7. Embedding (powers dedupe + smart ordering).
       let embedding: number[] | null = null;
       try {
         embedding = await embedVideo(prisma, {
@@ -117,7 +141,7 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         console.warn(`[ai] embedding failed for ${videoId}: ${describeOpenAIError(err)}`);
       }
 
-      // 7. pHash from the middle frame.
+      // 8. pHash from the middle frame.
       let pHash: string | null = null;
       try {
         const mid = info.durationSec ? info.durationSec / 2 : 0;
@@ -128,7 +152,7 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         console.warn(`[ai] pHash failed for ${videoId}:`, err);
       }
 
-      // 8. Duplicate detection across the user's library.
+      // 9. Duplicate detection across the user's library.
       const dupes = await detectDuplicates(prisma, {
         userId: video.userId,
         videoId,

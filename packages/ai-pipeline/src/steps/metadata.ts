@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { getOpenAI, VISION_MODEL } from '../config';
+import type { StyleExample } from './style-examples';
 
 /**
  * Vision-LLM metadata generation. Given a few representative frames plus the
@@ -54,7 +55,13 @@ emojis-only captions. Hashtags: lowercase, no leading '#', 5-12 relevant tags.
 Pick ONE concise category (1-2 words, e.g. "Travel", "Drone", "Cooking", "Fitness").
 Choose the index of the most eye-catching frame for the thumbnail.
 Tailor each platform: TikTok = punchy hook + trend-friendly; YouTube = clear searchable
-title; Instagram = aesthetic, mid-length. Respond with ONLY a JSON object of the form:
+title; Instagram = aesthetic, mid-length.
+If a creator bio is provided, use it to understand their niche and personality — it
+informs tone, never gets quoted directly. If examples of this creator's past posts are
+provided, use them ONLY to match this creator's established voice, tone, caption length,
+and hashtag conventions — never copy their specific topic, wording, or hashtags unless
+genuinely relevant to this new video.
+Respond with ONLY a JSON object of the form:
 {"title","caption","hashtags":[],"category","bestFrameIndex",
  "platforms":{"TIKTOK":{"title","caption","hashtags":[]},
  "INSTAGRAM":{...},"YOUTUBE":{...}}}`;
@@ -75,11 +82,25 @@ function platformOf(p: PlatformMeta | undefined, fallback: GeneratedMetadata): P
   };
 }
 
+/** Render past-post exemplars as a prompt block, or '' when there are none. */
+function buildStyleExamplesText(examples: StyleExample[]): string {
+  if (examples.length === 0) return '';
+  const blocks = examples
+    .map((ex, i) => {
+      const hashtags = ex.hashtags.length ? ex.hashtags.join(', ') : '(none)';
+      return `${i + 1}. Title: ${ex.title || '(none)'}\n   Caption: ${ex.caption || '(none)'}\n   Hashtags: ${hashtags}\n   Category: ${ex.category || '(none)'}`;
+    })
+    .join('\n');
+  return `\nThis creator's past posts (voice/tone/hashtag-style reference ONLY — do not reuse their topics or wording):\n${blocks}\n`;
+}
+
 /** Run the vision model over up to 4 frames + transcript and parse the result. */
 export async function generateMetadata(params: {
   frames: Buffer[];
   transcript: string | null;
   durationSec: number | null;
+  creatorBio?: string | null;
+  styleExamples?: StyleExample[];
 }): Promise<GeneratedMetadata> {
   const frames = params.frames.slice(0, 4);
   const imageContent = frames.map((buf) => ({
@@ -93,6 +114,10 @@ export async function generateMetadata(params: {
   const durationText = params.durationSec
     ? `Video duration: ~${Math.round(params.durationSec)}s.`
     : '';
+  const bioText = params.creatorBio
+    ? `Creator bio (from their own platform profile): ${params.creatorBio.slice(0, 500)}`
+    : '';
+  const examplesText = buildStyleExamplesText(params.styleExamples ?? []);
 
   const completion = await getOpenAI().chat.completions.create({
     model: VISION_MODEL,
@@ -102,7 +127,10 @@ export async function generateMetadata(params: {
       {
         role: 'user',
         content: [
-          { type: 'text', text: `${durationText}\n${transcriptText}\nFrames follow in order:` },
+          {
+            type: 'text',
+            text: `${durationText}\n${bioText}\n${transcriptText}\n${examplesText}\nFrames follow in order:`,
+          },
           ...imageContent,
         ],
       },

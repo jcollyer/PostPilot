@@ -2,6 +2,7 @@ import { Platform } from '@postpilot/db';
 
 import { deriveCodeChallenge } from '../crypto';
 import { buildUrl, expiresAt, formBody, requestJson } from '../http';
+import { extractHashtags, stripHashtags } from '../text';
 import {
   OAuthError,
   type AuthorizationRequest,
@@ -10,6 +11,8 @@ import {
   type OAuthTokens,
   type PlatformAdapter,
   type PlatformIdentity,
+  type ProfileSnapshot,
+  type RecentPost,
   type RefreshParams,
 } from '../types';
 
@@ -17,8 +20,14 @@ const AUTHORIZE_URL = 'https://www.tiktok.com/v2/auth/authorize/';
 const TOKEN_URL = 'https://open.tiktokapis.com/v2/oauth/token/';
 const REVOKE_URL = 'https://open.tiktokapis.com/v2/oauth/revoke/';
 const USER_URL = 'https://open.tiktokapis.com/v2/user/info/';
+const VIDEO_LIST_URL = 'https://open.tiktokapis.com/v2/video/list/';
 
-const DEFAULT_SCOPES = ['user.info.basic', 'video.publish'];
+// user.info.profile -> bio_description on user/info; video.list -> reading
+// back past posts for AI style context (see fetchProfileSnapshot below).
+// Both are additive to the original publish-only scope set, so existing
+// connections need to reconnect once before either becomes available.
+const DEFAULT_SCOPES = ['user.info.basic', 'user.info.profile', 'video.publish', 'video.list'];
+const RECENT_POSTS_LIMIT = 10;
 
 /** Sandbox vs prod is selected by TIKTOK_ENV; clients have separate keys. */
 function credentials(): { clientKey?: string; clientSecret?: string } {
@@ -45,7 +54,21 @@ interface TikTokTokenResponse {
 }
 
 interface TikTokUserResponse {
-  data?: { user?: { open_id?: string; union_id?: string; display_name?: string } };
+  data?: {
+    user?: {
+      open_id?: string;
+      union_id?: string;
+      display_name?: string;
+      bio_description?: string;
+    };
+  };
+  error?: { code?: string; message?: string };
+}
+
+interface TikTokVideoListResponse {
+  data?: {
+    videos?: Array<{ title?: string; video_description?: string; create_time?: number }>;
+  };
   error?: { code?: string; message?: string };
 }
 
@@ -166,6 +189,58 @@ export const tiktokAdapter: PlatformAdapter = {
       externalAccountId: user.open_id,
       displayName: user.display_name ?? null,
     };
+  },
+
+  /**
+   * Best-effort bio + last 10 posts, for AI style context. Requires
+   * `user.info.profile` (bio) and `video.list` (posts) — connections made
+   * before those scopes existed won't have them until they reconnect, so
+   * both calls are individually best-effort rather than all-or-nothing.
+   */
+  async fetchProfileSnapshot({
+    accessToken,
+  }: {
+    accessToken: string;
+    externalAccountId: string;
+  }): Promise<ProfileSnapshot> {
+    const userRes = await requestJson<TikTokUserResponse>(
+      buildUrl(USER_URL, { fields: 'open_id,display_name,bio_description' }),
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        context: 'TikTok user.info (profile)',
+        platform: Platform.TIKTOK,
+      },
+    ).catch(() => null);
+
+    const videoRes = await requestJson<TikTokVideoListResponse>(
+      buildUrl(VIDEO_LIST_URL, {
+        fields: 'title,video_description,create_time',
+      }),
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ max_count: RECENT_POSTS_LIMIT }),
+        context: 'TikTok video.list',
+        platform: Platform.TIKTOK,
+      },
+    ).catch(() => null);
+
+    const bio = userRes?.data?.user?.bio_description?.trim() || null;
+
+    const recentPosts: RecentPost[] = (videoRes?.data?.videos ?? [])
+      .slice(0, RECENT_POSTS_LIMIT)
+      .map((v) => ({ text: v.video_description || v.title || '', createTime: v.create_time }))
+      .filter((v) => v.text)
+      .map((v) => ({
+        caption: stripHashtags(v.text),
+        hashtags: extractHashtags(v.text),
+        postedAt: v.createTime ? new Date(v.createTime * 1000).toISOString() : null,
+      }));
+
+    return { bio, recentPosts };
   },
 
   async revoke({ accessToken }: RefreshParams): Promise<void> {

@@ -21,6 +21,24 @@ export interface AuthorizationRequest {
   url: string;
 }
 
+/** One past post's metadata, as pulled back from the platform's own API. */
+export interface RecentPost {
+  caption: string;
+  hashtags: string[];
+  /** ISO 8601, when known. */
+  postedAt: string | null;
+}
+
+/**
+ * A creator's "vibe" as read from their own connected account: their bio and
+ * a handful of their real past captions/hashtags. Used purely as read-only
+ * context for AI metadata generation — never written back to the platform.
+ */
+export interface ProfileSnapshot {
+  bio: string | null;
+  recentPosts: RecentPost[];
+}
+
 export interface AuthorizeOptions {
   redirectUri: string;
   state: string;
@@ -63,6 +81,16 @@ export interface PlatformAdapter {
   fetchIdentity(accessToken: string): Promise<PlatformIdentity>;
   /** Best-effort remote revoke on disconnect; optional per platform. */
   revoke?(params: RefreshParams): Promise<void>;
+  /**
+   * Best-effort read of the creator's bio + recent post captions, used as AI
+   * style context (see @postpilot/ai-pipeline's style-examples step). Optional
+   * per platform — a platform without the needed scope granted yet, or
+   * without this implemented, simply has no cached snapshot.
+   */
+  fetchProfileSnapshot?(params: {
+    accessToken: string;
+    externalAccountId: string;
+  }): Promise<ProfileSnapshot>;
 }
 
 /**

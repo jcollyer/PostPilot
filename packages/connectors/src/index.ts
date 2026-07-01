@@ -25,6 +25,8 @@ export type {
   AuthorizeOptions,
   ExchangeParams,
   RefreshParams,
+  ProfileSnapshot,
+  RecentPost,
 } from './types';
 export { OAuthError } from './types';
 
@@ -46,3 +48,10 @@ export {
 
 // Token refresh
 export { refreshConnection, refreshDueConnections, markNeedsReconnect } from './refresh-service';
+
+// Creator-profile snapshot cache (bio + recent posts, used as AI style context)
+export {
+  refreshProfileSnapshot,
+  refreshDueProfiles,
+  type ProfileRefreshResult,
+} from './profile-service';

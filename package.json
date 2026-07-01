@@ -21,6 +21,7 @@
     "db:studio": "dotenv -e .env -- prisma studio --schema=packages/db/prisma/schema.prisma",
     "db:seed": "dotenv -e .env -- tsx packages/db/prisma/seed.ts",
     "refresh:connections": "dotenv -e .env -- npm --workspace=@postpilot/connectors run refresh:connections",
+    "refresh:profiles": "dotenv -e .env -- npm --workspace=@postpilot/connectors run refresh:profiles",
     "ai:process": "dotenv -e .env -- npm --workspace=@postpilot/ai-pipeline run ai:process",
     "ai:watch": "dotenv -e .env -- npm --workspace=@postpilot/ai-pipeline run ai:watch",
     "queue:reschedule": "dotenv -e .env -- npm --workspace=@postpilot/queue run queue:reschedule",

@@ -5,6 +5,7 @@ import { decryptNullable, decryptSecret, generateCodeVerifier, generateState } f
 import { getRedirectUri } from './config';
 import { needsRefresh, tokenColumns } from './tokens';
 import { refreshConnection } from './refresh-service';
+import { refreshProfileSnapshot } from './profile-service';
 
 export interface PendingAuthorization {
   url: string;
@@ -50,7 +51,7 @@ export async function completeConnection(params: {
   });
   const cols = tokenColumns(tokens);
 
-  return prisma.platformConnection.upsert({
+  const connection = await prisma.platformConnection.upsert({
     where: {
       userId_platform_externalAccountId: {
         userId: params.userId,
@@ -78,6 +79,14 @@ export async function completeConnection(params: {
       ...cols,
     },
   });
+
+  // Warm the profile snapshot cache (bio + recent posts) right away so the
+  // very next video generated after connecting already benefits from it,
+  // instead of waiting for the periodic refresh job. Best-effort — never
+  // blocks or fails the connect flow.
+  refreshProfileSnapshot(connection).catch(() => undefined);
+
+  return connection;
 }
 
 /** Disconnect (best-effort remote revoke, then delete the row). */

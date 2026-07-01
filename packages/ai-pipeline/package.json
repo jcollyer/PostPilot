@@ -17,7 +17,8 @@
     "@postpilot/db": "*",
     "@postpilot/storage": "*",
     "@postpilot/types": "*",
-    "openai": "^4.73.0"
+    "openai": "^4.73.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@postpilot/config": "*",

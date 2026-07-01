@@ -1,6 +1,7 @@
 import { Platform } from '@postpilot/db';
 
 import { buildUrl, expiresAt, formBody, requestJson } from '../http';
+import { extractHashtags, stripHashtags } from '../text';
 import {
   OAuthError,
   type AuthorizationRequest,
@@ -9,6 +10,8 @@ import {
   type OAuthTokens,
   type PlatformAdapter,
   type PlatformIdentity,
+  type ProfileSnapshot,
+  type RecentPost,
   type RefreshParams,
 } from '../types';
 
@@ -18,11 +21,13 @@ const AUTHORIZE_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const REVOKE_URL = 'https://oauth2.googleapis.com/revoke';
 const CHANNELS_URL = 'https://www.googleapis.com/youtube/v3/channels';
+const PLAYLIST_ITEMS_URL = 'https://www.googleapis.com/youtube/v3/playlistItems';
 
 const DEFAULT_SCOPES = [
   'https://www.googleapis.com/auth/youtube.upload',
   'https://www.googleapis.com/auth/youtube.readonly',
 ];
+const RECENT_POSTS_LIMIT = 10;
 
 function credentials(): { clientId?: string; clientSecret?: string } {
   return {
@@ -41,6 +46,19 @@ interface GoogleTokenResponse {
 
 interface ChannelsResponse {
   items?: Array<{ id?: string; snippet?: { title?: string; customUrl?: string } }>;
+}
+
+interface ChannelsWithDetailsResponse {
+  items?: Array<{
+    snippet?: { description?: string };
+    contentDetails?: { relatedPlaylists?: { uploads?: string } };
+  }>;
+}
+
+interface PlaylistItemsResponse {
+  items?: Array<{
+    snippet?: { title?: string; description?: string; publishedAt?: string };
+  }>;
 }
 
 export const youtubeAdapter: PlatformAdapter = {
@@ -149,6 +167,63 @@ export const youtubeAdapter: PlatformAdapter = {
       username: channel.snippet?.customUrl ?? null,
       displayName: channel.snippet?.title ?? null,
     };
+  },
+
+  /**
+   * Best-effort bio (channel description) + last 10 uploads, for AI style
+   * context. Both are covered by the `youtube.readonly` scope already
+   * requested at connect time — no reconnect needed. Uses the channel's
+   * uploads playlist (1 quota unit) rather than search.list (100 units).
+   */
+  async fetchProfileSnapshot({
+    accessToken,
+  }: {
+    accessToken: string;
+    externalAccountId: string;
+  }): Promise<ProfileSnapshot> {
+    const channelRes = await requestJson<ChannelsWithDetailsResponse>(
+      buildUrl(CHANNELS_URL, { part: 'snippet,contentDetails', mine: 'true' }),
+      {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        context: 'YouTube channels.list (profile)',
+        platform: Platform.YOUTUBE,
+      },
+    ).catch(() => null);
+
+    const channel = channelRes?.items?.[0];
+    const bio = channel?.snippet?.description?.trim() || null;
+    const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
+
+    let recentPosts: RecentPost[] = [];
+    if (uploadsPlaylistId) {
+      const items = await requestJson<PlaylistItemsResponse>(
+        buildUrl(PLAYLIST_ITEMS_URL, {
+          part: 'snippet',
+          playlistId: uploadsPlaylistId,
+          maxResults: String(RECENT_POSTS_LIMIT),
+        }),
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          context: 'YouTube playlistItems.list',
+          platform: Platform.YOUTUBE,
+        },
+      ).catch(() => null);
+
+      recentPosts = (items?.items ?? [])
+        .filter((i) => i.snippet?.title)
+        .slice(0, RECENT_POSTS_LIMIT)
+        .map((i) => {
+          const title = i.snippet?.title ?? '';
+          const combined = `${title} ${i.snippet?.description ?? ''}`;
+          return {
+            caption: stripHashtags(title),
+            hashtags: extractHashtags(combined),
+            postedAt: i.snippet?.publishedAt ?? null,
+          };
+        });
+    }
+
+    return { bio, recentPosts };
   },
 
   async revoke({ accessToken, refreshToken }: RefreshParams): Promise<void> {

@@ -1,6 +1,7 @@
 import { Platform } from '@postpilot/db';
 
 import { buildUrl, expiresAt, formBody, requestJson } from '../http';
+import { extractHashtags, stripHashtags } from '../text';
 import {
   OAuthError,
   type AuthorizationRequest,
@@ -9,6 +10,8 @@ import {
   type OAuthTokens,
   type PlatformAdapter,
   type PlatformIdentity,
+  type ProfileSnapshot,
+  type RecentPost,
   type RefreshParams,
 } from '../types';
 
@@ -44,6 +47,16 @@ interface IgMeResponse {
   username?: string;
   account_type?: string;
 }
+
+interface IgProfileResponse {
+  biography?: string;
+}
+
+interface IgMediaListResponse {
+  data?: Array<{ caption?: string; timestamp?: string }>;
+}
+
+const RECENT_POSTS_LIMIT = 10;
 
 async function exchangeForLongLived(
   shortToken: string,
@@ -157,5 +170,49 @@ export const instagramAdapter: PlatformAdapter = {
       username: me.username ?? null,
       displayName: me.username ?? null,
     };
+  },
+
+  /**
+   * Best-effort bio + last 10 posts, for AI style context. Both fields are
+   * covered by the `instagram_business_basic` scope already requested at
+   * connect time, so this works for every existing connection — no
+   * reconnect needed.
+   */
+  async fetchProfileSnapshot({
+    accessToken,
+    externalAccountId,
+  }: {
+    accessToken: string;
+    externalAccountId: string;
+  }): Promise<ProfileSnapshot> {
+    const profile = await requestJson<IgProfileResponse>(
+      buildUrl(`${GRAPH}/${externalAccountId}`, {
+        fields: 'biography',
+        access_token: accessToken,
+      }),
+      { context: 'Instagram profile (bio)', platform: Platform.INSTAGRAM },
+    ).catch(() => null);
+
+    const media = await requestJson<IgMediaListResponse>(
+      buildUrl(`${GRAPH}/${externalAccountId}/media`, {
+        fields: 'caption,timestamp',
+        limit: String(RECENT_POSTS_LIMIT),
+        access_token: accessToken,
+      }),
+      { context: 'Instagram media list', platform: Platform.INSTAGRAM },
+    ).catch(() => null);
+
+    const bio = profile?.biography?.trim() || null;
+
+    const recentPosts: RecentPost[] = (media?.data ?? [])
+      .filter((m) => m.caption)
+      .slice(0, RECENT_POSTS_LIMIT)
+      .map((m) => ({
+        caption: stripHashtags(m.caption!),
+        hashtags: extractHashtags(m.caption!),
+        postedAt: m.timestamp ?? null,
+      }));
+
+    return { bio, recentPosts };
   },
 };
