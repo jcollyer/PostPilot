@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Folder as FolderIcon, FolderOpen, Loader2 } from 'lucide-react';
 
 import { trpc } from '@/lib/trpc/client';
@@ -11,6 +11,10 @@ import type { FolderDto } from './types';
  * Left-side folder tree. Lazy: each node fetches its child folders only when
  * it's expanded, so the panel stays cheap no matter how big the library gets.
  * Selecting a node navigates the main pane to that folder.
+ *
+ * When you land on a folder directly (e.g. via a shared `?folder=` link or a
+ * page refresh), the tree auto-expands the whole ancestor chain so the current
+ * folder is revealed and shown open — see `expandedPath` below.
  */
 export function FolderTree({
   currentFolderId,
@@ -20,6 +24,18 @@ export function FolderTree({
   onSelect: (folderId: string | null) => void;
 }) {
   const roots = trpc.folder.children.useQuery({ parentId: null });
+
+  // Root → current ancestor chain for the active folder. Expanding every id on
+  // this path opens the tree down to the current folder (and the folder itself,
+  // since breadcrumbs include it) so a deep-linked folder is visible on load.
+  const trail = trpc.folder.breadcrumbs.useQuery(
+    { folderId: currentFolderId ?? '' },
+    { enabled: Boolean(currentFolderId) },
+  );
+  const expandedPath = useMemo(
+    () => new Set((trail.data ?? []).map((c) => c.id)),
+    [trail.data],
+  );
 
   return (
     <div className="text-sm">
@@ -49,6 +65,7 @@ export function FolderTree({
               folder={f}
               depth={0}
               currentFolderId={currentFolderId}
+              expandedPath={expandedPath}
               onSelect={onSelect}
             />
           ))
@@ -62,16 +79,35 @@ function TreeNode({
   folder,
   depth,
   currentFolderId,
+  expandedPath,
   onSelect,
 }: {
   folder: FolderDto;
   depth: number;
   currentFolderId: string | null;
+  expandedPath: Set<string>;
   onSelect: (folderId: string | null) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const hasChildren = folder.childFolderCount > 0;
   const active = folder.id === currentFolderId;
+  const onPath = expandedPath.has(folder.id);
+
+  // Start open if we already know this node is on the active folder's path
+  // (avoids a flash), then keep it in sync as the path resolves/changes.
+  const [expanded, setExpanded] = useState(onPath);
+
+  // Auto-open when this node becomes part of the current folder's ancestor
+  // chain (deep link / refresh / breadcrumb navigation). We only force it open,
+  // never closed, so the user's own manual collapses elsewhere are preserved.
+  useEffect(() => {
+    if (onPath) setExpanded(true);
+  }, [onPath]);
+
+  // Bring the active folder into view within the (potentially long) tree panel.
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (active) rowRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [active]);
 
   const children = trpc.folder.children.useQuery(
     { parentId: folder.id },
@@ -81,6 +117,7 @@ function TreeNode({
   return (
     <div>
       <div
+        ref={rowRef}
         className={cn(
           'group flex items-center rounded-md transition',
           active ? 'bg-muted text-foreground font-medium' : 'hover:bg-muted/60',
@@ -131,6 +168,7 @@ function TreeNode({
                 folder={c}
                 depth={depth + 1}
                 currentFolderId={currentFolderId}
+                expandedPath={expandedPath}
                 onSelect={onSelect}
               />
             ))
