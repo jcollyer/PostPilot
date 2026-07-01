@@ -32,7 +32,14 @@ export interface ProcessResult {
  * be wrapped by a durable Trigger.dev task later without changing this logic.
  */
 export async function processVideo(videoId: string): Promise<ProcessResult> {
+  // Missing config is a hard, operator-visible failure — not a silent skip.
+  // Leaving the row PENDING makes the UI spin forever (the cron just re-skips
+  // it every 5 min); marking FAILED surfaces the error badge and lets the user
+  // re-queue via "Generate Metadata" once the key is set in the worker env.
   if (!isAiConfigured()) {
+    await prisma.video
+      .update({ where: { id: videoId }, data: { aiStatus: 'FAILED' } })
+      .catch(() => {});
     return { videoId, ok: false, error: 'OPENAI_API_KEY is not set' };
   }
 
@@ -40,9 +47,11 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
   if (!video) return { videoId, ok: false, error: 'video not found' };
   if (!video.storageKey) return { videoId, ok: false, error: 'video has no storage key' };
 
+  // Stamp aiStartedAt so a run killed mid-pipeline (before the catch below can
+  // set FAILED) can be detected as stale and reclaimed by processPending.
   await prisma.video.update({
     where: { id: videoId },
-    data: { aiStatus: 'RUNNING' },
+    data: { aiStatus: 'RUNNING', aiStartedAt: new Date() },
   });
 
   try {

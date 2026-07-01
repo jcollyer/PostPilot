@@ -436,6 +436,10 @@ model Video {
   // AI pipeline outputs.
   transcript     String?          @db.Text
   aiStatus       AiPipelineStatus @default(PENDING)
+  // When the worker last moved this video into RUNNING. Used to detect and
+  // reclaim rows orphaned in RUNNING by a killed worker run (OOM, maxDuration,
+  // deploy restart) so they don't spin forever.
+  aiStartedAt    DateTime?
   aiProcessedAt  DateTime?
   categoryId     String?
 

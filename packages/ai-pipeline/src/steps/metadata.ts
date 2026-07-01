@@ -202,15 +202,17 @@ export async function generateMetadata(params: {
   // extractThumbnails samples MAX_FRAMES candidates (steps/frames.ts's
   // SAMPLE_FRACTIONS) — send all of them, not just the first 4, so the model
   // can actually see (and pick as thumbnail) the near-the-end frame too.
-  // 'high' detail lets it use the source resolution ffmpeg captured instead
-  // of a downscaled 512x512 pass — worth it for a hook-picking/context task,
-  // at the cost of materially more tokens per image than 'low' (~85 tokens
-  // flat) — expect several hundred to ~1000+ tokens per frame depending on
-  // source resolution.
+  //
+  // Detail is 'low' on purpose: 'high' inlines the full-resolution frame as
+  // base64 and holds all MAX_FRAMES of them in memory at once, which OOM-kills
+  // the worker on memory-constrained hosts (and multiplies token cost). 'low'
+  // downscales to ~512px at a flat ~85 tokens/frame — plenty for picking a
+  // hook/thumbnail and writing captions. Revisit only with a per-frame size
+  // guard if higher fidelity is ever needed.
   const frames = params.frames.slice(0, MAX_FRAMES);
   const imageContent = frames.map((buf) => ({
     type: 'image_url' as const,
-    image_url: { url: `data:image/jpeg;base64,${buf.toString('base64')}`, detail: 'high' as const },
+    image_url: { url: `data:image/jpeg;base64,${buf.toString('base64')}`, detail: 'low' as const },
   }));
 
   const transcriptText = params.transcript
