@@ -19,6 +19,7 @@ import {
   setTargetPlatformsManySchema,
   setTargetPlatformsSchema,
   setTiktokMetaSchema,
+  stopMetadataGenerationSchema,
   type TikTokPostOptions,
   type TikTokPrivacyLevel,
   updateVideoMetadataSchema,
@@ -579,9 +580,12 @@ export const mediaRouter = router({
       where,
       _count: { _all: true },
     });
-    const counts = { PENDING: 0, RUNNING: 0, COMPLETED: 0, FAILED: 0 };
+    const counts = { PENDING: 0, RUNNING: 0, COMPLETED: 0, FAILED: 0, CANCELED: 0 };
     for (const g of grouped) counts[g.aiStatus] = g._count._all;
-    return { ...counts, total: counts.PENDING + counts.RUNNING + counts.COMPLETED + counts.FAILED };
+    return {
+      ...counts,
+      total: counts.PENDING + counts.RUNNING + counts.COMPLETED + counts.FAILED + counts.CANCELED,
+    };
   }),
 
   /**
@@ -606,6 +610,29 @@ export const mediaRouter = router({
         data: { aiStatus: 'PENDING' },
       });
       return { queued: count };
+    }),
+
+  /**
+   * Stop generation before it starts. Only videos still PENDING are affected —
+   * one already RUNNING is mid-pipeline (ffmpeg/OpenAI calls in flight) and
+   * can't be safely interrupted here, so it's left to finish on its own.
+   */
+  stopMetadataGeneration: protectedProcedure
+    .input(stopMetadataGenerationSchema)
+    .mutation(async ({ ctx, input }) => {
+      const where: Prisma.VideoWhereInput = {
+        userId: ctx.userId,
+        aiStatus: 'PENDING',
+      };
+      if (input.videoId) where.id = input.videoId;
+      if (input.videoIds) where.id = { in: input.videoIds };
+      if (input.uploadSessionId) where.uploadSessionId = input.uploadSessionId;
+
+      const { count } = await ctx.prisma.video.updateMany({
+        where,
+        data: { aiStatus: 'CANCELED' },
+      });
+      return { canceled: count };
     }),
 
   /** Override the AI-chosen thumbnail with a specific candidate frame. */

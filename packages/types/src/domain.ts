@@ -33,7 +33,13 @@ export type ConnectionStatus = z.infer<typeof connectionStatusSchema>;
 export const mediaStatusSchema = z.enum(['UPLOADING', 'PROCESSING', 'READY', 'FAILED']);
 export type MediaStatus = z.infer<typeof mediaStatusSchema>;
 
-export const aiPipelineStatusSchema = z.enum(['PENDING', 'RUNNING', 'COMPLETED', 'FAILED']);
+export const aiPipelineStatusSchema = z.enum([
+  'PENDING',
+  'RUNNING',
+  'COMPLETED',
+  'FAILED',
+  'CANCELED',
+]);
 export type AiPipelineStatus = z.infer<typeof aiPipelineStatusSchema>;
 
 export const queueStatusSchema = z.enum(['ACTIVE', 'PAUSED']);

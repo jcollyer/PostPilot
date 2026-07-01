@@ -17,6 +17,7 @@ import {
   Search,
   Share2,
   Sparkles,
+  Square,
   Tag,
   Trash2,
   TriangleAlert,
@@ -134,6 +135,16 @@ export function MediaLibraryView() {
   }, [busy, utils]);
 
   const regenerate = trpc.media.regenerateMetadata.useMutation({
+    onSuccess: () => {
+      aiSummary.refetch();
+      refresh();
+    },
+  });
+
+  // Stop generation before it starts. Only PENDING (not-yet-started) videos are
+  // affected — one already RUNNING finishes on its own since the worker can't
+  // be safely interrupted mid-video.
+  const stopGeneration = trpc.media.stopMetadataGeneration.useMutation({
     onSuccess: () => {
       aiSummary.refetch();
       refresh();
@@ -318,6 +329,13 @@ export function MediaLibraryView() {
   );
   const addableSelectedCount = selectedCount - blockedSelectedCount;
 
+  // Videos in the current selection still queued but not yet picked up by the
+  // worker — these are what a selection-scoped "stop" would actually affect.
+  const selectedPendingCount = useMemo(
+    () => videos.filter((v) => selectedIds.has(v.id) && v.aiStatus === 'PENDING').length,
+    [videos, selectedIds],
+  );
+
   const bulkAddToQueue = () => {
     // Routes through requestQueue, which gates on TikTok consent when needed and
     // optimistically marks only the videos the server will actually queue.
@@ -325,13 +343,15 @@ export function MediaLibraryView() {
     clearSelection();
   };
   const bulkRegenerate = () => regenerate.mutate({ videoIds: [...selectedIds] });
+  const bulkStopGeneration = () => stopGeneration.mutate({ videoIds: [...selectedIds] });
 
   const bulkBusy =
     removeMany.isPending ||
     setCategoryMany.isPending ||
     setTargetsMany.isPending ||
     addToQueue.isPending ||
-    regenerate.isPending;
+    regenerate.isPending ||
+    stopGeneration.isPending;
 
   const openPlatformsDialog = () => {
     setBulkPlatforms(selectedFromTargets([]));
@@ -394,6 +414,20 @@ export function MediaLibraryView() {
               )}
               Generate metadata
             </Button>
+            {busy ? (
+              <Button
+                variant="outline"
+                onClick={() => stopGeneration.mutate({})}
+                disabled={stopGeneration.isPending}
+              >
+                {stopGeneration.isPending ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="mr-2 h-4 w-4" />
+                )}
+                Stop generating metadata
+              </Button>
+            ) : null}
             <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
               <FolderPlus className="mr-2 h-4 w-4" />
               New folder
@@ -420,6 +454,11 @@ export function MediaLibraryView() {
                 className="text-destructive hover:underline"
               >
                 Retry {aiSummary.data.FAILED} failed
+              </button>
+            ) : null}
+            {aiSummary.data.CANCELED > 0 ? (
+              <button type="button" onClick={() => regenerate.mutate({})} className="hover:underline">
+                {aiSummary.data.CANCELED} stopped — resume
               </button>
             ) : null}
             {busy ? (
@@ -538,6 +577,12 @@ export function MediaLibraryView() {
                 <Sparkles className="mr-2 h-4 w-4" />
                 Generate metadata
               </Button>
+              {selectedPendingCount > 0 ? (
+                <Button size="sm" variant="outline" onClick={bulkStopGeneration} disabled={bulkBusy}>
+                  <Square className="mr-2 h-4 w-4" />
+                  Stop generating metadata
+                </Button>
+              ) : null}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button size="sm" variant="outline" disabled={bulkBusy}>
@@ -1019,6 +1064,13 @@ function VideoCard({
               className="flex items-center rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
             >
               <TriangleAlert className="h-3 w-3" />
+            </span>
+          ) : video.aiStatus === 'CANCELED' ? (
+            <span
+              title="Metadata generation was stopped before it started"
+              className="flex items-center gap-0.5 rounded bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+            >
+              <Square className="h-3 w-3" /> Stopped
             </span>
           ) : null}
         </span>

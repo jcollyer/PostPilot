@@ -184,6 +184,9 @@ enum AiPipelineStatus {
   RUNNING
   COMPLETED
   FAILED
+  /// User stopped generation before the worker picked the video up. Only
+  /// reachable from PENDING — a video already RUNNING finishes on its own.
+  CANCELED
 }
 
 /// User-controlled global queue state. Per-platform pausing is expressed via

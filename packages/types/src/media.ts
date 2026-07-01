@@ -139,6 +139,19 @@ export const regenerateMetadataSchema = z.object({
 });
 export type RegenerateMetadataInput = z.infer<typeof regenerateMetadataSchema>;
 
+/**
+ * Stop AI generation before it starts. Same scope shape as
+ * `regenerateMetadataSchema` (single video / many / a session / everything),
+ * but only ever touches videos still PENDING — one already RUNNING is left to
+ * finish since the worker can't be safely interrupted mid-video.
+ */
+export const stopMetadataGenerationSchema = z.object({
+  videoId: z.string().min(1).optional(),
+  videoIds: z.array(z.string().min(1)).min(1).max(1000).optional(),
+  uploadSessionId: z.string().min(1).optional(),
+});
+export type StopMetadataGenerationInput = z.infer<typeof stopMetadataGenerationSchema>;
+
 /** Override the AI-selected thumbnail with one of the candidate frames. */
 export const selectThumbnailSchema = z.object({
   videoId: z.string().min(1),
