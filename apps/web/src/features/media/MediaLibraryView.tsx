@@ -22,10 +22,12 @@ import {
   Tag,
   Trash2,
   TriangleAlert,
+  Upload,
   X,
 } from 'lucide-react';
 
 import {
+  ACCEPTED_VIDEO_MIME_TYPES,
   DEFAULT_TIKTOK_OPTIONS,
   mediaStatusSchema,
   tiktokConsentSegments,
@@ -58,7 +60,8 @@ import {
   useConnectedPlatforms,
   useTikTokAccount,
 } from './PlatformTargets';
-import { UploadDialog } from './UploadDialog';
+import { UploadDialog, UploadItemList } from './UploadDialog';
+import { useVideoUpload } from './useVideoUpload';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
 import { FolderCard } from './FolderCard';
 import { FolderTree } from './FolderTree';
@@ -493,7 +496,11 @@ export function MediaLibraryView() {
               </button>
             ) : null}
             {aiSummary.data.CANCELED > 0 ? (
-              <button type="button" onClick={() => regenerate.mutate({})} className="hover:underline">
+              <button
+                type="button"
+                onClick={() => regenerate.mutate({})}
+                className="hover:underline"
+              >
                 {aiSummary.data.CANCELED} stopped — resume
               </button>
             ) : null}
@@ -614,7 +621,12 @@ export function MediaLibraryView() {
                 Generate metadata
               </Button>
               {selectedPendingCount > 0 ? (
-                <Button size="sm" variant="outline" onClick={bulkStopGeneration} disabled={bulkBusy}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={bulkStopGeneration}
+                  disabled={bulkBusy}
+                >
                   <Square className="mr-2 h-4 w-4" />
                   Stop generating metadata
                 </Button>
@@ -692,6 +704,11 @@ export function MediaLibraryView() {
             hasFilters={hasFilters}
             isSearching={isSearching}
             inFolder={currentFolderId !== null}
+            folderId={currentFolderId}
+            onUploaded={() => {
+              refresh();
+              aiSummary.refetch();
+            }}
           />
         ) : (
           <>
@@ -842,7 +859,7 @@ export function MediaLibraryView() {
                       href={seg.href}
                       target="_blank"
                       rel="noreferrer noopener"
-                      className="underline underline-offset-2 hover:text-foreground"
+                      className="hover:text-foreground underline underline-offset-2"
                     >
                       {seg.text}
                     </a>
@@ -931,24 +948,106 @@ function EmptyState({
   hasFilters,
   isSearching,
   inFolder,
+  folderId,
+  onUploaded,
 }: {
   hasFilters: boolean;
   isSearching: boolean;
   inFolder: boolean;
+  folderId: string | null;
+  onUploaded: () => void;
 }) {
   const title = isSearching ? 'No results' : inFolder ? 'This folder is empty' : 'No videos yet';
   const body = isSearching
     ? 'Try clearing the search or filters.'
     : inFolder
-      ? 'Upload videos here, create a subfolder, or move items into this folder.'
-      : 'Upload a batch of videos to get started — they upload straight to storage and we build your queue from there.';
+      ? 'Drop videos here to upload, create a subfolder, or move items into this folder.'
+      : 'Drop a batch of videos here to get started — they upload straight to storage and we build your queue from there.';
+
+  // Uploading only makes sense when the empty state reflects a genuinely empty
+  // folder/library — not a search or filter that happened to match nothing.
+  const canUpload = !isSearching && !hasFilters;
+
+  if (!canUpload) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
+        <Film className="text-muted-foreground h-8 w-8" />
+        <p className="font-medium">
+          {hasFilters && !isSearching ? 'No videos match those filters' : title}
+        </p>
+        <p className="text-muted-foreground max-w-sm text-sm">{body}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed py-16 text-center">
-      <Film className="text-muted-foreground h-8 w-8" />
-      <p className="font-medium">
-        {hasFilters && !isSearching ? 'No videos match those filters' : title}
-      </p>
-      <p className="text-muted-foreground max-w-sm text-sm">{body}</p>
+    <EmptyStateDropzone title={title} body={body} folderId={folderId} onUploaded={onUploaded} />
+  );
+}
+
+function EmptyStateDropzone({
+  title,
+  body,
+  folderId,
+  onUploaded,
+}: {
+  title: string;
+  body: string;
+  folderId: string | null;
+  onUploaded: () => void;
+}) {
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { items, addFiles } = useVideoUpload({ folderId, onUploaded });
+
+  const onSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) addFiles(e.target.files);
+    e.target.value = '';
+  };
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
+        }}
+        className={`flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed py-16 text-center transition-colors ${
+          dragging
+            ? 'border-primary bg-primary/5'
+            : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+        }`}
+      >
+        {dragging ? (
+          <Upload className="text-primary h-8 w-8" />
+        ) : (
+          <Film className="text-muted-foreground h-8 w-8" />
+        )}
+        <p className="font-medium">{dragging ? 'Drop to upload' : title}</p>
+        <p className="text-muted-foreground max-w-sm text-sm">{body}</p>
+        <p className="text-muted-foreground text-xs">MP4, MOV, or WebM · up to 10 GB each</p>
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTED_VIDEO_MIME_TYPES.join(',')}
+        multiple
+        className="hidden"
+        onChange={onSelect}
+      />
+      {items.length > 0 ? (
+        <div className="mt-4">
+          <UploadItemList items={items} />
+        </div>
+      ) : null}
     </div>
   );
 }
