@@ -31,6 +31,28 @@ export interface ProcessResult {
  * Sets aiStatus RUNNING up front and COMPLETED/FAILED at the end. Designed to
  * be wrapped by a durable Trigger.dev task later without changing this logic.
  */
+/**
+ * Resolve a video's folder chain into a readable path, root → leaf
+ * (e.g. ["Travel", "Japan 2024", "Tokyo"]). Returns [] for root-level videos
+ * (folderId === null). Walks up parentId with a small depth cap so a corrupt
+ * self-referential cycle can never loop forever.
+ */
+async function resolveFolderPath(folderId: string | null): Promise<string[]> {
+  const names: string[] = [];
+  let currentId = folderId;
+  const MAX_DEPTH = 20;
+  for (let i = 0; i < MAX_DEPTH && currentId; i++) {
+    const folder = await prisma.folder.findUnique({
+      where: { id: currentId },
+      select: { name: true, parentId: true },
+    });
+    if (!folder) break;
+    names.push(folder.name);
+    currentId = folder.parentId;
+  }
+  return names.reverse();
+}
+
 export async function processVideo(videoId: string): Promise<ProcessResult> {
   // Missing config is a hard, operator-visible failure — not a silent skip.
   // Leaving the row PENDING makes the UI spin forever (the cron just re-skips
@@ -137,6 +159,20 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         );
       }
 
+      // 4c. Folder path — walk the folder tree from this video's folder up to
+      //     the root so the model sees how the creator filed it (root > … >
+      //     leaf). Folder names often encode who/what/where/why/when, a strong
+      //     topical hint. Non-fatal: an empty path (root-level video or lookup
+      //     failure) simply omits the block, same as before this existed.
+      let folderPath: string[] = [];
+      try {
+        folderPath = await resolveFolderPath(video.folderId);
+      } catch (err) {
+        console.warn(
+          `[ai] folder path lookup failed for ${videoId} (continuing): ${describeOpenAIError(err)}`,
+        );
+      }
+
       // 5. Vision metadata + 6. persist (base, per-platform, category, thumb).
       let metadata;
       try {
@@ -147,6 +183,7 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
           creatorBio: creatorContext.bio,
           styleExamples: creatorContext.examples,
           creatorProfile,
+          folderPath,
         });
       } catch (err) {
         throw new Error(`vision metadata (OpenAI) failed: ${describeOpenAIError(err)}`);

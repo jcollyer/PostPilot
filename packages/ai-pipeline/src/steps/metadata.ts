@@ -81,6 +81,11 @@ Pick ONE concise category (1-2 words, e.g. "Travel", "Drone", "Cooking", "Fitnes
 Choose the index of the most eye-catching frame for the thumbnail.
 Tailor each platform: TikTok = punchy hook + trend-friendly; YouTube = clear searchable
 title; Instagram = aesthetic, mid-length.
+If a folder path is given, it is the creator's own filing of this video — its names
+often encode who/what/where/why/when (e.g. a shoot location, event, client, series, or
+date). Treat it as a strong topical hint to ground titles, captions, and hashtags, but
+never quote raw folder names, internal codes, or dates verbatim if they read as
+file-management jargon rather than natural caption language.
 Three sources of voice context may follow, in priority order. If a creator profile is
 given, it is the creator's own explicit instructions — follow it precisely, including its
 banned words and emoji preference, and it overrides everything else below. If a creator
@@ -178,6 +183,97 @@ function applyBannedWords(meta: GeneratedMetadata, banned: string[]): GeneratedM
   };
 }
 
+/**
+ * Obvious file-management folder names that carry no topical signal — default
+ * scaffolding ("New Folder"), placeholders ("Untitled"), workflow/status buckets
+ * ("Final", "Drafts", "Exports"), and generic catch-alls ("Misc", "Stuff").
+ * These get dropped before the path reaches the model so it isn't nudged toward
+ * junk topics or tempted to quote them.
+ */
+const NON_SIGNAL_FOLDER_NAMES = new Set<string>([
+  'new folder',
+  'untitled',
+  'untitled folder',
+  'folder',
+  'folders',
+  'misc',
+  'miscellaneous',
+  'other',
+  'others',
+  'stuff',
+  'random',
+  'temp',
+  'tmp',
+  'temporary',
+  'test',
+  'tests',
+  'testing',
+  'draft',
+  'drafts',
+  'final',
+  'finals',
+  'wip',
+  'todo',
+  'copy',
+  'export',
+  'exports',
+  'output',
+  'outputs',
+  'render',
+  'renders',
+  'raw',
+  'footage',
+  'uploads',
+  'downloads',
+  'videos',
+  'video',
+  'clips',
+  'archive',
+  'archived',
+  'old',
+  'unsorted',
+  'inbox',
+  'new',
+]);
+
+/**
+ * Regex-based junk detection for names the exact blocklist can't enumerate:
+ * pure version/sequence tokens ("v2", "final_v3", "draft 2"), "Copy of …" /
+ * "… copy 2" duplicate markers, and lone small integers ("1", "2"). Note we do
+ * NOT strip pure 4-digit numbers — "2024" is a meaningful year (the "when").
+ */
+function isNonSignalFolderName(name: string): boolean {
+  const n = name.trim().toLowerCase();
+  if (!n) return true;
+  if (NON_SIGNAL_FOLDER_NAMES.has(n)) return true;
+  // version tokens: v2, ver 3, final_v2, draft-1, final 2, etc.
+  if (/^(final|draft|ver|version|v|rev|take)[\s._-]*v?\d*$/.test(n)) return true;
+  // duplicate markers: "copy of x", "x copy", "x copy 2", "x (1)"
+  if (/^copy of /.test(n) || /\bcopy(\s*\d+)?$/.test(n) || /\(\d+\)$/.test(n)) return true;
+  // lone small integers (folder "1", "2") — but keep years like 2024
+  if (/^\d{1,3}$/.test(n)) return true;
+  return false;
+}
+
+/**
+ * Render the video's folder path (root → leaf) as a prompt block, or '' when
+ * the video sits at the library root / has no folder. The path often encodes
+ * who/what/where/why/when the creator captured this video, so it's a useful
+ * topical anchor. Segments are joined with ' > ' so the model can see the
+ * hierarchy (broad category → specific shoot). Obvious non-signal segments
+ * (see isNonSignalFolderName) are dropped first so scaffolding names never
+ * skew the metadata.
+ */
+function buildFolderPathText(folderPath: string[] | null | undefined): string {
+  if (!folderPath || folderPath.length === 0) return '';
+  const cleaned = folderPath
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((s) => !isNonSignalFolderName(s));
+  if (cleaned.length === 0) return '';
+  return `\nFolder (how the creator filed this video — a topical hint about who/what/where/why/when, not caption text to quote):\n${cleaned.join(' > ')}\n`;
+}
+
 /** Render past-post exemplars as a prompt block, or '' when there are none. */
 function buildStyleExamplesText(examples: StyleExample[]): string {
   if (examples.length === 0) return '';
@@ -198,6 +294,8 @@ export async function generateMetadata(params: {
   creatorBio?: string | null;
   styleExamples?: StyleExample[];
   creatorProfile?: CreatorProfileContext | null;
+  /** Folder chain root → leaf (e.g. ["Travel", "Japan 2024", "Tokyo"]). */
+  folderPath?: string[] | null;
 }): Promise<GeneratedMetadata> {
   // extractThumbnails samples MAX_FRAMES candidates (steps/frames.ts's
   // SAMPLE_FRACTIONS) — send all of them, not just the first 4, so the model
@@ -225,6 +323,7 @@ export async function generateMetadata(params: {
     ? `Creator bio (from their own platform profile): ${params.creatorBio.slice(0, 500)}`
     : '';
   const profileText = buildCreatorProfileText(params.creatorProfile);
+  const folderText = buildFolderPathText(params.folderPath);
   const examplesText = buildStyleExamplesText(params.styleExamples ?? []);
 
   const completion = await getOpenAI().chat.completions.create({
@@ -237,7 +336,7 @@ export async function generateMetadata(params: {
         content: [
           {
             type: 'text',
-            text: `${durationText}\n${profileText}\n${bioText}\n${transcriptText}\n${examplesText}\nFrames follow in order:`,
+            text: `${durationText}\n${profileText}\n${bioText}\n${folderText}\n${transcriptText}\n${examplesText}\nFrames follow in order:`,
           },
           ...imageContent,
         ],
