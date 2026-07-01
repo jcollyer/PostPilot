@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { getInitials } from '@/lib/utils';
 import { trpc } from '@/lib/trpc/client';
 
+import { CreatorProfileSettings } from './CreatorProfileSettings';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { NotificationsSettings } from './NotificationsSettings';
 import { signOutAfterAccountDelete } from './actions';
@@ -181,6 +182,19 @@ export function SettingsView() {
           <Button variant="outline" asChild>
             <Link href="/settings/connections">Manage platform connections</Link>
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card id="creator-profile" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle>Creator profile</CardTitle>
+          <CardDescription>
+            Tell the AI about your niche, tone, and voice so generated captions actually sound like
+            you.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CreatorProfileSettings />
         </CardContent>
       </Card>
 

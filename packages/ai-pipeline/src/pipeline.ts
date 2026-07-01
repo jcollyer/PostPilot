@@ -8,7 +8,7 @@ import { extractGray9x8, probeMedia } from './ffmpeg';
 import { dHashFromGray9x8 } from './phash';
 import { extractThumbnails } from './steps/frames';
 import { transcribeVideo } from './steps/transcribe';
-import { generateMetadata } from './steps/metadata';
+import { generateMetadata, type CreatorProfileContext } from './steps/metadata';
 import { getCreatorContext } from './steps/style-examples';
 import { embedVideo } from './steps/embeddings';
 import { detectDuplicates } from './steps/duplicates';
@@ -25,8 +25,8 @@ export interface ProcessResult {
 /**
  * Run the full AI pipeline for one video. Ordered steps, each isolated so a
  * later failure doesn't lose earlier work:
- *   probe → frames → transcribe → creator context → metadata (vision) →
- *   persist → embeddings → pHash → duplicate detection.
+ *   probe → frames → transcribe → creator context + profile →
+ *   metadata (vision) → persist → embeddings → pHash → duplicate detection.
  *
  * Sets aiStatus RUNNING up front and COMPLETED/FAILED at the end. Designed to
  * be wrapped by a durable Trigger.dev task later without changing this logic.
@@ -105,6 +105,29 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         );
       }
 
+      // 4b. Creator profile — explicit niche/tone/audience/banned-words/emoji
+      //     instructions from the CreatorProfile onboarding form + settings
+      //     card. Non-fatal and simply absent (null) for creators who never
+      //     filled it in, same as before this existed.
+      let creatorProfile: CreatorProfileContext | null = null;
+      try {
+        creatorProfile = await prisma.creatorProfile.findUnique({
+          where: { userId: video.userId },
+          select: {
+            niche: true,
+            tone: true,
+            audience: true,
+            bannedWords: true,
+            exampleCaption: true,
+            emojiPreference: true,
+          },
+        });
+      } catch (err) {
+        console.warn(
+          `[ai] creator profile lookup failed for ${videoId} (continuing): ${describeOpenAIError(err)}`,
+        );
+      }
+
       // 5. Vision metadata + 6. persist (base, per-platform, category, thumb).
       let metadata;
       try {
@@ -114,6 +137,7 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
           durationSec: info.durationSec,
           creatorBio: creatorContext.bio,
           styleExamples: creatorContext.examples,
+          creatorProfile,
         });
       } catch (err) {
         throw new Error(`vision metadata (OpenAI) failed: ${describeOpenAIError(err)}`);

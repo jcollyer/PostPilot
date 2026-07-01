@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 
 import { NavBar } from '@/components/NavBar';
+import { CreatorProfileOnboarding } from '@/features/onboarding/CreatorProfileOnboarding';
 import { getServerSession } from '@/server/session';
 
 /**
@@ -16,6 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-dvh flex-col">
       <NavBar name={session.user.name} email={session.user.email} image={session.user.image} />
       <main className="container flex-1 py-8">{children}</main>
+      <CreatorProfileOnboarding />
     </div>
   );
 }

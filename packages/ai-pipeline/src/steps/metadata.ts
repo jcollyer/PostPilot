@@ -48,19 +48,43 @@ export interface GeneratedMetadata {
   platforms: { TIKTOK: PlatformMeta; INSTAGRAM: PlatformMeta; YOUTUBE: PlatformMeta };
 }
 
+/**
+ * Explicit creator-set context (the CreatorProfile onboarding form + settings
+ * card), as opposed to the *inferred* voice signals in style-examples.ts
+ * (bio + past posts). Takes priority in the prompt since it's direct
+ * instruction from the creator, not a guess.
+ */
+export interface CreatorProfileContext {
+  niche: string | null;
+  tone: string | null;
+  audience: string | null;
+  bannedWords: string[];
+  exampleCaption: string | null;
+  emojiPreference: 'NONE' | 'MODERATE' | 'HEAVY';
+}
+
+const EMOJI_GUIDANCE: Record<CreatorProfileContext['emojiPreference'], string> = {
+  NONE: 'Do not use any emojis, anywhere.',
+  MODERATE: 'Use emojis sparingly — only when they genuinely add something.',
+  HEAVY: 'Use emojis liberally, matching an upbeat, emoji-forward caption style.',
+};
+
 const SYSTEM_PROMPT = `You are the content manager for a short-form video creator.
 You are given sample frames from one vertical short video and (sometimes) its transcript.
-Write publishing metadata. Be specific and engaging, never generic. Avoid clickbait and
-emojis-only captions. Hashtags: lowercase, no leading '#', 5-12 relevant tags.
+Write publishing metadata. Be specific and engaging, never generic. Hashtags: lowercase,
+no leading '#', 5-12 relevant tags.
 Pick ONE concise category (1-2 words, e.g. "Travel", "Drone", "Cooking", "Fitness").
 Choose the index of the most eye-catching frame for the thumbnail.
 Tailor each platform: TikTok = punchy hook + trend-friendly; YouTube = clear searchable
 title; Instagram = aesthetic, mid-length.
-If a creator bio is provided, use it to understand their niche and personality — it
-informs tone, never gets quoted directly. If examples of this creator's past posts are
-provided, use them ONLY to match this creator's established voice, tone, caption length,
-and hashtag conventions — never copy their specific topic, wording, or hashtags unless
-genuinely relevant to this new video.
+Three sources of voice context may follow, in priority order. If a creator profile is
+given, it is the creator's own explicit instructions — follow it precisely, including its
+banned words and emoji preference, and it overrides everything else below. If a creator
+bio is given, use it to understand their niche and personality — it informs tone, never
+gets quoted directly. If examples of this creator's past posts are given, use them ONLY to
+match established voice, tone, caption length, and hashtag conventions — never copy their
+specific topic, wording, or hashtags unless genuinely relevant to this new video. Absent
+any of these, avoid clickbait and emoji-only captions.
 Respond with ONLY a JSON object of the form:
 {"title","caption","hashtags":[],"category","bestFrameIndex",
  "platforms":{"TIKTOK":{"title","caption","hashtags":[]},
@@ -79,6 +103,74 @@ function platformOf(p: PlatformMeta | undefined, fallback: GeneratedMetadata): P
     title: p?.title?.trim() || fallback.title,
     caption: p?.caption?.trim() || fallback.caption,
     hashtags: normalizeHashtags(p?.hashtags?.length ? p.hashtags : fallback.hashtags),
+  };
+}
+
+/** Render the creator's explicit profile as a prompt block, or '' when unset. */
+function buildCreatorProfileText(profile: CreatorProfileContext | null | undefined): string {
+  if (!profile) return '';
+  const lines: string[] = [];
+  if (profile.niche) lines.push(`Niche: ${profile.niche}`);
+  if (profile.tone) lines.push(`Tone: ${profile.tone}`);
+  if (profile.audience) lines.push(`Audience: ${profile.audience}`);
+  if (profile.bannedWords.length > 0) {
+    lines.push(
+      `Never use these words/phrases, under any circumstance: ${profile.bannedWords.join(', ')}`,
+    );
+  }
+  if (profile.exampleCaption) {
+    lines.push(
+      `An example caption in the creator's own words (match this voice — don't reuse its topic): "${profile.exampleCaption.slice(0, 500)}"`,
+    );
+  }
+  lines.push(`Emoji use: ${EMOJI_GUIDANCE[profile.emojiPreference]}`);
+  return `\nCreator profile (set directly by the creator — highest priority, follow precisely):\n${lines.join('\n')}\n`;
+}
+
+/**
+ * Case-insensitive whole-word/phrase removal — the hard guarantee behind a
+ * creator's "words to avoid" list, since prompt instructions alone aren't
+ * 100% reliable. Runs on every generated field, not just the prompt.
+ */
+function removeBannedWords(text: string, banned: string[]): string {
+  if (!text || banned.length === 0) return text;
+  let result = text;
+  for (const phrase of banned) {
+    const trimmed = phrase.trim();
+    if (!trimmed) continue;
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    result = result.replace(new RegExp(`\\b${escaped}\\b`, 'gi'), '');
+  }
+  return result
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.!?])/g, '$1')
+    .trim();
+}
+
+function removeBannedFromHashtags(hashtags: string[], banned: string[]): string[] {
+  if (banned.length === 0) return hashtags;
+  const bannedLower = new Set(banned.map((b) => b.trim().toLowerCase()).filter(Boolean));
+  return hashtags.filter((h) => !bannedLower.has(h.toLowerCase()));
+}
+
+/** Apply the banned-words filter to every text field of a generated result. */
+function applyBannedWords(meta: GeneratedMetadata, banned: string[]): GeneratedMetadata {
+  if (banned.length === 0) return meta;
+  const clean = (p: PlatformMeta): PlatformMeta => ({
+    title: removeBannedWords(p.title, banned),
+    caption: removeBannedWords(p.caption, banned),
+    hashtags: removeBannedFromHashtags(p.hashtags, banned),
+  });
+  return {
+    ...meta,
+    title: removeBannedWords(meta.title, banned),
+    caption: removeBannedWords(meta.caption, banned),
+    hashtags: removeBannedFromHashtags(meta.hashtags, banned),
+    platforms: {
+      TIKTOK: clean(meta.platforms.TIKTOK),
+      INSTAGRAM: clean(meta.platforms.INSTAGRAM),
+      YOUTUBE: clean(meta.platforms.YOUTUBE),
+    },
   };
 }
 
@@ -101,6 +193,7 @@ export async function generateMetadata(params: {
   durationSec: number | null;
   creatorBio?: string | null;
   styleExamples?: StyleExample[];
+  creatorProfile?: CreatorProfileContext | null;
 }): Promise<GeneratedMetadata> {
   const frames = params.frames.slice(0, 4);
   const imageContent = frames.map((buf) => ({
@@ -117,6 +210,7 @@ export async function generateMetadata(params: {
   const bioText = params.creatorBio
     ? `Creator bio (from their own platform profile): ${params.creatorBio.slice(0, 500)}`
     : '';
+  const profileText = buildCreatorProfileText(params.creatorProfile);
   const examplesText = buildStyleExamplesText(params.styleExamples ?? []);
 
   const completion = await getOpenAI().chat.completions.create({
@@ -129,7 +223,7 @@ export async function generateMetadata(params: {
         content: [
           {
             type: 'text',
-            text: `${durationText}\n${bioText}\n${transcriptText}\n${examplesText}\nFrames follow in order:`,
+            text: `${durationText}\n${profileText}\n${bioText}\n${transcriptText}\n${examplesText}\nFrames follow in order:`,
           },
           ...imageContent,
         ],
@@ -165,5 +259,5 @@ export async function generateMetadata(params: {
     YOUTUBE: platformOf(parsed.platforms.YOUTUBE, base),
   };
 
-  return base;
+  return applyBannedWords(base, params.creatorProfile?.bannedWords ?? []);
 }

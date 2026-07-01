@@ -6,6 +6,7 @@ import { folderRouter } from './routers/folder';
 import { queueRouter } from './routers/queue';
 import { notificationsRouter } from './routers/notifications';
 import { dashboardRouter } from './routers/dashboard';
+import { creatorProfileRouter } from './routers/creator-profile';
 
 export const appRouter = router({
   user: userRouter,
@@ -15,6 +16,7 @@ export const appRouter = router({
   queue: queueRouter,
   notifications: notificationsRouter,
   dashboard: dashboardRouter,
+  creatorProfile: creatorProfileRouter,
 });
 
 export type AppRouter = typeof appRouter;

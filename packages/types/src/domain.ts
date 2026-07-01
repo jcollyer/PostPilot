@@ -78,6 +78,16 @@ export type NotificationType = z.infer<typeof notificationTypeSchema>;
 export const notificationChannelSchema = z.enum(['EMAIL', 'PUSH', 'SMS']);
 export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
 
+export const emojiPreferenceSchema = z.enum(['NONE', 'MODERATE', 'HEAVY']);
+export type EmojiPreference = z.infer<typeof emojiPreferenceSchema>;
+
+/** Human-friendly labels + AI-prompt guidance for each emoji preference. */
+export const EMOJI_PREFERENCE_LABELS: Record<EmojiPreference, string> = {
+  NONE: 'None — never use emojis',
+  MODERATE: 'A few — sparingly, when they add something',
+  HEAVY: 'Lots — upbeat, emoji-heavy style',
+};
+
 // ---------------------------------------------------------------------------
 // Embeddings
 // ---------------------------------------------------------------------------

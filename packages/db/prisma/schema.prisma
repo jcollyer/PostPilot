@@ -41,8 +41,13 @@ model User {
   timezone      String    @default("UTC")
   // E.164 phone for urgent SMS alerts (opt-in; see Notification).
   phoneNumber   String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  // When the creator-profile onboarding modal was completed or explicitly
+  // skipped. Null means "never shown a decision" — the modal keeps
+  // appearing. Set on both save and skip, so it's a dismissal marker, not a
+  // "profile has data" marker (CreatorProfile can still be empty/absent).
+  creatorOnboardingCompletedAt DateTime?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @updatedAt
 
   // Auth
   sessions Session[]
@@ -58,8 +63,39 @@ model User {
   notifications       Notification[]
   notificationPrefs   NotificationPreference[]
   devices             Device[]
+  creatorProfile      CreatorProfile?
 
   @@map("user")
+}
+
+/// Creator-set context that's injected into every AI metadata generation run
+/// (see @postpilot/ai-pipeline's steps/metadata.ts) — explicit instructions
+/// from the creator, distinct from the inferred voice signals in
+/// steps/style-examples.ts (bio + past posts). All fields are optional; an
+/// absent row (no CreatorProfile) is the same as "nothing set" and the
+/// prompt behaves exactly as it did before this existed.
+model CreatorProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Short descriptor of their content, e.g. "Van life & budget travel".
+  niche String?
+  // Free-text voice description, e.g. "Witty, a little sarcastic, never corporate".
+  tone String?
+  // Who the content is for, e.g. "20-somethings saving up to travel".
+  audience String?
+  // Words/phrases the AI must never use — enforced both in the prompt and as
+  // a hard post-generation filter (see metadata.ts's removeBannedWords).
+  bannedWords String[]
+  // A caption the creator wrote themselves, given to the model as a concrete
+  // voice reference alongside the inferred style examples.
+  exampleCaption String? @db.Text
+  emojiPreference EmojiPreference @default(MODERATE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Session {
@@ -224,6 +260,14 @@ enum DeliveryStatus {
 enum DevicePlatform {
   IOS
   ANDROID
+}
+
+/// How liberally the AI should use emojis in generated captions, set by the
+/// creator on their CreatorProfile.
+enum EmojiPreference {
+  NONE
+  MODERATE
+  HEAVY
 }
 
 // ----------------------------------------------------------------------------
