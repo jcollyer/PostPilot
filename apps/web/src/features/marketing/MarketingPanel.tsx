@@ -28,7 +28,7 @@ export function MarketingPanel() {
       <ul className="space-y-2.5">
         {VALUE_PROPS.map((v) => (
           <li key={v} className="flex items-start gap-2 text-sm">
-            <CheckCircle2 className="text-primary mt-0.5 h-4 w-4 shrink-0" />
+            <CheckCircle2 className="fill-primary text-foreground mt-0.5 h-4 w-4 shrink-0" />
             <span>{v}</span>
           </li>
         ))}

@@ -104,7 +104,7 @@ export function SettingsView() {
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="flex items-center gap-4">
-                <span className="bg-primary/15 text-primary relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full text-xl font-semibold">
+                <span className="bg-primary text-primary-foreground relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-full text-xl font-semibold">
                   {me?.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img

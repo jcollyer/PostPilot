@@ -1,10 +1,12 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist } from 'next/font/google';
 import '@/styles/globals.css';
 
 import { TRPCProvider } from '@/lib/trpc/Provider';
 
-const inter = Inter({
+// Geist — a neutral Swiss-style grotesque used as a free, embeddable stand-in
+// for Ramp's Lausanne. The matching TTF for Rive lives in /assets/fonts.
+const geist = Geist({
   subsets: ['latin'],
   variable: '--font-sans',
   display: 'swap',
@@ -18,7 +20,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning className={inter.variable}>
+    <html lang="en" suppressHydrationWarning className={geist.variable}>
       <body className="bg-background text-foreground min-h-dvh font-sans">
         <TRPCProvider>{children}</TRPCProvider>
       </body>

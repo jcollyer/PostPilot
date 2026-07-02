@@ -5,66 +5,68 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    /* Near-black ink — #0b0a08 */
+    --foreground: 40 16% 4%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 40 16% 4%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 40 16% 4%;
 
-    /* Primary brand color — #096aed */
-    --primary: 214 93% 48%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary brand color — lime #e8f256, with near-black ink on top */
+    --primary: 64 86% 64%;
+    --primary-foreground: 40 16% 4%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 48 20% 96%;
+    --secondary-foreground: 40 16% 4%;
 
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
+    --muted: 48 20% 96%;
+    --muted-foreground: 40 5% 42%;
 
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 48 20% 96%;
+    --accent-foreground: 40 16% 4%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 214 93% 48%;
+    --border: 40 12% 90%;
+    --input: 40 12% 90%;
+    --ring: 64 86% 64%;
 
     --radius: 0.625rem;
   }
 
   .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 98%;
+    /* Warm near-black surface — #0b0a08 family */
+    --background: 40 16% 4%;
+    --foreground: 48 20% 96%;
 
-    --card: 222 47% 11%;
-    --card-foreground: 210 40% 98%;
+    --card: 40 14% 7%;
+    --card-foreground: 48 20% 96%;
 
-    --popover: 222 47% 11%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 40 14% 7%;
+    --popover-foreground: 48 20% 96%;
 
-    /* Primary brand color — #096aed, brightened slightly for dark backgrounds */
-    --primary: 214 92% 56%;
-    --primary-foreground: 210 40% 98%;
+    /* Primary brand color — lime #e8f256, black ink on top */
+    --primary: 64 86% 64%;
+    --primary-foreground: 40 16% 4%;
 
-    --secondary: 217 33% 17%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 40 8% 14%;
+    --secondary-foreground: 48 20% 96%;
 
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
+    --muted: 40 8% 14%;
+    --muted-foreground: 40 6% 64%;
 
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 40 8% 14%;
+    --accent-foreground: 48 20% 96%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 214 92% 56%;
+    --border: 40 8% 16%;
+    --input: 40 8% 16%;
+    --ring: 64 86% 64%;
   }
 }
 
@@ -77,5 +79,39 @@
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+  }
+}
+
+/* Hero dot grid — a subtle tiled dot pattern that gently fades in and out.
+   Pure CSS (no image asset); the radial mask feathers it toward the edges so
+   it never competes with the headline. To use a custom Illustrator PNG
+   instead, set `background-image: url('/hero-dots.png')` and a matching
+   `background-size` (the PNG tile dimensions). */
+.hero-dots {
+  background-image: radial-gradient(
+    circle,
+    hsl(var(--foreground) / 0.16) 0.75px,
+    transparent 1.2px
+  );
+  background-size: 15px 15px;
+  -webkit-mask-image: radial-gradient(ellipse 85% 65% at 50% 35%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(ellipse 85% 65% at 50% 35%, #000 0%, transparent 78%);
+  animation: hero-dots-fade 7s ease-in-out infinite;
+}
+
+@keyframes hero-dots-fade {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-dots {
+    animation: none;
+    opacity: 0.5;
   }
 }

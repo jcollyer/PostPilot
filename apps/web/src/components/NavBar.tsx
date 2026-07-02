@@ -53,7 +53,7 @@ export function NavBar({ name, email, image }: NavBarProps) {
               aria-label="Open account menu"
               className="focus-visible:ring-ring rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             >
-              <span className="bg-primary/15 text-primary relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full text-sm font-semibold">
+              <span className="bg-primary text-primary-foreground relative flex h-9 w-9 items-center justify-center overflow-hidden rounded-full text-sm font-semibold">
                 {image ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img

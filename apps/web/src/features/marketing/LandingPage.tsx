@@ -57,45 +57,54 @@ export function LandingPage() {
       <main className="flex-1">
         {/* Hero */}
         <section className="relative overflow-hidden">
+          <div className="hero-dots pointer-events-none absolute inset-0 -z-10" aria-hidden />
           <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary/10 to-transparent" />
           <div
             className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
             aria-hidden
           />
-          <div className="mx-auto max-w-6xl px-6 py-20 text-center sm:py-28">
-            <Image
-              src="/logo-small.png"
-              alt="PostPilot"
-              width={92}
-              height={71}
-              className="mx-auto mb-6 h-16 w-auto"
-              priority
-            />
-            <div className="text-primary border-primary/20 bg-primary/5 mb-4 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium">
-              <Sparkles className="h-3.5 w-3.5" />
-              Your content queue on autopilot
+          <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+            <div className="max-w-3xl">
+              <div className="text-foreground border-border bg-secondary mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium">
+                <Sparkles className="h-3.5 w-3.5 fill-primary text-foreground" />
+                Your content queue on autopilot
+              </div>
+              <h1 className="text-4xl font-semibold leading-[1.03] tracking-tight sm:text-6xl">
+                Upload once. Queue it. Walk away.
+              </h1>
+              <p className="text-muted-foreground mt-5 max-w-2xl text-lg">
+                PostPilot auto-publishes your short-form videos to TikTok, Instagram Reels, and
+                YouTube Shorts — batch your content once, stay consistent, and let AI handle the
+                rest.
+              </p>
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Button asChild size="lg">
+                  <Link href="/signin?mode=signup">
+                    Get started free
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button asChild size="lg" variant="outline">
+                  <Link href="/pricing">See pricing</Link>
+                </Button>
+              </div>
+              <p className="text-muted-foreground mt-4 text-sm">
+                Free to start · no credit card required
+              </p>
             </div>
-            <h1 className="mx-auto max-w-3xl text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-              Upload once. Queue it. Walk away.
-            </h1>
-            <p className="text-muted-foreground mx-auto mt-5 max-w-2xl text-lg">
-              PostPilot auto-publishes your short-form videos to TikTok, Instagram Reels, and YouTube
-              Shorts — batch your content once, stay consistent, and let AI handle the rest.
-            </p>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Button asChild size="lg">
-                <Link href="/signin?mode=signup">
-                  Get started free
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link href="/pricing">See pricing</Link>
-              </Button>
+
+            {/* Product screenshot */}
+            <div className="border-border/70 bg-card mt-14 overflow-hidden rounded-2xl border shadow-sm sm:mt-16">
+              <Image
+                src="/product-screenshot.png"
+                alt="PostPilot content queue dashboard"
+                width={1920}
+                height={1080}
+                className="h-auto w-full"
+                priority
+                sizes="(max-width: 1152px) 100vw, 1152px"
+              />
             </div>
-            <p className="text-muted-foreground mt-4 text-sm">
-              Free to start · no credit card required
-            </p>
           </div>
         </section>
 
@@ -117,7 +126,7 @@ export function LandingPage() {
                 key={f.title}
                 className="border-border/60 bg-card rounded-xl border p-6 shadow-sm transition-shadow hover:shadow-md"
               >
-                <div className="bg-primary/10 text-primary mb-4 flex size-11 items-center justify-center rounded-lg">
+                <div className="bg-foreground text-primary mb-4 flex size-11 items-center justify-center rounded-lg">
                   <f.icon className="h-5 w-5" />
                 </div>
                 <h3 className="text-lg font-semibold">{f.title}</h3>
@@ -152,16 +161,20 @@ export function LandingPage() {
 
         {/* CTA */}
         <section className="mx-auto max-w-6xl px-6 py-20">
-          <div className="text-primary-foreground relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary to-blue-700 px-8 py-14 text-center">
-            <h2 className="text-3xl font-semibold tracking-tight">
+          <div className="bg-foreground text-background relative overflow-hidden rounded-2xl px-8 py-14 text-center">
+            <div
+              className="bg-primary/20 pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl"
+              aria-hidden
+            />
+            <h2 className="text-3xl font-semibold tracking-tight sm:text-4xl">
               Stop scrambling to stay consistent
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-primary-foreground/80">
+            <p className="text-background/70 mx-auto mt-3 max-w-xl">
               Batch your videos once and let PostPilot do the posting. Affordable enough to be an
               impulse.
             </p>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <Button asChild size="lg" variant="secondary">
+              <Button asChild size="lg">
                 <Link href="/signin?mode=signup">
                   Get started free
                   <ArrowRight className="h-4 w-4" />
@@ -171,20 +184,20 @@ export function LandingPage() {
                 asChild
                 size="lg"
                 variant="outline"
-                className="border-primary-foreground/30 bg-transparent text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                className="border-background/30 text-background hover:bg-background/10 hover:text-background bg-transparent"
               >
                 <Link href="/pricing">Compare plans</Link>
               </Button>
             </div>
-            <div className="text-primary-foreground/80 mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
+            <div className="text-background/70 mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
               <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4" /> Free plan to try it
+                <CheckCircle2 className="text-primary h-4 w-4" /> Free plan to try it
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4" /> TikTok, Reels &amp; Shorts
+                <CheckCircle2 className="text-primary h-4 w-4" /> TikTok, Reels &amp; Shorts
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 className="h-4 w-4" /> Cancel anytime
+                <CheckCircle2 className="text-primary h-4 w-4" /> Cancel anytime
               </span>
             </div>
           </div>

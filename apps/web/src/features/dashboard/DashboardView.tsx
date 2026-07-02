@@ -124,7 +124,7 @@ export function DashboardView({ greeting }: { greeting: string }) {
         <InfoCard icon={<Layers className="h-4 w-4" />} title="Ready in library">
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-semibold">{data.readyVideos}</span>
-            <Link href="/media" className="text-primary text-sm underline">
+            <Link href="/media" className="text-foreground text-sm underline underline-offset-2">
               Open library
             </Link>
           </div>

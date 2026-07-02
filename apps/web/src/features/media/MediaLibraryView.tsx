@@ -438,18 +438,6 @@ export function MediaLibraryView() {
             <FolderBreadcrumbs currentFolderId={currentFolderId} onNavigate={navigateToFolder} />
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() => regenerate.mutate({})}
-              disabled={regenerate.isPending}
-            >
-              {regenerate.isPending || busy ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="mr-2 h-4 w-4" />
-              )}
-              Generate metadata
-            </Button>
             {busy ? (
               <Button
                 variant="outline"
