@@ -4,6 +4,7 @@ import { Platform, Prisma, type PrismaClient } from '@postpilot/db';
 import {
   abortUploadSchema,
   aiSummarySchema,
+  clearStoppedMetadataSchema,
   completeUploadSchema,
   confirmCoverUploadSchema,
   createUploadSessionSchema,
@@ -613,11 +614,17 @@ export const mediaRouter = router({
       where,
       _count: { _all: true },
     });
-    const counts = { PENDING: 0, RUNNING: 0, COMPLETED: 0, FAILED: 0, CANCELED: 0 };
+    const counts = { PENDING: 0, RUNNING: 0, COMPLETED: 0, FAILED: 0, CANCELED: 0, SKIPPED: 0 };
     for (const g of grouped) counts[g.aiStatus] = g._count._all;
     return {
       ...counts,
-      total: counts.PENDING + counts.RUNNING + counts.COMPLETED + counts.FAILED + counts.CANCELED,
+      total:
+        counts.PENDING +
+        counts.RUNNING +
+        counts.COMPLETED +
+        counts.FAILED +
+        counts.CANCELED +
+        counts.SKIPPED,
     };
   }),
 
@@ -666,6 +673,29 @@ export const mediaRouter = router({
         data: { aiStatus: 'CANCELED' },
       });
       return { canceled: count };
+    }),
+
+  /**
+   * Clear stopped videos. Only videos currently CANCELED are affected — they
+   * move to SKIPPED, staying in the library but dropping out of the AI-metadata
+   * summary. Returns how many were cleared.
+   */
+  clearStoppedMetadata: protectedProcedure
+    .input(clearStoppedMetadataSchema)
+    .mutation(async ({ ctx, input }) => {
+      const where: Prisma.VideoWhereInput = {
+        userId: ctx.userId,
+        aiStatus: 'CANCELED',
+      };
+      if (input.videoId) where.id = input.videoId;
+      if (input.videoIds) where.id = { in: input.videoIds };
+      if (input.uploadSessionId) where.uploadSessionId = input.uploadSessionId;
+
+      const { count } = await ctx.prisma.video.updateMany({
+        where,
+        data: { aiStatus: 'SKIPPED' },
+      });
+      return { cleared: count };
     }),
 
   /** Override the AI-chosen thumbnail with a specific candidate frame. */

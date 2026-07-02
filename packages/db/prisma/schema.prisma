@@ -187,6 +187,9 @@ enum AiPipelineStatus {
   /// User stopped generation before the worker picked the video up. Only
   /// reachable from PENDING — a video already RUNNING finishes on its own.
   CANCELED
+  /// User cleared a stopped (CANCELED) video: it stays in the library but is
+  /// intentionally excluded from AI metadata generation and the summary bar.
+  SKIPPED
 }
 
 /// User-controlled global queue state. Per-platform pausing is expressed via

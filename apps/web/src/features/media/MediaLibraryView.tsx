@@ -173,6 +173,15 @@ export function MediaLibraryView() {
     },
   });
 
+  // Clear stopped (CANCELED) videos — moves them to SKIPPED so they drop out of
+  // the AI-metadata summary while staying in the library.
+  const clearStopped = trpc.media.clearStoppedMetadata.useMutation({
+    onSuccess: () => {
+      aiSummary.refetch();
+      refresh();
+    },
+  });
+
   // Any active search/filter switches the view to flat, library-wide results.
   const isSearching = search.length > 0 || Boolean(status) || Boolean(categoryId);
 
@@ -496,13 +505,23 @@ export function MediaLibraryView() {
               </button>
             ) : null}
             {aiSummary.data.CANCELED > 0 ? (
-              <button
-                type="button"
-                onClick={() => regenerate.mutate({})}
-                className="hover:underline"
-              >
-                {aiSummary.data.CANCELED} stopped — resume
-              </button>
+              <span className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => regenerate.mutate({})}
+                  className="hover:underline"
+                >
+                  {aiSummary.data.CANCELED} stopped — resume
+                </button>
+                <button
+                  type="button"
+                  onClick={() => clearStopped.mutate({})}
+                  disabled={clearStopped.isPending}
+                  className="hover:underline disabled:opacity-50"
+                >
+                  Clear stopped
+                </button>
+              </span>
             ) : null}
             {busy ? (
               <span className="text-muted-foreground/70">

@@ -39,6 +39,7 @@ export const aiPipelineStatusSchema = z.enum([
   'COMPLETED',
   'FAILED',
   'CANCELED',
+  'SKIPPED',
 ]);
 export type AiPipelineStatus = z.infer<typeof aiPipelineStatusSchema>;
 

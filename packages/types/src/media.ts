@@ -152,6 +152,18 @@ export const stopMetadataGenerationSchema = z.object({
 });
 export type StopMetadataGenerationInput = z.infer<typeof stopMetadataGenerationSchema>;
 
+/**
+ * Clear stopped (CANCELED) videos. Same scope shape as the schemas above, but
+ * only ever touches videos currently CANCELED, moving them to SKIPPED so they
+ * drop out of the AI-metadata summary while staying in the library.
+ */
+export const clearStoppedMetadataSchema = z.object({
+  videoId: z.string().min(1).optional(),
+  videoIds: z.array(z.string().min(1)).min(1).max(1000).optional(),
+  uploadSessionId: z.string().min(1).optional(),
+});
+export type ClearStoppedMetadataInput = z.infer<typeof clearStoppedMetadataSchema>;
+
 /** Override the AI-selected thumbnail with one of the candidate frames. */
 export const selectThumbnailSchema = z.object({
   videoId: z.string().min(1),
