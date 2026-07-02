@@ -132,7 +132,7 @@
   overflow: hidden;
   background: hsl(var(--card));
   container-type: inline-size;
-  --pp-loop: 9s;
+  --pp-loop: 13s;
 }
 
 /* top bar (faux app chrome) */
@@ -373,21 +373,21 @@
 
 /* stacking + staggered timing (delay = persistent phase offset) */
 .pp-card.c {
-  left: 20cqw;
-  top: 15cqw;
+  left: 10cqw;
+  top: 13cqw;
   z-index: 1;
   background: hsl(var(--secondary));
   animation-delay: 0s;
 }
 .pp-card.b {
-  left: 23.6cqw;
-  top: 18.5cqw;
+  left: 13.6cqw;
+  top: 16.5cqw;
   z-index: 2;
   animation-delay: 0.12s;
 }
 .pp-card.a {
-  left: 27.2cqw;
-  top: 22cqw;
+  left: 17.2cqw;
+  top: 20cqw;
   z-index: 3;
   animation-delay: 0.24s;
 }
@@ -411,22 +411,22 @@
 
 @keyframes pp-drop {
   0%,
-  13.3% {
+  4.6% {
     transform: translateY(-16.25cqw);
     opacity: 0;
   }
-  15% {
+  8% {
     opacity: 1;
   }
-  21% {
+  11.5% {
     transform: translateY(0.375cqw) scale(1.02);
     opacity: 1;
   }
-  23% {
+  13% {
     transform: translateY(0) scale(1);
     opacity: 1;
   }
-  83% {
+  84% {
     transform: translateY(0);
     opacity: 1;
   }
@@ -442,10 +442,10 @@
 }
 @keyframes pp-ringfade {
   0%,
-  15% {
+  9% {
     opacity: 0;
   }
-  17%,
+  11%,
   86% {
     opacity: 1;
   }
@@ -456,10 +456,10 @@
 }
 @keyframes pp-ringfill {
   0%,
-  23% {
+  13% {
     stroke-dashoffset: 82;
   }
-  32% {
+  18% {
     stroke-dashoffset: 0;
   }
   100% {
@@ -468,10 +468,10 @@
 }
 @keyframes pp-ringfill-slow {
   0%,
-  24% {
+  14% {
     stroke-dashoffset: 82;
   }
-  50% {
+  30% {
     stroke-dashoffset: 0;
   }
   100% {
@@ -482,8 +482,8 @@
 /* focus handles on the front card */
 .pp-handles {
   position: absolute;
-  left: 27.2cqw;
-  top: 22cqw;
+  left: 17.2cqw;
+  top: 20cqw;
   width: 20.625cqw;
   height: 12.875cqw;
   z-index: 4;
@@ -516,8 +516,8 @@
 /* upload toast */
 .pp-toast {
   position: absolute;
-  left: 20cqw;
-  top: 37cqw;
+  left: 10cqw;
+  top: 34cqw;
   z-index: 5;
   display: inline-flex;
   align-items: center;
@@ -550,11 +550,11 @@
 }
 @keyframes pp-transient {
   0%,
-  21% {
+  12% {
     opacity: 0;
   }
-  24%,
-  84% {
+  15%,
+  85% {
     opacity: 1;
   }
   88%,
@@ -564,20 +564,20 @@
 }
 @keyframes pp-toast {
   0%,
-  18% {
+  9% {
     opacity: 0;
     transform: translateY(0.5cqw) scale(0.96);
   }
-  22% {
+  13% {
     opacity: 1;
     transform: translateY(0) scale(1.04);
   }
-  25%,
-  32% {
+  16%,
+  23% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-  36%,
+  26%,
   100% {
     opacity: 0;
     transform: translateY(0.5cqw) scale(0.98);
@@ -587,8 +587,8 @@
 /* ---------- Act 2: metadata panel (auto-generates) ---------- */
 .pp-meta {
   position: absolute;
-  left: 50cqw;
-  top: 8.5cqw;
+  left: 45cqw;
+  top: 10cqw;
   width: 27cqw;
   height: 22cqw;
   border-radius: 1.25cqw;
@@ -677,11 +677,11 @@
 
 @keyframes pp-panel {
   0%,
-  31% {
+  24% {
     opacity: 0;
     transform: translateX(2.5cqw);
   }
-  36% {
+  28% {
     opacity: 1;
     transform: translateX(0);
   }
@@ -697,11 +697,11 @@
 }
 @keyframes pp-resolve {
   0%,
-  35% {
+  29% {
     background: hsl(var(--muted-foreground) / 0.18);
   }
-  46%,
-  84% {
+  39%,
+  85% {
     background: hsl(var(--foreground) / 0.34);
   }
   89%,
@@ -711,18 +711,18 @@
 }
 @keyframes pp-scan {
   0%,
-  35% {
+  28% {
     opacity: 0;
     transform: translateY(0);
   }
-  37% {
+  30% {
     opacity: 1;
   }
-  50% {
+  41% {
     opacity: 1;
     transform: translateY(13cqw);
   }
-  52%,
+  43%,
   100% {
     opacity: 0;
     transform: translateY(13cqw);
@@ -730,15 +730,15 @@
 }
 @keyframes pp-chip {
   0%,
-  49% {
+  41% {
     opacity: 0;
     transform: scale(0.6);
   }
-  53% {
+  45% {
     opacity: 1;
     transform: scale(1.08);
   }
-  56% {
+  47% {
     transform: scale(1);
   }
   85% {
@@ -751,29 +751,201 @@
 }
 @keyframes pp-gendot {
   0%,
-  33% {
+  27% {
     opacity: 0;
   }
-  36%,
-  55% {
+  30%,
+  45% {
     opacity: 1;
   }
-  58%,
+  48%,
   100% {
     opacity: 0;
   }
 }
 @keyframes pp-rdy {
   0%,
-  56% {
+  45% {
     opacity: 0;
     transform: scale(0.6);
   }
-  60% {
+  48% {
     opacity: 1;
     transform: scale(1.1);
   }
-  63% {
+  50% {
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  89%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Act 3: scheduled queue + posting to platforms ---------- */
+.pp-qtile {
+  position: absolute;
+  width: 9.5cqw;
+  height: 9cqw;
+  border-radius: 0.9cqw;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 0.5cqw 1.4cqw -0.9cqw hsl(var(--foreground) / 0.25);
+  opacity: 0;
+  z-index: 3;
+  animation: pp-qtile var(--pp-loop) cubic-bezier(0.2, 0.8, 0.2, 1) infinite both;
+}
+.pp-qtile .qthumb {
+  position: absolute;
+  left: 0.8cqw;
+  right: 0.8cqw;
+  top: 0.8cqw;
+  height: 4.4cqw;
+  border-radius: 0.5cqw;
+  background: hsl(var(--muted));
+}
+.pp-qtile .qtime {
+  position: absolute;
+  left: 0.8cqw;
+  bottom: 1.4cqw;
+  width: 3.2cqw;
+  height: 0.75cqw;
+  border-radius: 0.35cqw;
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+.pp-qtile .qdot {
+  position: absolute;
+  right: 0.9cqw;
+  bottom: 1.3cqw;
+  width: 1cqw;
+  height: 1cqw;
+  border-radius: 50%;
+  background: hsl(var(--muted-foreground) / 0.35);
+}
+.pp-playhead {
+  position: absolute;
+  top: 38cqw;
+  left: 10cqw;
+  width: 0.28cqw;
+  height: 11cqw;
+  border-radius: 0.2cqw;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 1.2cqw 0.1cqw hsl(var(--primary) / 0.7);
+  opacity: 0;
+  z-index: 4;
+  animation: pp-playhead var(--pp-loop) ease-in-out infinite both;
+}
+.pp-plat {
+  position: absolute;
+  width: 5.4cqw;
+  height: 5.4cqw;
+  border-radius: 1.1cqw;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  z-index: 3;
+  animation: pp-plat var(--pp-loop) cubic-bezier(0.2, 0.8, 0.2, 1) infinite both;
+}
+.pp-plat > svg {
+  width: 2.8cqw;
+  height: 2.8cqw;
+  color: hsl(var(--foreground));
+}
+.pp-plat .lit {
+  position: absolute;
+  right: -0.6cqw;
+  top: -0.6cqw;
+  width: 2cqw;
+  height: 2cqw;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  animation: pp-platlit var(--pp-loop) cubic-bezier(0.2, 0.8, 0.2, 1) infinite both;
+}
+.pp-plat .lit svg {
+  width: 1.1cqw;
+  height: 1.1cqw;
+  color: hsl(var(--primary-foreground));
+}
+
+@keyframes pp-qtile {
+  0%,
+  48% {
+    opacity: 0;
+    transform: translateY(1.5cqw);
+  }
+  51% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  89%,
+  100% {
+    opacity: 0;
+    transform: translateY(1.5cqw);
+  }
+}
+@keyframes pp-playhead {
+  0%,
+  50% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  52% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  64% {
+    opacity: 1;
+    transform: translateX(40cqw);
+  }
+  66%,
+  100% {
+    opacity: 0;
+    transform: translateX(40cqw);
+  }
+}
+@keyframes pp-plat {
+  0%,
+  49% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  52% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  89%,
+  100% {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+@keyframes pp-platlit {
+  0%,
+  62% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  66% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  69% {
     transform: scale(1);
   }
   85% {
@@ -797,7 +969,11 @@
   .pp-meta .scan,
   .pp-meta .chip,
   .pp-meta .status .gendot,
-  .pp-meta .status .rdy {
+  .pp-meta .status .rdy,
+  .pp-qtile,
+  .pp-playhead,
+  .pp-plat,
+  .pp-plat .lit {
     animation: none !important;
   }
   .pp-card {
@@ -831,5 +1007,14 @@
   }
   .pp-meta .status .rdy {
     opacity: 1;
+  }
+  .pp-qtile,
+  .pp-plat,
+  .pp-plat .lit {
+    opacity: 1;
+    transform: none;
+  }
+  .pp-playhead {
+    opacity: 0;
   }
 }

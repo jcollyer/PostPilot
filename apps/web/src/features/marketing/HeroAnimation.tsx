@@ -235,6 +235,103 @@ export function HeroAnimation() {
 
           <span className="scan" />
         </div>
+
+        {/* Act 3 — scheduled queue + posting to platforms */}
+        <span className="pp-playhead" aria-hidden />
+
+        <div className="pp-qtile" style={{ left: '10cqw', top: '39cqw' }} aria-hidden>
+          <span className="qthumb" />
+          <span className="qtime" />
+          <span className="qdot" />
+        </div>
+        <div
+          className="pp-qtile"
+          style={{ left: '20.5cqw', top: '39cqw', animationDelay: '0.12s' }}
+          aria-hidden
+        >
+          <span className="qthumb" />
+          <span className="qtime" />
+          <span className="qdot" />
+        </div>
+        <div
+          className="pp-qtile"
+          style={{ left: '31cqw', top: '39cqw', animationDelay: '0.24s' }}
+          aria-hidden
+        >
+          <span className="qthumb" />
+          <span className="qtime" />
+          <span className="qdot" />
+        </div>
+        <div
+          className="pp-qtile"
+          style={{ left: '41.5cqw', top: '39cqw', animationDelay: '0.36s' }}
+          aria-hidden
+        >
+          <span className="qthumb" />
+          <span className="qtime" />
+          <span className="qdot" />
+        </div>
+
+        {/* platform icons light up as posts go out */}
+        <div className="pp-plat" style={{ left: '56cqw', top: '40.8cqw' }} aria-hidden>
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M13 4c.5 2 2 3.3 4 3.5v2.7c-1.5 0-2.9-.5-4-1.3v5.1a4.6 4.6 0 1 1-4.6-4.6c.3 0 .6 0 .9.1v2.8a1.9 1.9 0 1 0 1.3 1.8V4H13z" />
+          </svg>
+          <span className="lit">
+            <svg viewBox="0 0 14 14" fill="none">
+              <path
+                d="M3 7.5 L6 10.5 L11.5 4"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        </div>
+        <div
+          className="pp-plat"
+          style={{ left: '62.5cqw', top: '40.8cqw', animationDelay: '0.08s' }}
+          aria-hidden
+        >
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="4" width="16" height="16" rx="5" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+            <circle cx="17" cy="7" r="1.2" fill="currentColor" />
+          </svg>
+          <span className="lit" style={{ animationDelay: '0.18s' }}>
+            <svg viewBox="0 0 14 14" fill="none">
+              <path
+                d="M3 7.5 L6 10.5 L11.5 4"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        </div>
+        <div
+          className="pp-plat"
+          style={{ left: '69cqw', top: '40.8cqw', animationDelay: '0.16s' }}
+          aria-hidden
+        >
+          <svg viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="6.5" width="18" height="11" rx="3.5" stroke="currentColor" strokeWidth="1.8" />
+            <path d="M11 9.5 L15 12 L11 14.5 Z" fill="currentColor" />
+          </svg>
+          <span className="lit" style={{ animationDelay: '0.36s' }}>
+            <svg viewBox="0 0 14 14" fill="none">
+              <path
+                d="M3 7.5 L6 10.5 L11.5 4"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </span>
+        </div>
       </div>
     </div>
   );
