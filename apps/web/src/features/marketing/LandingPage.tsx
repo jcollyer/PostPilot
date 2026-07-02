@@ -1,4 +1,3 @@
-import Image from 'next/image';
 import Link from 'next/link';
 import {
   ArrowRight,
@@ -11,6 +10,7 @@ import {
 
 import { Button } from '@/components/ui/button';
 
+import { HeroAnimation } from './HeroAnimation';
 import { SiteFooter } from './SiteFooter';
 import { SiteHeader } from './SiteHeader';
 
@@ -93,17 +93,9 @@ export function LandingPage() {
               </p>
             </div>
 
-            {/* Product screenshot */}
+            {/* Animated product demo (replaces the static screenshot) */}
             <div className="border-border/70 bg-card mt-14 overflow-hidden rounded-2xl border shadow-sm sm:mt-16">
-              <Image
-                src="/product-screenshot.png"
-                alt="PostPilot content queue dashboard"
-                width={1920}
-                height={1080}
-                className="h-auto w-full"
-                priority
-                sizes="(max-width: 1152px) 100vw, 1152px"
-              />
+              <HeroAnimation />
             </div>
           </div>
         </section>
