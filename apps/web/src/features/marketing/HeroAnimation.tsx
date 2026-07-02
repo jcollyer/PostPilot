@@ -168,6 +168,73 @@ export function HeroAnimation() {
           </span>
           3 clips uploaded
         </div>
+
+        {/* Act 2 — metadata auto-generates (scan-bar reveal) */}
+        <div className="pp-meta" aria-hidden>
+          <div className="mthumb">
+            <svg viewBox="0 0 34 34" fill="currentColor">
+              <path d="M12 9 L26 17 L12 25 Z" />
+            </svg>
+          </div>
+          <div className="status">
+            <span className="gendot" />
+            <span className="rdy">
+              <svg viewBox="0 0 14 14" fill="none">
+                <path
+                  d="M3 7.5 L6 10.5 L11.5 4"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </span>
+          </div>
+
+          {/* fields that resolve as the scan bar passes */}
+          <span className="fld" style={{ left: '6.2cqw', top: '2cqw', width: '15cqw' }} />
+          <span
+            className="fld"
+            style={{ left: '1.4cqw', top: '8cqw', width: '22.5cqw', animationDelay: '0.12s' }}
+          />
+          <span
+            className="fld"
+            style={{ left: '1.4cqw', top: '10.4cqw', width: '19cqw', animationDelay: '0.24s' }}
+          />
+          <span
+            className="fld"
+            style={{ left: '1.4cqw', top: '12.8cqw', width: '14.5cqw', animationDelay: '0.36s' }}
+          />
+
+          {/* hashtag chips pop in */}
+          <span className="chip" style={{ left: '1.4cqw', top: '15.8cqw', width: '3.6cqw' }} />
+          <span
+            className="chip"
+            style={{ left: '5.5cqw', top: '15.8cqw', width: '4.6cqw', animationDelay: '0.08s' }}
+          />
+          <span
+            className="chip"
+            style={{ left: '10.6cqw', top: '15.8cqw', width: '3.2cqw', animationDelay: '0.16s' }}
+          />
+          <span
+            className="chip"
+            style={{ left: '14.3cqw', top: '15.8cqw', width: '4.6cqw', animationDelay: '0.24s' }}
+          />
+          <span
+            className="chip"
+            style={{ left: '1.4cqw', top: '18.3cqw', width: '4.2cqw', animationDelay: '0.32s' }}
+          />
+          <span
+            className="chip"
+            style={{ left: '6.1cqw', top: '18.3cqw', width: '3cqw', animationDelay: '0.4s' }}
+          />
+          <span
+            className="chip"
+            style={{ left: '9.6cqw', top: '18.3cqw', width: '4.8cqw', animationDelay: '0.48s' }}
+          />
+
+          <span className="scan" />
+        </div>
       </div>
     </div>
   );

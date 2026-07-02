@@ -132,7 +132,7 @@
   overflow: hidden;
   background: hsl(var(--card));
   container-type: inline-size;
-  --pp-loop: 6s;
+  --pp-loop: 9s;
 }
 
 /* top bar (faux app chrome) */
@@ -373,20 +373,20 @@
 
 /* stacking + staggered timing (delay = persistent phase offset) */
 .pp-card.c {
-  left: 30cqw;
+  left: 20cqw;
   top: 15cqw;
   z-index: 1;
   background: hsl(var(--secondary));
   animation-delay: 0s;
 }
 .pp-card.b {
-  left: 33.6cqw;
+  left: 23.6cqw;
   top: 18.5cqw;
   z-index: 2;
   animation-delay: 0.12s;
 }
 .pp-card.a {
-  left: 37.2cqw;
+  left: 27.2cqw;
   top: 22cqw;
   z-index: 3;
   animation-delay: 0.24s;
@@ -468,10 +468,10 @@
 }
 @keyframes pp-ringfill-slow {
   0%,
-  22% {
+  24% {
     stroke-dashoffset: 82;
   }
-  58% {
+  50% {
     stroke-dashoffset: 0;
   }
   100% {
@@ -482,7 +482,7 @@
 /* focus handles on the front card */
 .pp-handles {
   position: absolute;
-  left: 37.2cqw;
+  left: 27.2cqw;
   top: 22cqw;
   width: 20.625cqw;
   height: 12.875cqw;
@@ -516,7 +516,7 @@
 /* upload toast */
 .pp-toast {
   position: absolute;
-  left: 30cqw;
+  left: 20cqw;
   top: 37cqw;
   z-index: 5;
   display: inline-flex;
@@ -550,10 +550,10 @@
 }
 @keyframes pp-transient {
   0%,
-  33% {
+  21% {
     opacity: 0;
   }
-  36%,
+  24%,
   84% {
     opacity: 1;
   }
@@ -564,23 +564,224 @@
 }
 @keyframes pp-toast {
   0%,
-  33% {
+  18% {
     opacity: 0;
     transform: translateY(0.5cqw) scale(0.96);
   }
-  36% {
+  22% {
     opacity: 1;
     transform: translateY(0) scale(1.04);
   }
-  39%,
-  84% {
+  25%,
+  32% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
-  88%,
+  36%,
   100% {
     opacity: 0;
     transform: translateY(0.5cqw) scale(0.98);
+  }
+}
+
+/* ---------- Act 2: metadata panel (auto-generates) ---------- */
+.pp-meta {
+  position: absolute;
+  left: 50cqw;
+  top: 8.5cqw;
+  width: 27cqw;
+  height: 22cqw;
+  border-radius: 1.25cqw;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  box-shadow: 0 0.75cqw 1.9cqw -1.1cqw hsl(var(--foreground) / 0.28);
+  overflow: hidden;
+  z-index: 4;
+  opacity: 0;
+  animation: pp-panel var(--pp-loop) cubic-bezier(0.2, 0.75, 0.2, 1) infinite both;
+}
+.pp-meta .mthumb {
+  position: absolute;
+  left: 1.4cqw;
+  top: 1.4cqw;
+  width: 4cqw;
+  height: 4cqw;
+  border-radius: 0.6cqw;
+  background: hsl(var(--muted));
+  display: grid;
+  place-items: center;
+}
+.pp-meta .mthumb svg {
+  width: 1.4cqw;
+  height: 1.4cqw;
+  color: hsl(var(--muted-foreground));
+}
+.pp-meta .fld {
+  position: absolute;
+  height: 0.95cqw;
+  border-radius: 0.4cqw;
+  background: hsl(var(--muted-foreground) / 0.18);
+  animation: pp-resolve var(--pp-loop) ease both infinite;
+}
+.pp-meta .scan {
+  position: absolute;
+  left: 1.1cqw;
+  top: 1.4cqw;
+  width: 24.6cqw;
+  height: 0.28cqw;
+  border-radius: 0.2cqw;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 1.2cqw 0.1cqw hsl(var(--primary) / 0.7);
+  opacity: 0;
+  animation: pp-scan var(--pp-loop) ease-in-out infinite both;
+}
+.pp-meta .chip {
+  position: absolute;
+  height: 1.8cqw;
+  border-radius: 0.9cqw;
+  background: hsl(var(--muted-foreground) / 0.14);
+  border: 1px solid hsl(var(--border));
+  opacity: 0;
+  animation: pp-chip var(--pp-loop) cubic-bezier(0.2, 0.8, 0.2, 1) infinite both;
+}
+.pp-meta .status {
+  position: absolute;
+  right: 1.4cqw;
+  top: 1.6cqw;
+  width: 2.2cqw;
+  height: 2.2cqw;
+}
+.pp-meta .status .gendot {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  opacity: 0;
+  animation: pp-gendot var(--pp-loop) ease infinite both;
+}
+.pp-meta .status .rdy {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  animation: pp-rdy var(--pp-loop) cubic-bezier(0.2, 0.8, 0.2, 1) infinite both;
+}
+.pp-meta .status .rdy svg {
+  width: 1.2cqw;
+  height: 1.2cqw;
+  color: hsl(var(--primary-foreground));
+}
+
+@keyframes pp-panel {
+  0%,
+  31% {
+    opacity: 0;
+    transform: translateX(2.5cqw);
+  }
+  36% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  85% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  89%,
+  100% {
+    opacity: 0;
+    transform: translateX(2.5cqw);
+  }
+}
+@keyframes pp-resolve {
+  0%,
+  35% {
+    background: hsl(var(--muted-foreground) / 0.18);
+  }
+  46%,
+  84% {
+    background: hsl(var(--foreground) / 0.34);
+  }
+  89%,
+  100% {
+    background: hsl(var(--muted-foreground) / 0.18);
+  }
+}
+@keyframes pp-scan {
+  0%,
+  35% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+  37% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(13cqw);
+  }
+  52%,
+  100% {
+    opacity: 0;
+    transform: translateY(13cqw);
+  }
+}
+@keyframes pp-chip {
+  0%,
+  49% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  53% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  56% {
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  89%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes pp-gendot {
+  0%,
+  33% {
+    opacity: 0;
+  }
+  36%,
+  55% {
+    opacity: 1;
+  }
+  58%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes pp-rdy {
+  0%,
+  56% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+  63% {
+    transform: scale(1);
+  }
+  85% {
+    opacity: 1;
+  }
+  89%,
+  100% {
+    opacity: 0;
   }
 }
 
@@ -590,7 +791,13 @@
   .pp-ring,
   .pp-ring .fill,
   .pp-handles,
-  .pp-toast {
+  .pp-toast,
+  .pp-meta,
+  .pp-meta .fld,
+  .pp-meta .scan,
+  .pp-meta .chip,
+  .pp-meta .status .gendot,
+  .pp-meta .status .rdy {
     animation: none !important;
   }
   .pp-card {
@@ -605,5 +812,24 @@
   .pp-handles,
   .pp-toast {
     opacity: 0;
+  }
+  .pp-meta {
+    opacity: 1;
+    transform: none;
+  }
+  .pp-meta .fld {
+    background: hsl(var(--foreground) / 0.34);
+  }
+  .pp-meta .scan {
+    opacity: 0;
+  }
+  .pp-meta .chip {
+    opacity: 1;
+  }
+  .pp-meta .status .gendot {
+    opacity: 0;
+  }
+  .pp-meta .status .rdy {
+    opacity: 1;
   }
 }
