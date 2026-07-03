@@ -14,8 +14,10 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { trpc } from '@/lib/trpc/client';
 import { formatBytes } from './upload';
 import { useVideoUpload, type UploadItem } from './useVideoUpload';
+import { readDroppedContents } from './dropped-entries';
 
 const ACCEPT = ACCEPTED_VIDEO_MIME_TYPES.join(',');
 
@@ -32,10 +34,47 @@ export function UploadDialog({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { items, addFiles, reset, inProgress } = useVideoUpload({ folderId, onUploaded });
+  const utils = trpc.useUtils();
+  const createFolder = trpc.folder.create.useMutation();
 
   const onSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) addFiles(e.target.files);
     e.target.value = '';
+  };
+
+  // Resolve a dropped folder's name to a folder id under the current folder,
+  // creating it if needed. If a sibling with that name already exists (a repeat
+  // drop), reuse it instead of surfacing a conflict.
+  const resolveFolderId = async (name: string): Promise<string | null> => {
+    const trimmed = name.trim().slice(0, 120);
+    if (!trimmed) return null;
+    try {
+      const created = await createFolder.mutateAsync({ name: trimmed, parentId: folderId });
+      return created.id;
+    } catch {
+      const siblings = await utils.folder.children.fetch({ parentId: folderId });
+      return siblings.find((f) => f.name === trimmed)?.id ?? null;
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setDragging(false);
+    const { looseFiles, folders } = await readDroppedContents(e.dataTransfer);
+
+    if (looseFiles.length) addFiles(looseFiles);
+
+    // Each dropped folder becomes a new subfolder holding its qualifying files.
+    for (const folder of folders) {
+      if (folder.files.length === 0) continue;
+      const targetId = await resolveFolderId(folder.name);
+      if (targetId) addFiles(folder.files, targetId);
+    }
+
+    if (folders.length) {
+      void utils.folder.list.invalidate();
+      void utils.folder.children.invalidate();
+    }
   };
 
   return (
@@ -71,11 +110,7 @@ export function UploadDialog({
             setDragging(true);
           }}
           onDragLeave={() => setDragging(false)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            if (e.dataTransfer.files) addFiles(e.dataTransfer.files);
-          }}
+          onDrop={handleDrop}
           className={`flex w-full flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-8 text-sm transition-colors ${
             dragging
               ? 'border-primary bg-primary/5'
@@ -83,9 +118,9 @@ export function UploadDialog({
           }`}
         >
           <Upload className="text-muted-foreground h-6 w-6" />
-          <span className="font-medium">Drop videos or click to browse</span>
+          <span className="font-medium">Drop videos or a folder, or click to browse</span>
           <span className="text-muted-foreground text-xs">
-            MP4, MOV, or WebM · up to 10 GB each
+            MP4, MOV, or WebM · up to 10 GB each · drop a folder to keep it grouped
           </span>
         </button>
         <input

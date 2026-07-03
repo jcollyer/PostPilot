@@ -99,6 +99,15 @@ git checkout main && git pull             # sync your local main
 Track a PR anytime with `gh pr view --web`. If CI fails, the PR just stays open —
 fix, commit, and push again (re-running `npm run ship` from the same branch works).
 
+**One branch per PR.** After a PR merges, always go back to `main` and pull before
+starting new work — don't keep committing on the old branch. Pushing new commits
+to a branch whose PR is already merged does **not** open a new PR; you'd get
+nothing. The script guards against this (it aborts if the current branch has a
+merged/closed PR), but the habit is: `git checkout main && git pull` first.
+
+To make this automatic, enable **Settings → General → Pull Requests → Automatically
+delete head branches** so merged branches disappear and can't be reused by accident.
+
 ## Where to go after this
 
 - **Grow coverage:** the current tests are smoke tests over pure logic. Good next

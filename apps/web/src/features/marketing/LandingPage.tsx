@@ -102,13 +102,12 @@ export function LandingPage() {
 
         {/* Features */}
         <section className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
-          <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-3xl font-semibold tracking-tight">
+          <div className="max-w-4xl">
+            <h2 className="text-foreground text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
               Everything you need to post consistently
             </h2>
-            <p className="text-muted-foreground mt-3">
-              Set it up once and PostPilot keeps your channels fed — without becoming another app you
-              have to manage.
+            <p className="text-muted-foreground mt-1 text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+              Set it up once and PostPilot keeps your channels fed.
             </p>
           </div>
 
