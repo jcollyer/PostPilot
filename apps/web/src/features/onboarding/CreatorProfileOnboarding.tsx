@@ -77,7 +77,7 @@ export function CreatorProfileOnboarding() {
           </DialogTitle>
           <DialogDescription>
             A few optional details help the AI write captions that actually sound like you. Skip
-            anything you're not sure about — you can change these anytime in Settings.
+            anything you&apos;re not sure about — you can change these anytime in Settings.
           </DialogDescription>
         </DialogHeader>
 
