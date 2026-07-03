@@ -12,6 +12,9 @@
     "build": "turbo run build",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "postinstall": "prisma generate --schema=packages/db/prisma/schema.prisma",
@@ -40,7 +43,9 @@
     "prisma": "^5.22.0",
     "tsx": "^4.19.2",
     "turbo": "^2.3.3",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4"
   },
   "engines": {
     "node": ">=20"

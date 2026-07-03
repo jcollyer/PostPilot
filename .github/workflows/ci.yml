@@ -1,0 +1,52 @@
+name: CI
+
+# Run on every PR into main, and on direct pushes to main. Each job below
+# reports its own status check (named `lint`, `typecheck`, `test`) so they can be
+# required individually in branch protection and show up separately on the PR.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cancel superseded runs on the same branch/PR so a rapid series of pushes
+# doesn't pile up redundant jobs.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      # `npm ci` installs from the lockfile and runs the postinstall
+      # `prisma generate`, which only needs the schema file (no database).
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm test
