@@ -16,6 +16,8 @@ export interface UploadItem {
   status: ItemStatus;
   error?: string;
   controller: AbortController;
+  /** Folder this specific file lands in (null = the root). */
+  folderId: string | null;
 }
 
 /**
@@ -48,7 +50,7 @@ export function useVideoUpload({
           filename: item.file.name,
           contentType: item.file.type as (typeof ACCEPTED_VIDEO_MIME_TYPES)[number],
           fileSize: item.file.size,
-          folderId,
+          folderId: item.folderId,
         });
 
         const parts = await uploadParts({
@@ -83,11 +85,11 @@ export function useVideoUpload({
         }
       }
     },
-    [abortUpload, completeUpload, initUpload, onUploaded, patch, folderId],
+    [abortUpload, completeUpload, initUpload, onUploaded, patch],
   );
 
   const addFiles = useCallback(
-    (files: FileList | File[]) => {
+    (files: FileList | File[], targetFolderId: string | null = folderId) => {
       const valid = Array.from(files).filter(
         (f) =>
           (ACCEPTED_VIDEO_MIME_TYPES as readonly string[]).includes(f.type) &&
@@ -99,11 +101,12 @@ export function useVideoUpload({
         progress: 0,
         status: 'uploading',
         controller: new AbortController(),
+        folderId: targetFolderId,
       }));
       setItems((prev) => [...newItems, ...prev]);
       newItems.forEach(runUpload);
     },
-    [runUpload],
+    [runUpload, folderId],
   );
 
   const reset = useCallback(() => setItems([]), []);
