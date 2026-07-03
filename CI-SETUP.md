@@ -55,6 +55,50 @@ be required individually in branch protection.
 4. **Confirm green, then merge.** Once the check passes, merge the PR. From now
    on every PR runs the same gate.
 
+## One-command PRs (solo-dev flow)
+
+`scripts/ship.sh` collapses "branch → commit → push → open PR → merge" into a
+single command. It opens a PR (title/body filled from your commits) and enables
+**auto-merge (squash)**, so GitHub merges the PR the moment `lint`, `typecheck`,
+and `test` pass — no second step, but the CI gate still protects `main`.
+
+### One-time setup
+
+1. **Install the GitHub CLI** and sign in:
+
+   ```bash
+   brew install gh        # macOS
+   gh auth login          # pick GitHub.com + your account
+   ```
+
+2. **Enable auto-merge on the repo** (required for `--auto`). Either flip the
+   checkbox at **Settings → General → Pull Requests → Allow auto-merge**, or run:
+
+   ```bash
+   gh api -X PATCH "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)" \
+     -F allow_auto_merge=true
+   ```
+
+   Auto-merge only works because `main` already requires the three status checks
+   (set up above) — that's the condition GitHub waits on before merging.
+
+### Everyday use
+
+```bash
+# ...make your changes on main (or a feature branch)...
+npm run ship -- "add caption editor"      # or: ./scripts/ship.sh "add caption editor"
+```
+
+That branches (if you're on `main`), commits everything, pushes, opens the PR,
+and arms auto-merge. When CI goes green the PR merges itself. Afterwards:
+
+```bash
+git checkout main && git pull             # sync your local main
+```
+
+Track a PR anytime with `gh pr view --web`. If CI fails, the PR just stays open —
+fix, commit, and push again (re-running `npm run ship` from the same branch works).
+
 ## Where to go after this
 
 - **Grow coverage:** the current tests are smoke tests over pure logic. Good next
