@@ -30,8 +30,26 @@ fi
 
 current="$(git rev-parse --abbrev-ref HEAD)"
 
-# On main? Create a fresh branch. Otherwise stay on the current feature branch.
+# Guard: never reuse a feature branch whose PR is already merged or closed.
+# Pushing more commits to such a branch will NOT open a new PR — you'd silently
+# get nothing. Force a clean start off main instead.
+if [[ "$current" != "main" ]]; then
+  state="$(gh pr view "$current" --json state -q .state 2>/dev/null || echo NONE)"
+  if [[ "$state" == "MERGED" || "$state" == "CLOSED" ]]; then
+    echo "error: branch '$current' already has a $state pull request." >&2
+    echo "Reusing it won't open a new PR. Move your work to a fresh branch:" >&2
+    echo "  git checkout main && git pull" >&2
+    echo "  git checkout -b <new-branch>" >&2
+    echo "  git checkout $current -- .        # bring your changes across" >&2
+    echo "  npm run ship -- \"$msg\"" >&2
+    exit 1
+  fi
+fi
+
+# Choose the branch: reuse the current feature branch, or cut a fresh one off an
+# up-to-date main.
 if [[ "$current" == "main" ]]; then
+  git pull --ff-only 2>/dev/null || echo "note: couldn't fast-forward main; continuing."
   branch="${2:-}"
   if [[ -z "$branch" ]]; then
     # Slugify the commit message into a branch name, capped at 40 chars.
@@ -53,8 +71,11 @@ fi
 
 git push -u origin "$branch"
 
-# Open the PR if one doesn't already exist for this branch.
-if ! gh pr view >/dev/null 2>&1; then
+# Open a PR only if there isn't already an OPEN one for this branch.
+state="$(gh pr view "$branch" --json state -q .state 2>/dev/null || echo NONE)"
+if [[ "$state" == "OPEN" ]]; then
+  echo "Existing open PR updated with your new commits."
+else
   gh pr create --fill --base main
 fi
 
@@ -62,6 +83,6 @@ fi
 gh pr merge --auto --squash
 
 echo ""
-echo "✅ PR opened and set to auto-merge (squash) once CI is green."
-echo "   Track it with:  gh pr view --web"
+echo "✅ PR is set to auto-merge (squash) once CI passes."
+echo "   Track it:        gh pr view --web"
 echo "   After it merges: git checkout main && git pull"
