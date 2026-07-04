@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 export function SiteHeader() {
   return (
     <header className="border-border/60 sticky top-0 z-30 w-full border-b bg-background/80 backdrop-blur">
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
         <Link href="/" className="flex items-center" aria-label="PostPilot home">
           <Image
             src="/logo.png"

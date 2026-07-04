@@ -63,7 +63,7 @@ export function LandingPage() {
             className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[42rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl"
             aria-hidden
           />
-          <div className="mx-auto max-w-6xl px-6 py-20 sm:py-24">
+          <div className="mx-auto max-w-7xl px-6 py-20 sm:py-24">
             <div className="max-w-3xl">
               <div className="text-foreground border-border bg-secondary mb-5 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium">
                 <Sparkles className="h-3.5 w-3.5 fill-primary text-foreground" />

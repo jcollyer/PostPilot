@@ -37,6 +37,19 @@
     --radius: 0.625rem;
   }
 
+  /* Authenticated app scope — the logged-in pages use royal blue (#2563eb) as
+     the primary brand color instead of the marketing lime. Applied both to the
+     (app) layout wrapper (instant, no flash) and to <html> via a data attribute
+     while an app page is mounted, so Radix overlays that portal to <body>
+     (menus, dialogs, sheets) pick up the blue too. Foreground is white so
+     button and pill labels read as white on the blue fill. */
+  .app-theme,
+  [data-app-theme='blue'] {
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
+    --ring: 221 83% 53%;
+  }
+
   .dark {
     /* Warm near-black surface — #0b0a08 family */
     --background: 40 16% 4%;
