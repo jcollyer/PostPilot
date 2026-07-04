@@ -21,6 +21,7 @@ import {
   setTargetPlatformsManySchema,
   setTargetPlatformsSchema,
   setTiktokMetaSchema,
+  setTiktokPrivacyManySchema,
   stopMetadataGenerationSchema,
   type TikTokPostOptions,
   type TikTokPrivacyLevel,
@@ -814,6 +815,43 @@ export const mediaRouter = router({
     });
     return { success: true as const, blockingReasons: reasons };
   }),
+
+  /**
+   * Bulk version of the privacy picker for the multi-select footer: set the
+   * TikTok "who can view" level on many owned videos at once. Only privacy is
+   * touched — the interaction toggles keep their existing (or default) values —
+   * because privacy is the single field that gates a batch out of the queue.
+   */
+  setTiktokPrivacyMany: protectedProcedure
+    .input(setTiktokPrivacyManySchema)
+    .mutation(async ({ ctx, input }) => {
+      // Scope to videos the user actually owns before touching platform-meta.
+      const owned = await ctx.prisma.video.findMany({
+        where: { id: { in: input.videoIds }, userId: ctx.userId },
+        select: { id: true },
+      });
+
+      // Upsert per video: existing TikTok rows only get the new privacy; missing
+      // rows are created with privacy set and the interaction toggles left at
+      // their DB defaults (all false).
+      await ctx.prisma.$transaction(
+        owned.map((v) =>
+          ctx.prisma.videoPlatformMeta.upsert({
+            where: { videoId_platform: { videoId: v.id, platform: Platform.TIKTOK } },
+            create: {
+              videoId: v.id,
+              platform: Platform.TIKTOK,
+              aiGenerated: false,
+              hashtags: [],
+              tiktokPrivacy: input.privacy,
+              edited: true,
+            },
+            update: { tiktokPrivacy: input.privacy, edited: true },
+          }),
+        ),
+      );
+      return { updated: owned.length };
+    }),
 
   /** Videos flagged as (near-)duplicates, with their matches — for a dupe review view. */
   duplicates: protectedProcedure.query(async ({ ctx }) => {
