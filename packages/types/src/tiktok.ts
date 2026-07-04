@@ -153,3 +153,15 @@ export const setTiktokMetaSchema = z.object({
   brandedContent: z.boolean(),
 });
 export type SetTiktokMetaInput = z.infer<typeof setTiktokMetaSchema>;
+
+/**
+ * Bulk-set just the TikTok privacy level ("who can view") for many videos at
+ * once, from the media library's multi-select footer. Privacy is the one field
+ * TikTok forbids defaulting, so setting it in bulk is what clears the
+ * "needs TikTok details" gate for a batch of selected videos.
+ */
+export const setTiktokPrivacyManySchema = z.object({
+  videoIds: z.array(z.string().min(1)).min(1).max(1000),
+  privacy: tiktokPrivacySchema,
+});
+export type SetTiktokPrivacyManyInput = z.infer<typeof setTiktokPrivacyManySchema>;

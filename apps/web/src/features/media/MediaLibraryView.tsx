@@ -30,9 +30,12 @@ import {
   ACCEPTED_VIDEO_MIME_TYPES,
   DEFAULT_TIKTOK_OPTIONS,
   mediaStatusSchema,
+  TIKTOK_PRIVACY_LABELS,
+  TIKTOK_PRIVACY_LEVELS,
   tiktokConsentSegments,
   type MediaStatus,
   type Platform,
+  type TikTokPrivacyLevel,
 } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
@@ -358,6 +361,14 @@ export function MediaLibraryView() {
       refresh();
     },
   });
+  // Bulk-set the TikTok audience ("who can view") for the selection. Keeps the
+  // selection so the user can immediately queue the now-unblocked videos; the
+  // refresh re-evaluates the "needs TikTok details" gate.
+  const setTiktokPrivacyMany = trpc.media.setTiktokPrivacyMany.useMutation({
+    onSuccess: () => refresh(),
+  });
+  const applyBulkPrivacy = (privacy: TikTokPrivacyLevel) =>
+    setTiktokPrivacyMany.mutate({ videoIds: [...selectedIds], privacy });
 
   // Videos in the current selection still missing required TikTok input.
   const blockedSelectedCount = useMemo(
@@ -386,6 +397,7 @@ export function MediaLibraryView() {
     removeMany.isPending ||
     setCategoryMany.isPending ||
     setTargetsMany.isPending ||
+    setTiktokPrivacyMany.isPending ||
     addToQueue.isPending ||
     regenerate.isPending ||
     stopGeneration.isPending;
@@ -582,7 +594,8 @@ export function MediaLibraryView() {
         </div>
 
         {selectionActive ? (
-          <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 shadow-sm backdrop-blur">
+          <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-2 z-20 rounded-lg border shadow-sm backdrop-blur">
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2">
             <button
               type="button"
               onClick={clearSelection}
@@ -601,15 +614,6 @@ export function MediaLibraryView() {
             </button>
 
             <div className="ml-auto flex flex-wrap items-center gap-2">
-              {blockedSelectedCount > 0 ? (
-                <span
-                  className="flex items-center gap-1 text-xs text-amber-600"
-                  title="These videos need TikTok details before they can be queued."
-                >
-                  <TriangleAlert className="h-3.5 w-3.5" />
-                  {blockedSelectedCount} need TikTok details
-                </span>
-              ) : null}
               <Button
                 size="sm"
                 variant="outline"
@@ -700,6 +704,56 @@ export function MediaLibraryView() {
                 Delete
               </Button>
             </div>
+            </div>
+
+            {connected.has('TIKTOK') ? (
+              <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
+                <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                  {tiktokAccount.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={tiktokAccount.avatarUrl}
+                      alt=""
+                      className="h-4 w-4 shrink-0 rounded-full object-cover"
+                    />
+                  ) : null}
+                  <span>
+                    Posting to TikTok as{' '}
+                    <span className="text-foreground font-medium">
+                      {tiktokAccount.nickname ?? tiktokAccount.username ?? 'your account'}
+                    </span>
+                  </span>
+                </div>
+                {blockedSelectedCount > 0 ? (
+                  <span
+                    className="flex items-center gap-1 text-xs text-amber-600"
+                    title="These videos need TikTok details before they can be queued."
+                  >
+                    <TriangleAlert className="h-3.5 w-3.5" />
+                    {blockedSelectedCount} need TikTok details
+                  </span>
+                ) : null}
+
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="text-muted-foreground text-xs">Who can view</span>
+                  <Select
+                    onValueChange={(v) => applyBulkPrivacy(v as TikTokPrivacyLevel)}
+                    disabled={bulkBusy}
+                  >
+                    <SelectTrigger className="h-8 w-auto min-w-[180px]">
+                      <SelectValue placeholder="Set who can view…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIKTOK_PRIVACY_LEVELS.map((level) => (
+                        <SelectItem key={level} value={level}>
+                          {TIKTOK_PRIVACY_LABELS[level]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
