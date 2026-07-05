@@ -1,15 +1,9 @@
 import Link from 'next/link';
-import {
-  ArrowRight,
-  CalendarClock,
-  CheckCircle2,
-  Sparkles,
-  UploadCloud,
-  Wand2,
-} from 'lucide-react';
+import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
+import { FeatureShowcase } from './FeatureShowcase';
 import { HeroAnimation } from './HeroAnimation';
 import { SiteFooter } from './SiteFooter';
 import { SiteHeader } from './SiteHeader';
@@ -19,29 +13,6 @@ import { SiteHeader } from './SiteHeader';
  * positioning, walks through the core features, and drives to sign-up. Pricing
  * lives on its own /pricing route, linked from here.
  */
-
-const FEATURES = [
-  {
-    icon: UploadCloud,
-    title: 'Upload once, queue forever',
-    body: 'Drop a whole backlog of short-form videos in one go. PostPilot holds them in a tidy queue so you are never scrambling for something to post.',
-  },
-  {
-    icon: Wand2,
-    title: 'AI does the busywork',
-    body: 'It writes titles, captions, and hashtags and picks thumbnails for each clip — so every post goes out polished without you touching it.',
-  },
-  {
-    icon: CalendarClock,
-    title: 'Smart, hands-off scheduling',
-    body: 'It spaces similar videos apart and publishes on your schedule to TikTok, Instagram Reels, and YouTube Shorts automatically.',
-  },
-  {
-    icon: Sparkles,
-    title: 'Only pings you when it matters',
-    body: 'No noisy dashboards to babysit. PostPilot runs itself and reaches out only when something genuinely needs your attention.',
-  },
-];
 
 const STEPS = [
   { step: '1', title: 'Connect your accounts', body: 'Link TikTok, Reels, and Shorts in a couple of clicks.' },
@@ -78,7 +49,11 @@ export function LandingPage() {
                 rest.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Button asChild size="lg">
+                <Button
+                  asChild
+                  size="lg"
+                  className="border-border/60 border bg-[#e4dcc4] text-[#2b2926] shadow-none hover:bg-[#d9cda6]"
+                >
                   <Link href="/signin?mode=signup">
                     Get started free
                     <ArrowRight className="h-4 w-4" />
@@ -101,38 +76,27 @@ export function LandingPage() {
         </section>
 
         {/* Features */}
-        <section className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
+        <section className="mx-auto max-w-7xl px-6 py-16 sm:py-20">
           <div className="max-w-4xl">
-            <h2 className="text-foreground text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+            <h2 className="text-foreground text-2xl font-normal leading-[1.05] tracking-tight sm:text-4xl">
               Everything you need to post consistently
             </h2>
-            <p className="text-muted-foreground mt-1 text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+            <p className="text-muted-foreground mt-1 text-2xl font-normal leading-[1.05] tracking-tight sm:text-4xl">
               Set it up once and PostPilot keeps your channels fed.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-6 sm:grid-cols-2">
-            {FEATURES.map((f) => (
-              <div
-                key={f.title}
-                className="border-border/60 bg-card rounded-xl border p-6 shadow-sm transition-shadow hover:shadow-md"
-              >
-                <div className="bg-foreground text-primary mb-4 flex size-11 items-center justify-center rounded-lg">
-                  <f.icon className="h-5 w-5" />
-                </div>
-                <h3 className="text-lg font-semibold">{f.title}</h3>
-                <p className="text-muted-foreground mt-2 text-sm leading-relaxed">{f.body}</p>
-              </div>
-            ))}
-          </div>
+          <FeatureShowcase />
         </section>
 
         {/* How it works */}
-        <section className="bg-secondary/40 border-border/60 border-y">
-          <div className="mx-auto max-w-6xl px-6 py-16 sm:py-20">
-            <div className="mx-auto max-w-2xl text-center">
-              <h2 className="text-3xl font-semibold tracking-tight">Live in three steps</h2>
-              <p className="text-muted-foreground mt-3">
+        <section className="bg-secondary/40">
+          <div className="mx-auto max-w-7xl px-6 pb-16 pt-24 sm:pb-20 sm:pt-32">
+            <div className="mx-auto max-w-4xl text-center">
+              <h2 className="text-foreground text-2xl font-normal leading-[1.05] tracking-tight sm:text-4xl">
+                Live in three steps
+              </h2>
+              <p className="text-muted-foreground mt-1 text-lg font-normal">
                 From zero to a self-running content queue in minutes.
               </p>
             </div>
@@ -151,7 +115,7 @@ export function LandingPage() {
         </section>
 
         {/* CTA */}
-        <section className="mx-auto max-w-6xl px-6 py-20">
+        <section className="mx-auto max-w-7xl px-6 py-20">
           <div className="bg-foreground text-background relative overflow-hidden rounded-2xl px-8 py-14 text-center">
             <div
               className="bg-primary/20 pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl"

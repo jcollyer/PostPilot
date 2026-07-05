@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Check, ImagePlus, Info, Loader2, Sparkles, TriangleAlert, UserRound } from 'lucide-react';
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { Check, ImagePlus, Info, Loader2, Sparkles, TriangleAlert, UserRound, X } from 'lucide-react';
 
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
@@ -43,6 +43,7 @@ import {
   selectedFromTargets,
   targetsFromSelected,
   useConnectedPlatforms,
+  useTikTokAccount,
 } from './PlatformTargets';
 import type { VideoDto } from './types';
 import { putObject } from './upload';
@@ -62,13 +63,14 @@ export function EditMetadataDialog({
 }) {
   const [title, setTitle] = useState(video.title ?? '');
   const [caption, setCaption] = useState(video.caption ?? '');
-  const [hashtags, setHashtags] = useState((video.hashtags ?? []).join(' '));
+  const [hashtags, setHashtags] = useState<string[]>(video.hashtags ?? []);
   const [categoryId, setCategoryId] = useState(video.categoryId ?? '');
   const [coverUrl, setCoverUrl] = useState(video.coverImageUrl ?? null);
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
 
   const { connected } = useConnectedPlatforms();
+  const { avatarUrl: tiktokAvatarUrl } = useTikTokAccount();
   const [targetSel, setTargetSel] = useState(() => selectedFromTargets(video.targetPlatforms));
   const setTargetPlatforms = trpc.media.setTargetPlatforms.useMutation({ onSuccess: onSaved });
   const onToggleTargets = (next: Set<Platform>) => {
@@ -88,18 +90,12 @@ export function EditMetadataDialog({
     },
   });
 
-  const parseHashtags = (raw: string) =>
-    raw
-      .split(/[\s,]+/)
-      .map((t) => t.replace(/^#/, '').trim())
-      .filter(Boolean);
-
   const save = async () => {
     await updateMetadata.mutateAsync({
       videoId: video.id,
       title: title.trim() || null,
       caption: caption.trim() || null,
-      hashtags: parseHashtags(hashtags),
+      hashtags,
       categoryId: categoryId || null,
     });
     onSaved();
@@ -174,13 +170,15 @@ export function EditMetadataDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="video-hashtags">Hashtags</Label>
-            <Input
+            <HashtagInput
               id="video-hashtags"
               value={hashtags}
-              onChange={(e) => setHashtags(e.target.value)}
+              onChange={setHashtags}
               placeholder="travel drone sunset"
             />
-            <p className="text-muted-foreground text-xs">Separate with spaces or commas.</p>
+            <p className="text-muted-foreground text-xs">
+              Press Enter or comma to turn text into a tag.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -205,7 +203,12 @@ export function EditMetadataDialog({
 
           <div className="space-y-1.5">
             <Label>Post to</Label>
-            <PlatformChips selected={targetSel} connected={connected} onChange={onToggleTargets} />
+            <PlatformChips
+              selected={targetSel}
+              connected={connected}
+              onChange={onToggleTargets}
+              tiktokAvatarUrl={tiktokAvatarUrl}
+            />
             <p className="text-muted-foreground text-xs">
               Choose which platforms this video publishes to. Unconnected platforms are marked —
               they’ll post once connected.
@@ -360,13 +363,13 @@ function PlatformMetaEditor({
 
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
-  const [hashtags, setHashtags] = useState('');
+  const [hashtags, setHashtags] = useState<string[]>([]);
 
   // Reload the fields whenever the selected platform (or its data) changes.
   useEffect(() => {
     setTitle(current?.title ?? '');
     setCaption(current?.caption ?? '');
-    setHashtags((current?.hashtags ?? []).join(' '));
+    setHashtags(current?.hashtags ?? []);
   }, [platform, current?.title, current?.caption, current?.hashtags]);
 
   const setPlatformMeta = trpc.media.setPlatformMeta.useMutation({ onSuccess: onSaved });
@@ -377,10 +380,7 @@ function PlatformMetaEditor({
       platform,
       title: title.trim() || null,
       caption: caption.trim() || null,
-      hashtags: hashtags
-        .split(/[\s,]+/)
-        .map((t) => t.replace(/^#/, '').trim())
-        .filter(Boolean),
+      hashtags,
     });
 
   return (
@@ -420,10 +420,10 @@ function PlatformMetaEditor({
         placeholder={`${PLATFORM_LABELS[platform]} caption`}
         className="border-input bg-background focus-visible:ring-ring flex w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
       />
-      <Input
+      <HashtagInput
         value={hashtags}
-        onChange={(e) => setHashtags(e.target.value)}
-        placeholder="hashtags (space separated)"
+        onChange={setHashtags}
+        placeholder="Add hashtags — Enter or comma to add"
       />
       <div className="flex justify-end">
         <Button size="sm" variant="outline" onClick={save} disabled={setPlatformMeta.isPending}>
@@ -431,6 +431,111 @@ function PlatformMetaEditor({
           Save {PLATFORM_LABELS[platform]}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tag-style hashtag editor. Text types normally; pressing Enter or typing a
+ * comma turns the current text into a pill. Each pill has a remove button, and
+ * Backspace on an empty field removes the last one. Tags are stored normalized
+ * (no leading `#`, trimmed, de-duped); the `#` is only shown in the pill.
+ */
+function HashtagInput({
+  value,
+  onChange,
+  placeholder,
+  id,
+}: {
+  value: string[];
+  onChange: (tags: string[]) => void;
+  placeholder?: string;
+  id?: string;
+}) {
+  const [draft, setDraft] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const normalize = (raw: string) => raw.replace(/^#+/, '').trim();
+
+  const addTags = (raw: string) => {
+    const parts = raw
+      .split(/[\s,]+/)
+      .map(normalize)
+      .filter(Boolean);
+    if (parts.length === 0) return;
+    const next = [...value];
+    for (const t of parts) if (!next.includes(t)) next.push(t);
+    onChange(next);
+  };
+
+  const removeAt = (i: number) => onChange(value.filter((_, idx) => idx !== i));
+
+  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      addTags(draft);
+      setDraft('');
+    } else if (e.key === 'Backspace' && draft === '' && value.length > 0) {
+      removeAt(value.length - 1);
+    }
+  };
+
+  const onPaste = (e: ClipboardEvent<HTMLInputElement>) => {
+    const text = e.clipboardData.getData('text');
+    if (/[\s,]/.test(text)) {
+      e.preventDefault();
+      addTags(text);
+    }
+  };
+
+  return (
+    <div
+      className="border-input bg-background focus-within:ring-ring flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border px-2 py-1.5 text-sm focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2"
+      onClick={() => inputRef.current?.focus()}
+    >
+      {value.map((tag, i) => (
+        <span
+          key={`${tag}-${i}`}
+          className="bg-muted text-foreground inline-flex items-center gap-1 rounded-full py-0.5 pl-2.5 pr-1 text-xs font-medium"
+        >
+          #{tag}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              removeAt(i);
+            }}
+            aria-label={`Remove #${tag}`}
+            className="hover:bg-foreground/10 flex h-4 w-4 items-center justify-center rounded-full transition"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        ref={inputRef}
+        id={id}
+        value={draft}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v.includes(',')) {
+            addTags(v);
+            setDraft('');
+          } else {
+            setDraft(v);
+          }
+        }}
+        onKeyDown={onKeyDown}
+        onPaste={onPaste}
+        onBlur={() => {
+          if (draft.trim()) {
+            addTags(draft);
+            setDraft('');
+          }
+        }}
+        placeholder={value.length === 0 ? placeholder : ''}
+        className="placeholder:text-muted-foreground min-w-[6rem] flex-1 bg-transparent outline-none"
+      />
     </div>
   );
 }

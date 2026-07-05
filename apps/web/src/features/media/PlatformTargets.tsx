@@ -1,5 +1,6 @@
 'use client';
 
+import { Check } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { PLATFORM_LABELS, platformSchema, type Platform } from '@postpilot/types';
@@ -128,6 +129,8 @@ export function PlatformChips({
         const label = size === 'xs' ? SHORT_BADGE[p] : PLATFORM_SHORT[p];
         const showAvatar = p === 'TIKTOK' && isConnected && Boolean(tiktokAvatarUrl);
         const avatarSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+        const checkCircle = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+        const checkIcon = size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3';
         return (
           <button
             key={p}
@@ -143,7 +146,7 @@ export function PlatformChips({
                 ? `${PLATFORM_LABELS[p]} — ${on ? 'will post here' : 'not posting here'}`
                 : `${PLATFORM_LABELS[p]} isn't connected yet — it'll post once you connect it`
             }
-            className={`inline-flex items-center gap-1 rounded-md border font-medium transition disabled:opacity-50 ${pad} ${
+            className={`inline-flex items-center gap-1 rounded-full border font-medium transition disabled:opacity-50 ${pad} ${
               on
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'border-input text-muted-foreground hover:bg-accent'
@@ -166,6 +169,14 @@ export function PlatformChips({
                 }`}
                 title="Not connected"
               />
+            ) : null}
+            {on ? (
+              <span
+                aria-hidden
+                className={`-mr-0.5 flex shrink-0 items-center justify-center rounded-full bg-white ${checkCircle}`}
+              >
+                <Check className={`text-primary ${checkIcon}`} strokeWidth={3} />
+              </span>
             ) : null}
           </button>
         );
