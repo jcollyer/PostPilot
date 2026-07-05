@@ -41,7 +41,7 @@ export const NOTIFICATION_TYPE_META: NotificationTypeMeta[] = [
   {
     type: NotificationType.RECONNECT_REQUIRED,
     label: 'Reconnect required',
-    description: 'A platform connection expired and needs you to reauthorize it.',
+    description: 'A connection expired — reauthorize to keep posting.',
     channels: channelsForType(NotificationType.RECONNECT_REQUIRED),
   },
   {
