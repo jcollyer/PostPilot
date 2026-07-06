@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Check,
-  Copy,
   Film,
   FolderInput,
   FolderPlus,
@@ -1270,9 +1269,9 @@ function VideoCard({
           {video.isDuplicate ? (
             <span
               title="Possible duplicate"
-              className="flex items-center gap-0.5 rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              className="flex items-center gap-1 rounded bg-red-600 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-white shadow-sm ring-1 ring-red-700/50"
             >
-              <Copy className="h-3 w-3" /> Dup
+              Duplicate <TriangleAlert className="h-3.5 w-3.5" />
             </span>
           ) : null}
           {aiBusy ? (

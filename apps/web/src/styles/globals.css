@@ -130,6 +130,73 @@
 }
 
 /* ------------------------------------------------------------------ *
+   PostPilot marketing — "Live in three steps" neon panel.
+   A full-bleed dark section split into three numbered columns by two
+   slanted neon divider lines. Each line has a right-pointing arrow fused
+   into its center; line + arrow share the lime brand color and a layered
+   drop-shadow so they read as a single glowing neon tube. The arrow fill
+   uses --pp-panel (the panel background) so the line appears to flow
+   through the outline rather than cross behind it.
+ * ------------------------------------------------------------------ */
+.pp-steps {
+  --pp-panel: 40 16% 4%; /* near-black warm ink — same family as --foreground */
+  --pp-neon: 64 90% 66%; /* lime brand glow */
+  background-color: hsl(var(--pp-panel));
+  color: hsl(var(--pp-neon));
+}
+
+/* Shared neon glow — layered drop-shadows fake the halo of a lit gas tube. */
+.pp-neon-line,
+.pp-neon-arrow {
+  color: hsl(var(--pp-neon));
+  filter: drop-shadow(0 0 1.5px hsl(var(--pp-neon) / 0.8))
+    drop-shadow(0 0 5px hsl(var(--pp-neon) / 0.5))
+    drop-shadow(0 0 11px hsl(var(--pp-neon) / 0.35));
+}
+
+/* Fade the divider lines into the black panel at the top and bottom. */
+.pp-neon-line {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 14%,
+    #000 86%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 14%,
+    #000 86%,
+    transparent 100%
+  );
+}
+
+/* Arrow carries a slightly softer outer glow than the lines. */
+.pp-neon-arrow {
+  filter: drop-shadow(0 0 1px hsl(var(--pp-neon) / 0.7))
+    drop-shadow(0 0 4px hsl(var(--pp-neon) / 0.4))
+    drop-shadow(0 0 9px hsl(var(--pp-neon) / 0.28));
+}
+
+.pp-neon-text {
+  color: #fff;
+  text-shadow:
+    0 0 6px hsl(var(--pp-neon) / 0.55),
+    0 0 20px hsl(var(--pp-neon) / 0.35);
+}
+
+.pp-neon-num {
+  color: hsl(var(--pp-neon));
+  border-color: hsl(var(--pp-neon));
+  box-shadow:
+    0 0 6px hsl(var(--pp-neon) / 0.6),
+    0 0 16px hsl(var(--pp-neon) / 0.4),
+    inset 0 0 8px hsl(var(--pp-neon) / 0.35);
+  text-shadow: 0 0 8px hsl(var(--pp-neon) / 0.7);
+}
+
+/* ------------------------------------------------------------------ *
    PostPilot marketing hero — animated product demo (Act 1: Upload).
    Replaces the static product screenshot. Pure CSS + inline SVG.
    Everything is sized in cqw against `.pp-stage` (1cqw = 1% of the stage
@@ -2408,6 +2475,17 @@
 .dark .pp-feature {
   background: hsl(40 10% 9%);
   border-color: hsl(40 8% 18%);
+}
+
+/* Softer variant — a lighter beige surface + border for the marketing feature
+   highlights, so the illustration cards read gentler than the main bento. */
+.pp-feature-soft {
+  background: hsl(44 28% 96%);
+  border: 1px solid hsl(40 16% 91%);
+}
+.dark .pp-feature-soft {
+  background: hsl(40 10% 12%);
+  border-color: hsl(40 8% 22%);
 }
 
 /* Full-bleed stages (boxes 2, 3, 5) run to the box's sides and bottom, so drop

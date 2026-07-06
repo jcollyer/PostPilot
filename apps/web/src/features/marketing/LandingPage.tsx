@@ -3,22 +3,18 @@ import { ArrowRight, CheckCircle2, Sparkles } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 
+import { FeatureHighlights } from './FeatureHighlights';
 import { FeatureShowcase } from './FeatureShowcase';
 import { HeroAnimation } from './HeroAnimation';
 import { SiteFooter } from './SiteFooter';
 import { SiteHeader } from './SiteHeader';
+import { ThreeSteps } from './ThreeSteps';
 
 /**
  * Public marketing homepage for logged-out visitors. Leads with the logo and
  * positioning, walks through the core features, and drives to sign-up. Pricing
  * lives on its own /pricing route, linked from here.
  */
-
-const STEPS = [
-  { step: '1', title: 'Connect your accounts', body: 'Link TikTok, Reels, and Shorts in a couple of clicks.' },
-  { step: '2', title: 'Upload your backlog', body: 'Add videos once; AI preps the captions and thumbnails.' },
-  { step: '3', title: 'Walk away', body: 'PostPilot publishes on schedule and keeps you consistent.' },
-];
 
 export function LandingPage() {
   return (
@@ -75,6 +71,9 @@ export function LandingPage() {
           </div>
         </section>
 
+        {/* Live in three steps — full-bleed neon panel */}
+        <ThreeSteps />
+
         {/* Features */}
         <section className="mx-auto max-w-7xl px-6 py-16 sm:py-20">
           <div className="max-w-4xl">
@@ -89,29 +88,9 @@ export function LandingPage() {
           <FeatureShowcase />
         </section>
 
-        {/* How it works */}
-        <section className="bg-secondary/40">
-          <div className="mx-auto max-w-7xl px-6 pb-16 pt-24 sm:pb-20 sm:pt-32">
-            <div className="mx-auto max-w-4xl text-center">
-              <h2 className="text-foreground text-2xl font-normal leading-[1.05] tracking-tight sm:text-4xl">
-                Live in three steps
-              </h2>
-              <p className="text-muted-foreground mt-1 text-lg font-normal">
-                From zero to a self-running content queue in minutes.
-              </p>
-            </div>
-            <div className="mt-12 grid gap-8 sm:grid-cols-3">
-              {STEPS.map((s) => (
-                <div key={s.step} className="text-center">
-                  <div className="bg-primary text-primary-foreground mx-auto flex size-10 items-center justify-center rounded-full text-sm font-semibold">
-                    {s.step}
-                  </div>
-                  <h3 className="mt-4 font-semibold">{s.title}</h3>
-                  <p className="text-muted-foreground mt-2 text-sm">{s.body}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+        {/* More features — full-bleed carousel */}
+        <section className="overflow-x-clip py-16 sm:py-20">
+          <FeatureHighlights />
         </section>
 
         {/* CTA */}
