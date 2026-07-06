@@ -18,6 +18,9 @@ export function SiteFooter() {
           <Link href="/terms" className="hover:text-foreground">
             Terms
           </Link>
+          <Link href="/data-deletion" className="hover:text-foreground">
+            Data deletion
+          </Link>
           <Link href="/signin" className="hover:text-foreground">
             Sign in
           </Link>

@@ -26,8 +26,9 @@ export default function TermsPage() {
           <div className="mt-10 space-y-8 text-base leading-relaxed">
             <p>
               These Terms of Service (“Terms”) govern your access to and use of PostPilot (the
-              “Service”). By creating an account or using the Service, you agree to these Terms. If
-              you don’t agree, please don’t use PostPilot.
+              “Service”), a service operated by RushfordColler LLC (“PostPilot,” “we,” or “us”). By
+              creating an account or using the Service, you agree to these Terms. If you don’t agree,
+              please don’t use PostPilot.
             </p>
 
             <div className="space-y-3">

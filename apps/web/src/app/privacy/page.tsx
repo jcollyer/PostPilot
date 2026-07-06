@@ -25,8 +25,10 @@ export default function PrivacyPage() {
 
           <div className="mt-10 space-y-8 text-base leading-relaxed">
             <p>
-              PostPilot is built to respect your privacy. The short version: we do not store your
-              personal information. This policy explains what that means in practice.
+              PostPilot is a service operated by RushfordColler LLC (&ldquo;PostPilot,&rdquo;
+              &ldquo;we,&rdquo; or &ldquo;us&rdquo;). It is built to respect your privacy. The short
+              version: we do not store your personal information. This policy explains what that
+              means in practice.
             </p>
 
             <div className="space-y-3">
