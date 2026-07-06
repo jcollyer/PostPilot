@@ -47,11 +47,11 @@ function FeatureBox({
         </h3>
       </div>
       {bleed ? (
-        <div className="mt-10 flex flex-1 flex-col justify-end pb-0">
+        <div className="flex flex-1 flex-col justify-end pb-0">
           <div className="w-[106%] translate-x-6 translate-y-10">{children}</div>
         </div>
       ) : (
-        <div className="pp-fullbleed mt-10 flex flex-1 flex-col justify-end">{children}</div>
+        <div className="pp-fullbleed flex flex-1 flex-col justify-end">{children}</div>
       )}
     </div>
   );
