@@ -29,6 +29,7 @@ import {
   Play,
   RefreshCw,
   RotateCcw,
+  Send,
   Shuffle,
   SkipForward,
   Trash2,
@@ -54,11 +55,28 @@ type TikTokAccount = {
   nickname: string | null;
 };
 
+/** The connected Instagram account, surfaced next to Instagram-bound items. */
+type InstagramAccount = {
+  avatarUrl: string | null;
+  username: string | null;
+};
+
 const PLATFORM_SHORT: Record<Platform, string> = {
   TIKTOK: 'TikTok',
   INSTAGRAM: 'IG',
   YOUTUBE: 'YT',
 };
+
+/** How many published items to show before the "Show more" toggle. */
+const PUBLISHED_CAP = 3;
+
+/** Latest publish time across an item's tasks, in ms (0 when none). */
+function latestPublishedAt(item: QueueItem): number {
+  return item.tasks.reduce((max, t) => {
+    const ts = t.publishedAt ? new Date(t.publishedAt).getTime() : 0;
+    return ts > max ? ts : max;
+  }, 0);
+}
 
 export function QueueView() {
   const utils = trpc.useUtils();
@@ -83,6 +101,15 @@ export function QueueView() {
       }
     : null;
 
+  // The connected Instagram account — used to badge Instagram-bound items.
+  const connections = trpc.connections.overview.useQuery();
+  const instagram: InstagramAccount | null = useMemo(() => {
+    const conn = connections.data?.find(
+      (e) => e.platform === 'INSTAGRAM' && e.connection?.status === 'ACTIVE',
+    )?.connection;
+    return conn ? { avatarUrl: conn.avatarUrl, username: conn.username } : null;
+  }, [connections.data]);
+
   const refresh = () => {
     utils.queue.get.invalidate();
     utils.queue.upcoming.invalidate();
@@ -96,6 +123,31 @@ export function QueueView() {
   const skip = trpc.queue.skip.useMutation({ onSuccess: refresh });
   const unskip = trpc.queue.unskip.useMutation({ onSuccess: refresh });
   const retryPublish = trpc.queue.retryPublish.useMutation({ onSuccess: refresh });
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const publishNow = trpc.queue.publishNow.useMutation({
+    onMutate: () => setPublishError(null),
+    onSuccess: (res) => {
+      refresh();
+      if (!res.success) {
+        setPublishError(
+          res.reason === 'no_connection'
+            ? "Connect an account for this video's platform(s) before publishing."
+            : 'That item has nothing left to publish.',
+        );
+        return;
+      }
+      const failed = res.results.find((r) => r.outcome === 'failed' || r.outcome === 'held');
+      setPublishError(
+        failed
+          ? `Couldn't publish to ${PLATFORM_LABELS[failed.platform]}: ${failed.detail ?? 'failed'}`
+          : null,
+      );
+    },
+  });
+  const clearCompleted = trpc.queue.clearCompleted.useMutation({ onSuccess: refresh });
+
+  // How many published items to show before "Show more".
+  const [showAllPublished, setShowAllPublished] = useState(false);
 
   // Local mirror of the server order so drag feels instant.
   const serverItems = queue.data?.items ?? [];
@@ -105,7 +157,12 @@ export function QueueView() {
   }, [queue.data]);
 
   const active = order.filter((i) => i.status !== 'SKIPPED' && i.status !== 'COMPLETED');
+  // Most-recently-published first, so the cap keeps the freshest posts visible.
+  const completed = order
+    .filter((i) => i.status === 'COMPLETED')
+    .sort((a, b) => latestPublishedAt(b) - latestPublishedAt(a));
   const skipped = order.filter((i) => i.status === 'SKIPPED');
+  const visiblePublished = showAllPublished ? completed : completed.slice(0, PUBLISHED_CAP);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -168,6 +225,12 @@ export function QueueView() {
         </div>
       ) : null}
 
+      {publishError ? (
+        <div className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-3 text-sm">
+          {publishError}
+        </div>
+      ) : null}
+
       <div className="grid gap-6 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
           <Card>
@@ -197,15 +260,82 @@ export function QueueView() {
                           key={item.id}
                           item={item}
                           tiktok={tiktok}
+                          instagram={instagram}
                           onSkip={() => skip.mutate({ itemId: item.id })}
                           onRemove={() => removeItem.mutate({ itemId: item.id })}
                           onRetry={(taskId) => retryPublish.mutate({ taskId })}
+                          onPublishNow={() => publishNow.mutate({ itemId: item.id })}
+                          publishing={publishNow.isPending && publishNow.variables?.itemId === item.id}
                         />
                       ))}
                     </ul>
                   </SortableContext>
                 </DndContext>
               )}
+
+              {completed.length > 0 ? (
+                <div className="space-y-2 pt-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
+                      Published
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => clearCompleted.mutate()}
+                      disabled={clearCompleted.isPending}
+                      title="Remove all published items from this list (posts stay live)"
+                    >
+                      {clearCompleted.isPending ? (
+                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-1 h-4 w-4" />
+                      )}
+                      Clear published
+                    </Button>
+                  </div>
+                  {visiblePublished.map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 rounded-md border p-2">
+                      <Thumb url={item.video.thumbnailUrl} />
+                      <div className="min-w-0 flex-1">
+                        <span className="block min-w-0 truncate text-sm font-medium">
+                          {item.video.title ?? item.video.originalFilename ?? 'Untitled'}
+                        </span>
+                        <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                          {item.tasks.map((t) => (
+                            <TaskChip
+                              key={t.id}
+                              task={t}
+                              tiktok={tiktok}
+                              instagram={instagram}
+                              onRetry={() => retryPublish.mutate({ taskId: t.id })}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeItem.mutate({ itemId: item.id })}
+                      >
+                        <Trash2 className="mr-1 h-4 w-4" /> Remove from queue
+                      </Button>
+                    </div>
+                  ))}
+                  {completed.length > PUBLISHED_CAP ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => setShowAllPublished((v) => !v)}
+                    >
+                      {showAllPublished
+                        ? 'Show less'
+                        : `Show ${completed.length - PUBLISHED_CAP} more`}
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
 
               {skipped.length > 0 ? (
                 <div className="space-y-2 pt-3">
@@ -253,7 +383,12 @@ export function QueueView() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <UpcomingList data={upcoming.data} loading={upcoming.isLoading} tiktok={tiktok} />
+              <UpcomingList
+                data={upcoming.data}
+                loading={upcoming.isLoading}
+                tiktok={tiktok}
+                instagram={instagram}
+              />
             </CardContent>
           </Card>
         </div>
@@ -287,8 +422,8 @@ function Thumb({ url }: { url: string | null }) {
   );
 }
 
-/** Small round TikTok creator avatar shown inside the TikTok pill. */
-function TikTokAvatar({ url }: { url: string | null }) {
+/** Small round account avatar shown inside a platform pill. */
+function PlatformAvatar({ url }: { url: string | null }) {
   if (!url) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
@@ -300,18 +435,35 @@ function TikTokAvatar({ url }: { url: string | null }) {
   );
 }
 
+/** The account avatar to show inside a given platform's pill, if any. */
+function platformAvatarUrl(
+  platform: Platform,
+  tiktok: TikTokAccount | null,
+  instagram: InstagramAccount | null,
+): string | null {
+  if (platform === 'TIKTOK') return tiktok?.avatarUrl ?? null;
+  if (platform === 'INSTAGRAM') return instagram?.avatarUrl ?? null;
+  return null;
+}
+
 function SortableRow({
   item,
   tiktok,
+  instagram,
   onSkip,
   onRemove,
   onRetry,
+  onPublishNow,
+  publishing,
 }: {
   item: QueueItem;
   tiktok: TikTokAccount | null;
+  instagram: InstagramAccount | null;
   onSkip: () => void;
   onRemove: () => void;
   onRetry: (taskId: string) => void;
+  onPublishNow: () => void;
+  publishing: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -351,15 +503,35 @@ function SortableRow({
           <span>{item.scheduledAt ? formatSlot(item.scheduledAt) : 'Awaiting a slot'}</span>
           {item.tasks.length > 0 ? (
             item.tasks.map((t) => (
-              <TaskChip key={t.id} task={t} tiktok={tiktok} onRetry={() => onRetry(t.id)} />
+              <TaskChip
+                key={t.id}
+                task={t}
+                tiktok={tiktok}
+                instagram={instagram}
+                onRetry={() => onRetry(t.id)}
+              />
             ))
           ) : (
-            <Destinations platforms={item.postsTo} tiktok={tiktok} />
+            <Destinations platforms={item.postsTo} tiktok={tiktok} instagram={instagram} />
           )}
         </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-1">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onPublishNow}
+          disabled={publishing}
+          title="Publish this item now, without waiting for its scheduled time"
+        >
+          {publishing ? (
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="mr-1 h-4 w-4" />
+          )}
+          Publish now
+        </Button>
         <button
           type="button"
           onClick={onSkip}
@@ -391,9 +563,11 @@ function SortableRow({
 function Destinations({
   platforms,
   tiktok,
+  instagram,
 }: {
   platforms: Platform[];
   tiktok: TikTokAccount | null;
+  instagram: InstagramAccount | null;
 }) {
   if (platforms.length === 0) {
     return <span className="text-muted-foreground">No connected platforms</span>;
@@ -401,20 +575,20 @@ function Destinations({
   return (
     <span className="flex items-center gap-1">
       <span className="text-muted-foreground/70">Posts to</span>
-      {platforms.map((p) => (
-        <span
-          key={p}
-          className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1 text-slate-600"
-          title={
-            p === 'TIKTOK' && tiktok?.username
-              ? `${PLATFORM_LABELS[p]} · @${tiktok.username}`
-              : PLATFORM_LABELS[p]
-          }
-        >
-          {p === 'TIKTOK' ? <TikTokAvatar url={tiktok?.avatarUrl ?? null} /> : null}
-          {PLATFORM_SHORT[p]}
-        </span>
-      ))}
+      {platforms.map((p) => {
+        const handle =
+          p === 'TIKTOK' ? tiktok?.username : p === 'INSTAGRAM' ? instagram?.username : null;
+        return (
+          <span
+            key={p}
+            className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1 text-slate-600"
+            title={handle ? `${PLATFORM_LABELS[p]} · @${handle}` : PLATFORM_LABELS[p]}
+          >
+            <PlatformAvatar url={platformAvatarUrl(p, tiktok, instagram)} />
+            {PLATFORM_SHORT[p]}
+          </span>
+        );
+      })}
     </span>
   );
 }
@@ -424,19 +598,26 @@ type QueueTask = QueueItem['tasks'][number];
 function TaskChip({
   task,
   tiktok,
+  instagram,
   onRetry,
 }: {
   task: QueueTask;
   tiktok: TikTokAccount | null;
+  instagram: InstagramAccount | null;
   onRetry: () => void;
 }) {
   const label = PLATFORM_SHORT[task.platform];
   const full = PLATFORM_LABELS[task.platform];
   const base = 'inline-flex items-center gap-0.5 rounded px-1';
-  // For TikTok, show the connected creator avatar inside the pill.
-  const avatar =
-    task.platform === 'TIKTOK' ? <TikTokAvatar url={tiktok?.avatarUrl ?? null} /> : null;
-  const at = task.platform === 'TIKTOK' && tiktok?.username ? ` · @${tiktok.username}` : '';
+  // Show the connected account avatar inside the pill (TikTok, Instagram).
+  const avatar = <PlatformAvatar url={platformAvatarUrl(task.platform, tiktok, instagram)} />;
+  const handle =
+    task.platform === 'TIKTOK'
+      ? tiktok?.username
+      : task.platform === 'INSTAGRAM'
+        ? instagram?.username
+        : null;
+  const at = handle ? ` · @${handle}` : '';
 
   if (task.status === 'PUBLISHED') {
     const cls = `${base} bg-emerald-100 text-emerald-700`;
@@ -496,10 +677,12 @@ function UpcomingList({
   data,
   loading,
   tiktok,
+  instagram,
 }: {
   data: Upcoming | undefined;
   loading: boolean;
   tiktok: TikTokAccount | null;
+  instagram: InstagramAccount | null;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, Upcoming>();
@@ -536,8 +719,13 @@ function UpcomingList({
           </p>
           <ul className="space-y-1.5">
             {posts.map((p) => {
-              const isTikTok = p.platform === 'TIKTOK';
-              const handle = tiktok?.username ?? tiktok?.nickname ?? null;
+              const avatarUrl = platformAvatarUrl(p.platform, tiktok, instagram);
+              const handle =
+                p.platform === 'TIKTOK'
+                  ? (tiktok?.username ?? tiktok?.nickname ?? null)
+                  : p.platform === 'INSTAGRAM'
+                    ? (instagram?.username ?? null)
+                    : null;
               return (
                 <li key={p.taskId} className="flex items-center gap-2 text-sm">
                   <Thumb url={p.thumbnailUrl} />
@@ -547,19 +735,17 @@ function UpcomingList({
                       <span>
                         {formatTime(p.scheduledAt)} · {PLATFORM_LABELS[p.platform]}
                       </span>
-                      {isTikTok && tiktok ? (
+                      {avatarUrl || handle ? (
                         <span className="flex items-center gap-1">
-                          {tiktok.avatarUrl ? (
+                          {avatarUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={tiktok.avatarUrl}
+                              src={avatarUrl}
                               alt=""
                               className="h-4 w-4 shrink-0 rounded-full object-cover"
                             />
                           ) : null}
-                          {handle ? (
-                            <span className="truncate">@{handle}</span>
-                          ) : null}
+                          {handle ? <span className="truncate">@{handle}</span> : null}
                         </span>
                       ) : null}
                       {p.needsConnection ? (
