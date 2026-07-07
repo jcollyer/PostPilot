@@ -65,6 +65,7 @@ export async function completeConnection(params: {
       externalAccountId: identity.externalAccountId,
       username: identity.username ?? null,
       displayName: identity.displayName ?? null,
+      avatarUrl: identity.avatarUrl ?? null,
       status: 'ACTIVE',
       lastRefreshedAt: new Date(),
       ...cols,
@@ -72,6 +73,7 @@ export async function completeConnection(params: {
     update: {
       username: identity.username ?? null,
       displayName: identity.displayName ?? null,
+      avatarUrl: identity.avatarUrl ?? null,
       status: 'ACTIVE',
       needsReconnectSince: null,
       lastError: null,
@@ -142,6 +144,7 @@ export interface ConnectionDto {
   status: PlatformConnection['status'];
   username: string | null;
   displayName: string | null;
+  avatarUrl: string | null;
   needsReconnectSince: Date | null;
   lastRefreshedAt: Date | null;
   accessTokenExpiresAt: Date | null;
@@ -155,6 +158,7 @@ export function toConnectionDto(conn: PlatformConnection): ConnectionDto {
     status: conn.status,
     username: conn.username,
     displayName: conn.displayName,
+    avatarUrl: conn.avatarUrl,
     needsReconnectSince: conn.needsReconnectSince,
     lastRefreshedAt: conn.lastRefreshedAt,
     accessTokenExpiresAt: conn.accessTokenExpiresAt,

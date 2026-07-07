@@ -72,13 +72,37 @@ Products → Instagram → *API setup with Instagram login* → **Complete app r
 
 > PostPilot's core function is publishing a creator's own videos to their own Instagram professional account on a schedule they set. When a queued item is due, we create a media container (`POST /{ig-user-id}/media`) pointing at the creator's uploaded video on our CDN, then publish it (`POST /{ig-user-id}/media_publish`) as a Reel. Publishing only ever happens to the account the user explicitly connected and only for content the user uploaded and scheduled.
 
-### Screencast script — `instagram_business_basic`
+### Screencast shot list — `instagram_business_basic`
 
-> 1. Land on PostPilot signed-in dashboard. 2. Settings → Connections → **Connect Instagram**. 3. Show the Instagram OAuth/consent screen and the permissions being requested. 4. Approve → return to app. 5. Show the now-connected account (handle/avatar) and the recent-media confirmation. Add a caption noting "reading username + media via instagram_business_basic."
+Record one continuous take on the **production** site, English UI, with on-screen captions:
 
-### Screencast script — `instagram_business_content_publish`
+1. Start signed in on the PostPilot dashboard (show the URL bar so it's clearly the live site).
+2. Go to **Settings → Connections**, click **Connect Instagram**. (Caption: "User starts Instagram connection.")
+3. Show the **Instagram login + consent screen**, including the list of permissions being requested. Don't cut this — reviewers must see it.
+4. Approve, return to PostPilot.
+5. Show the connected account: handle/avatar and the recent-media confirmation pulled from the account. (Caption: "App reads username + media via instagram_business_basic.")
 
-> 1. From the connected account, go to Media and select a sample video + caption. 2. Add to queue / Publish now. 3. Show the publish action firing. 4. Cut to the test Instagram account showing the newly published Reel. Caption it "container created + published via instagram_business_content_publish."
+### Screencast shot list — `instagram_business_content_publish`
+
+Continue on the same connected account:
+
+1. Go to **Media**, select a sample video, add a caption. (Caption: "User's own uploaded content.")
+2. Add it to the queue, then trigger **Publish now** (or show a due item publishing). (Caption: "App creates a media container + publishes.")
+3. Show the success state in PostPilot.
+4. Cut to the Instagram professional account showing the **newly published Reel** live. (Caption: "Published to the user's own account via instagram_business_content_publish.")
+
+---
+
+## Data handling (tab answers)
+
+Draft answers for the **Data handling** step. Adjust to match your exact infrastructure before submitting.
+
+- **Do you collect or process data?** Yes — only what's needed to operate the user's posting queue.
+- **Data collected via `instagram_business_basic`:** the connected account's user ID, username, and a read-only list of the user's own recent media (to confirm the correct account and avoid re-queuing already-posted content).
+- **Data used via `instagram_business_content_publish`:** the user's own uploaded videos/captions, which we submit as media containers and publish to the user's own account on their schedule.
+- **Purpose:** solely to provide the scheduling/publishing service the user signed up for. No advertising profiles; not sold or shared with third parties for marketing.
+- **Storage & security:** access tokens and account identifiers are stored encrypted; content is stored only as long as needed to publish it.
+- **Retention & deletion:** users can disconnect a platform (revokes and deletes that token) or delete their account in-app (removes account, content, queue, and all tokens). Email requests are honored within 30 days. See the public Data Deletion page: `https://<your-domain>/data-deletion`.
 
 ---
 
