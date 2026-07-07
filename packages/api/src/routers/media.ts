@@ -145,13 +145,27 @@ function tiktokOptionsFromMeta(meta: PlatformMetaRecord | undefined): TikTokPost
 }
 
 /**
- * A video "requires user input" when TikTok is connected and its stored TikTok
- * options don't yet satisfy the publishing rules (e.g. no privacy chosen).
+ * Whether TikTok is connected but this video's stored TikTok options don't yet
+ * satisfy the publishing rules (e.g. no privacy chosen). This is independent of
+ * whether the video currently targets TikTok, so the client can react instantly
+ * when the user toggles the TikTok target on/off without waiting for a refetch.
  */
-function tiktokNeedsInput(v: VideoRecord, tiktokConnected: boolean): boolean {
+function tiktokOptionsIncomplete(v: VideoRecord, tiktokConnected: boolean): boolean {
   if (!tiktokConnected) return false;
   const opts = tiktokOptionsFromMeta(v.platformMeta.find((m) => m.platform === Platform.TIKTOK));
   return evaluateTikTokRequirements(opts).length > 0;
+}
+
+/**
+ * A video "requires user input" when it actually posts to TikTok and its TikTok
+ * options are incomplete. If the video doesn't target TikTok, none of TikTok's
+ * requirements apply, so it never needs input on TikTok's behalf.
+ */
+function tiktokNeedsInput(v: VideoRecord, tiktokConnected: boolean): boolean {
+  // Empty targetPlatforms is the "all connected" default, which includes TikTok.
+  const targetsTikTok =
+    v.targetPlatforms.length === 0 || v.targetPlatforms.includes(Platform.TIKTOK);
+  return targetsTikTok && tiktokOptionsIncomplete(v, tiktokConnected);
 }
 
 /** Map a Video row to a safe client DTO (BigInt → number, never exposes keys we don't need). */
@@ -185,8 +199,13 @@ export function toVideoDto(v: VideoRecord, tiktokConnected = false) {
     isDuplicate: v.isDuplicate,
     // True when this video already has a slot in the user's queue.
     inQueue: v._count.queueItems > 0,
-    // True when the user must supply TikTok details before this can be queued.
+    // True when the user must supply TikTok details before this can be queued
+    // (i.e. it targets TikTok and its options are incomplete).
     tiktokNeedsInput: tiktokNeedsInput(v, tiktokConnected),
+    // True when TikTok's options are incomplete regardless of whether this video
+    // currently targets TikTok. Lets the client show/hide the "needs input"
+    // affordances instantly as the TikTok target chip is toggled.
+    tiktokOptionsIncomplete: tiktokOptionsIncomplete(v, tiktokConnected),
     // True when this video discloses branded content for TikTok — drives the
     // consent declaration wording shown before queueing (Branded Content Policy).
     tiktokBranded: (() => {

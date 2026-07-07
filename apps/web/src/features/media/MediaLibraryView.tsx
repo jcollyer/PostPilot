@@ -56,10 +56,13 @@ import {
 import { trpc } from '@/lib/trpc/client';
 import { EditMetadataDialog } from './EditMetadataDialog';
 import {
+  PLATFORM_ORDER,
   PlatformChips,
   selectedFromTargets,
   targetsFromSelected,
   useConnectedPlatforms,
+  usePlatformAccountLabels,
+  usePlatformAvatarUrls,
   useTikTokAccount,
 } from './PlatformTargets';
 import { UploadDialog, UploadItemList } from './UploadDialog';
@@ -115,6 +118,8 @@ export function MediaLibraryView() {
   const categories = trpc.media.listCategories.useQuery();
   const { connected } = useConnectedPlatforms();
   const tiktokAccount = useTikTokAccount();
+  const accountLabels = usePlatformAccountLabels();
+  const avatarUrls = usePlatformAvatarUrls();
 
   // Per-video platform targeting. The card keeps optimistic local state, so we
   // only refresh the queue (whose plan can change) — not the media list.
@@ -254,14 +259,16 @@ export function MediaLibraryView() {
   const [consent, setConsent] = useState<{
     videoIds: string[];
     addableIds: string[];
+    platforms: Platform[];
     branded: boolean;
   } | null>(null);
 
-  // A video posts to TikTok when it explicitly targets it, or when it's left on
-  // the "all connected" default (empty targetPlatforms) and TikTok is connected.
-  const videoTargetsTikTok = (v: VideoDto) =>
-    connected.has('TIKTOK') &&
-    (v.targetPlatforms.length === 0 || v.targetPlatforms.includes('TIKTOK'));
+  // A video posts to a platform when it explicitly targets it, or when it's left
+  // on the "all connected" default (empty targetPlatforms) — but only if that
+  // platform is actually connected.
+  const videoTargetsPlatform = (v: VideoDto, p: Platform) =>
+    connected.has(p) && (v.targetPlatforms.length === 0 || v.targetPlatforms.includes(p));
+  const videoTargetsTikTok = (v: VideoDto) => videoTargetsPlatform(v, 'TIKTOK');
 
   const performQueue = (videoIds: string[], addableIds: string[]) => {
     addToQueue.mutate({ videoIds });
@@ -272,18 +279,20 @@ export function MediaLibraryView() {
     });
   };
 
-  // Gate queueing behind the TikTok consent dialog when any to-be-queued video
-  // will actually post to TikTok; otherwise queue straight away.
+  // Gate queueing behind the "Post to your platforms" confirmation whenever any
+  // to-be-queued video will actually post somewhere. The dialog surfaces every
+  // targeted platform (and the required TikTok consent when TikTok is involved).
   const requestQueue = (videoIds: string[]) => {
     const vids = videos.filter((v) => videoIds.includes(v.id));
     const addable = vids.filter((v) => !v.tiktokNeedsInput);
     const addableIds = addable.map((v) => v.id);
-    const tiktokAddable = addable.filter(videoTargetsTikTok);
-    if (tiktokAddable.length > 0) {
+    const platforms = PLATFORM_ORDER.filter((p) => addable.some((v) => videoTargetsPlatform(v, p)));
+    if (platforms.length > 0) {
       setConsent({
         videoIds,
         addableIds,
-        branded: tiktokAddable.some((v) => v.tiktokBranded),
+        platforms,
+        branded: addable.filter(videoTargetsTikTok).some((v) => v.tiktokBranded),
       });
       return;
     }
@@ -298,6 +307,57 @@ export function MediaLibraryView() {
 
   const [editing, setEditing] = useState<VideoDto | null>(null);
   const [previewing, setPreviewing] = useState<VideoDto | null>(null);
+
+  // Optimistically reflect a video's new platform targets in whichever list
+  // cache is active (we intentionally don't refetch the list on a chip toggle),
+  // plus any open Edit panel snapshot. This keeps the card, the queue gate, and
+  // a subsequently-opened Edit panel all in sync with the toggle immediately.
+  const patchVideoTargets = (videoId: string, platforms: Platform[]) => {
+    const targetsTikTok = platforms.length === 0 || platforms.includes('TIKTOK');
+    const patch = <
+      T extends {
+        id: string;
+        targetPlatforms: Platform[];
+        tiktokNeedsInput: boolean;
+        tiktokOptionsIncomplete: boolean;
+      },
+    >(
+      v: T,
+    ): T =>
+      v.id === videoId
+        ? {
+            ...v,
+            targetPlatforms: platforms,
+            // Keep the server-derived gate in sync with the new targets so the
+            // queue gate and selection counts react without a refetch.
+            tiktokNeedsInput: v.tiktokOptionsIncomplete && connected.has('TIKTOK') && targetsTikTok,
+          }
+        : v;
+    utils.folder.list.setInfiniteData({ parentId: currentFolderId, limit: 24 }, (data) =>
+      data
+        ? {
+            ...data,
+            pages: data.pages.map((p) => ({
+              ...p,
+              videos: { ...p.videos, items: p.videos.items.map(patch) },
+            })),
+          }
+        : data,
+    );
+    utils.media.list.setInfiniteData(
+      {
+        limit: 24,
+        search: search || undefined,
+        status: status || undefined,
+        categoryId: categoryId || undefined,
+      },
+      (data) =>
+        data
+          ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map(patch) })) }
+          : data,
+    );
+    setEditing((cur) => (cur ? patch(cur) : cur));
+  };
 
   // ---- Multi-select ----
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -805,9 +865,12 @@ export function MediaLibraryView() {
                     connected={connected}
                     tiktokAccountLabel={tiktokAccount.nickname ?? tiktokAccount.username}
                     tiktokAvatarUrl={tiktokAccount.avatarUrl}
-                    onSetTargets={(platforms) =>
-                      setTargets.mutate({ videoId: video.id, platforms })
-                    }
+                    instagramAccountLabel={accountLabels.INSTAGRAM}
+                    instagramAvatarUrl={avatarUrls.INSTAGRAM}
+                    onSetTargets={(platforms) => {
+                      patchVideoTargets(video.id, platforms);
+                      setTargets.mutate({ videoId: video.id, platforms });
+                    }}
                   />
                 ))}
               </div>
@@ -900,40 +963,73 @@ export function MediaLibraryView() {
           </DialogContent>
         </Dialog>
 
-        {/* TikTok consent: declaration (§4) + express consent before upload (§5c) +
-          processing-time notice (§5d), shown before any TikTok-bound queueing. */}
+        {/* Confirm queueing across every targeted platform. When TikTok is
+          involved the section carries its required consent: declaration (§4) +
+          express consent before upload (§5c) + processing-time notice (§5d). */}
         <Dialog open={Boolean(consent)} onOpenChange={(o) => !o && setConsent(null)}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Post to TikTok</DialogTitle>
+              <DialogTitle>Post to your platforms</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 pt-1 text-sm">
-              <p>
-                {tiktokConsentSegments({
-                  ...DEFAULT_TIKTOK_OPTIONS,
-                  commercialDisclosure: consent?.branded ?? false,
-                  brandedContent: consent?.branded ?? false,
-                }).map((seg, i) =>
-                  seg.href ? (
-                    <a
-                      key={i}
-                      href={seg.href}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="hover:text-foreground underline underline-offset-2"
-                    >
-                      {seg.text}
-                    </a>
-                  ) : (
-                    <span key={i}>{seg.text}</span>
-                  ),
-                )}
-              </p>
-              <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
-                <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                After you publish, it can take a few minutes for TikTok to finish processing your
-                post before it appears on your profile.
-              </p>
+            <div className="space-y-4 pt-1 text-sm">
+              {(consent?.platforms ?? []).map((p) => {
+                const label =
+                  p === 'TIKTOK'
+                    ? (tiktokAccount.username ?? tiktokAccount.nickname ?? accountLabels.TIKTOK)
+                    : accountLabels[p];
+                const handle = label ? `@${label}` : null;
+                const heading =
+                  p === 'TIKTOK'
+                    ? 'Post to TikTok'
+                    : p === 'INSTAGRAM'
+                      ? 'Post to Instagram'
+                      : 'Post to YouTube';
+                return (
+                  <div key={p} className="space-y-1.5">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <h3 className="font-medium">{heading}</h3>
+                      {handle ? (
+                        <span className="text-muted-foreground text-xs">{handle}</span>
+                      ) : null}
+                    </div>
+                    {p === 'TIKTOK' ? (
+                      <>
+                        <p>
+                          {tiktokConsentSegments({
+                            ...DEFAULT_TIKTOK_OPTIONS,
+                            commercialDisclosure: consent?.branded ?? false,
+                            brandedContent: consent?.branded ?? false,
+                          }).map((seg, i) =>
+                            seg.href ? (
+                              <a
+                                key={i}
+                                href={seg.href}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="hover:text-foreground underline underline-offset-2"
+                              >
+                                {seg.text}
+                              </a>
+                            ) : (
+                              <span key={i}>{seg.text}</span>
+                            ),
+                          )}
+                        </p>
+                        <p className="text-muted-foreground flex items-start gap-1.5 text-xs">
+                          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          After you publish, it can take a few minutes for TikTok to finish
+                          processing your post before it appears on your profile.
+                        </p>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground">
+                        Continue to post to your {handle ? `${handle} ` : ''}
+                        {p === 'INSTAGRAM' ? 'Instagram account' : 'YouTube channel'}.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setConsent(null)}>
@@ -1169,6 +1265,8 @@ function VideoCard({
   connected,
   tiktokAccountLabel,
   tiktokAvatarUrl,
+  instagramAccountLabel,
+  instagramAvatarUrl,
   onSetTargets,
 }: {
   video: VideoDto;
@@ -1184,6 +1282,8 @@ function VideoCard({
   connected: Set<Platform>;
   tiktokAccountLabel: string | null;
   tiktokAvatarUrl: string | null;
+  instagramAccountLabel: string | null;
+  instagramAvatarUrl: string | null;
   onSetTargets: (platforms: Platform[]) => void;
 }) {
   const badge = STATUS_BADGE[video.status];
@@ -1205,6 +1305,12 @@ function VideoCard({
     setTargetSel(next);
     onSetTargets(targetsFromSelected(next));
   };
+
+  // Drive the "needs TikTok details" affordances off the optimistic local target
+  // selection (not the server-computed flag) so toggling the TikTok chip updates
+  // the badge/menu immediately, before the persisted target change round-trips.
+  const needsTiktokInput =
+    video.tiktokOptionsIncomplete && connected.has('TIKTOK') && targetSel.has('TIKTOK');
 
   return (
     <div
@@ -1258,7 +1364,7 @@ function VideoCard({
               <ListChecks className="h-3 w-3" /> Queued
             </span>
           ) : null}
-          {video.tiktokNeedsInput ? (
+          {needsTiktokInput ? (
             <span
               title="Needs TikTok details before queueing"
               className="flex items-center gap-0.5 rounded bg-amber-500/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
@@ -1345,7 +1451,7 @@ function VideoCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {video.status === 'READY' ? (
-                video.tiktokNeedsInput ? (
+                needsTiktokInput ? (
                   <DropdownMenuItem
                     disabled
                     className="cursor-not-allowed"
@@ -1374,7 +1480,7 @@ function VideoCard({
                   </DropdownMenuItem>
                 )
               ) : null}
-              {video.tiktokNeedsInput && video.status === 'READY' ? (
+              {needsTiktokInput && video.status === 'READY' ? (
                 <DropdownMenuItem onClick={onEdit} className="cursor-pointer">
                   <Pencil className="mr-2 h-4 w-4" /> Add TikTok details
                 </DropdownMenuItem>
@@ -1428,6 +1534,7 @@ function VideoCard({
             onChange={onToggleTarget}
             size="xs"
             tiktokAvatarUrl={tiktokAvatarUrl}
+            instagramAvatarUrl={instagramAvatarUrl}
           />
           {targetSel.has('TIKTOK') && connected.has('TIKTOK') && tiktokAccountLabel ? (
             <p
@@ -1435,6 +1542,14 @@ function VideoCard({
               title={`Will post to TikTok as ${tiktokAccountLabel}`}
             >
               TikTok: <span className="font-medium">@{tiktokAccountLabel}</span>
+            </p>
+          ) : null}
+          {targetSel.has('INSTAGRAM') && connected.has('INSTAGRAM') && instagramAccountLabel ? (
+            <p
+              className="text-muted-foreground truncate text-[10px]"
+              title={`Will post to Instagram as ${instagramAccountLabel}`}
+            >
+              Instagram: <span className="font-medium">@{instagramAccountLabel}</span>
             </p>
           ) : null}
         </div>

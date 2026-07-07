@@ -70,6 +70,52 @@ export function useTikTokAccount(): {
 }
 
 /**
+ * Per-platform account label (username, falling back to display name) for every
+ * ACTIVE connection. Used to tell the user which account each platform will post
+ * to. Shares the same `connections.overview` query as `useConnectedPlatforms`,
+ * so it adds no extra network calls. Platforms without an active connection map
+ * to `null`.
+ */
+export function usePlatformAccountLabels(): Record<Platform, string | null> {
+  const overview = trpc.connections.overview.useQuery();
+  return useMemo(() => {
+    const out: Record<Platform, string | null> = {
+      INSTAGRAM: null,
+      TIKTOK: null,
+      YOUTUBE: null,
+    };
+    for (const entry of overview.data ?? []) {
+      if (entry.connection?.status === 'ACTIVE') {
+        out[entry.platform] = entry.connection.username ?? entry.connection.displayName ?? null;
+      }
+    }
+    return out;
+  }, [overview.data]);
+}
+
+/**
+ * Per-platform avatar URL for every ACTIVE connection, pulled from
+ * `connections.overview`. Shares that query (no extra network calls). Platforms
+ * without an active connection map to `null`.
+ */
+export function usePlatformAvatarUrls(): Record<Platform, string | null> {
+  const overview = trpc.connections.overview.useQuery();
+  return useMemo(() => {
+    const out: Record<Platform, string | null> = {
+      INSTAGRAM: null,
+      TIKTOK: null,
+      YOUTUBE: null,
+    };
+    for (const entry of overview.data ?? []) {
+      if (entry.connection?.status === 'ACTIVE') {
+        out[entry.platform] = entry.connection.avatarUrl ?? null;
+      }
+    }
+    return out;
+  }, [overview.data]);
+}
+
+/**
  * Resolve a stored `targetPlatforms` value into the set of toggles to show as
  * selected. Empty (the default) means "all", so every toggle is on.
  */
@@ -99,6 +145,7 @@ export function PlatformChips({
   size = 'sm',
   disabled,
   tiktokAvatarUrl,
+  instagramAvatarUrl,
 }: {
   selected: Set<Platform>;
   connected: Set<Platform>;
@@ -107,6 +154,8 @@ export function PlatformChips({
   disabled?: boolean;
   /** Connected TikTok creator's avatar, shown inside the TikTok pill (1A context). */
   tiktokAvatarUrl?: string | null;
+  /** Connected Instagram account's avatar, shown inside the Instagram pill. */
+  instagramAvatarUrl?: string | null;
 }) {
   const toggle = (p: Platform) => {
     const next = new Set(selected);
@@ -127,7 +176,9 @@ export function PlatformChips({
         const on = selected.has(p);
         const isConnected = connected.has(p);
         const label = size === 'xs' ? SHORT_BADGE[p] : PLATFORM_SHORT[p];
-        const showAvatar = p === 'TIKTOK' && isConnected && Boolean(tiktokAvatarUrl);
+        const avatarUrl =
+          p === 'TIKTOK' ? tiktokAvatarUrl : p === 'INSTAGRAM' ? instagramAvatarUrl : null;
+        const showAvatar = isConnected && Boolean(avatarUrl);
         const avatarSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
         const checkCircle = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
         const checkIcon = size === 'xs' ? 'h-2.5 w-2.5' : 'h-3 w-3';
@@ -155,7 +206,7 @@ export function PlatformChips({
             {showAvatar ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={tiktokAvatarUrl as string}
+                src={avatarUrl as string}
                 alt=""
                 className={`-ml-0.5 shrink-0 rounded-full object-cover ${avatarSize}`}
               />

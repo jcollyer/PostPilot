@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { Check, ImagePlus, Info, Loader2, Sparkles, TriangleAlert, UserRound, X } from 'lucide-react';
 
 import {
@@ -43,6 +43,7 @@ import {
   selectedFromTargets,
   targetsFromSelected,
   useConnectedPlatforms,
+  usePlatformAvatarUrls,
   useTikTokAccount,
 } from './PlatformTargets';
 import type { VideoDto } from './types';
@@ -71,6 +72,7 @@ export function EditMetadataDialog({
 
   const { connected } = useConnectedPlatforms();
   const { avatarUrl: tiktokAvatarUrl } = useTikTokAccount();
+  const avatarUrls = usePlatformAvatarUrls();
   const [targetSel, setTargetSel] = useState(() => selectedFromTargets(video.targetPlatforms));
   const setTargetPlatforms = trpc.media.setTargetPlatforms.useMutation({ onSuccess: onSaved });
   const onToggleTargets = (next: Set<Platform>) => {
@@ -208,6 +210,7 @@ export function EditMetadataDialog({
               connected={connected}
               onChange={onToggleTargets}
               tiktokAvatarUrl={tiktokAvatarUrl}
+              instagramAvatarUrl={avatarUrls.INSTAGRAM}
             />
             <p className="text-muted-foreground text-xs">
               Choose which platforms this video publishes to. Unconnected platforms are marked —
@@ -300,6 +303,8 @@ export function EditMetadataDialog({
                 <PlatformMetaEditor
                   videoId={video.id}
                   meta={detail.data.platformMeta}
+                  selected={targetSel}
+                  connected={connected}
                   onSaved={() => {
                     detail.refetch();
                     onSaved();
@@ -307,17 +312,21 @@ export function EditMetadataDialog({
                 />
               </div>
 
-              {/* TikTok posting requirements subsection */}
-              <TikTokRequirementsEditor
-                videoId={video.id}
-                connected={detail.data.tiktokConnected}
-                initial={detail.data.tiktok}
-                durationSec={video.durationSec}
-                onSaved={() => {
-                  detail.refetch();
-                  onSaved();
-                }}
-              />
+              {/* TikTok posting requirements — only relevant when this video
+                actually targets TikTok. Hidden otherwise so its rules don't
+                apply. */}
+              {targetSel.has('TIKTOK') ? (
+                <TikTokRequirementsEditor
+                  videoId={video.id}
+                  connected={detail.data.tiktokConnected}
+                  initial={detail.data.tiktok}
+                  durationSec={video.durationSec}
+                  onSaved={() => {
+                    detail.refetch();
+                    onSaved();
+                  }}
+                />
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -352,13 +361,32 @@ interface PlatformMetaRow {
 function PlatformMetaEditor({
   videoId,
   meta,
+  selected,
+  connected,
   onSaved,
 }: {
   videoId: string;
   meta: PlatformMetaRow[];
+  selected: Set<Platform>;
+  connected: Set<Platform>;
   onSaved: () => void;
 }) {
-  const [platform, setPlatform] = useState<Platform>(platformSchema.options[0]);
+  // Only platforms this video posts to have an editable tab; default to the
+  // first platform that's both selected and connected (falling back to the
+  // first selected platform).
+  const defaultPlatform = useMemo(
+    () =>
+      platformSchema.options.find((p) => selected.has(p) && connected.has(p)) ??
+      platformSchema.options.find((p) => selected.has(p)) ??
+      platformSchema.options[0],
+    [selected, connected],
+  );
+  const [platform, setPlatform] = useState<Platform>(defaultPlatform);
+  // If the active tab's platform gets de-selected (its tab is now disabled),
+  // move to a valid default.
+  useEffect(() => {
+    if (!selected.has(platform)) setPlatform(defaultPlatform);
+  }, [selected, platform, defaultPlatform]);
   const current = meta.find((m) => m.platform === platform);
 
   const [title, setTitle] = useState('');
@@ -388,12 +416,15 @@ function PlatformMetaEditor({
       <div className="flex items-center gap-1">
         {platformSchema.options.map((p) => {
           const row = meta.find((m) => m.platform === p);
+          const isSelected = selected.has(p);
           return (
             <button
               key={p}
               type="button"
+              disabled={!isSelected}
               onClick={() => setPlatform(p)}
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium ${
+              title={isSelected ? undefined : `Not posting to ${PLATFORM_LABELS[p]}`}
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
                 p === platform ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
               }`}
             >

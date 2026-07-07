@@ -20,6 +20,7 @@ import {
   recomputeSchedule,
   smartArrangeQueue,
 } from '@postpilot/queue';
+import { processTask } from '@postpilot/publishing';
 
 import { protectedProcedure, router } from '../trpc';
 
@@ -72,6 +73,7 @@ export const queueRouter = router({
             platform: true,
             status: true,
             scheduledAt: true,
+            publishedAt: true,
             connectionId: true,
             platformPostUrl: true,
             lastError: true,
@@ -109,6 +111,7 @@ export const queueRouter = router({
           platform: t.platform,
           status: t.status,
           scheduledAt: t.scheduledAt,
+          publishedAt: t.publishedAt,
           postUrl: t.platformPostUrl,
           lastError: t.lastError,
           needsConnection: t.status === 'HELD' || !t.connectionId,
@@ -136,6 +139,7 @@ export const queueRouter = router({
       where: { id: { in: input.videoIds }, userId: ctx.userId, status: 'READY' },
       select: {
         id: true,
+        targetPlatforms: true,
         platformMeta: {
           where: { platform: Platform.TIKTOK },
           select: {
@@ -156,9 +160,14 @@ export const queueRouter = router({
     });
     const already = new Set(existing.map((e) => e.videoId));
 
-    // Block videos that still require TikTok input (privacy not chosen, etc.).
+    // Block videos that still require TikTok input (privacy not chosen, etc.) —
+    // but only when the video actually targets TikTok. Empty targetPlatforms is
+    // the "all connected" default, which includes TikTok.
     const needsInput = (v: (typeof videos)[number]): boolean => {
       if (!tiktokConnected) return false;
+      const targetsTikTok =
+        v.targetPlatforms.length === 0 || v.targetPlatforms.includes(Platform.TIKTOK);
+      if (!targetsTikTok) return false;
       const m = v.platformMeta[0];
       return (
         evaluateTikTokRequirements({
@@ -292,6 +301,95 @@ export const queueRouter = router({
     const res = await smartArrangeQueue(ctx.prisma, queue.id);
     await recomputeSchedule(ctx.prisma, queue.id);
     return res;
+  }),
+
+  /**
+   * Publish an item's due posts immediately, without waiting for the scheduler.
+   * Marks the item's publishable tasks due now and runs them through the same
+   * publish path the cron uses. Reels finish asynchronously (they enter
+   * PROCESSING and the poll job completes them), so this kicks off publishing
+   * rather than guaranteeing an instant PUBLISHED state.
+   */
+  publishNow: protectedProcedure.input(queueItemIdSchema).mutation(async ({ ctx, input }) => {
+    const item = await ctx.prisma.queueItem.findFirst({
+      where: { id: input.itemId, queue: { userId: ctx.userId } },
+      select: { id: true, video: { select: { targetPlatforms: true } } },
+    });
+    if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'Queue item not found.' });
+
+    const existing = await ctx.prisma.publishTask.findMany({
+      where: { queueItemId: item.id },
+      select: { id: true, status: true },
+    });
+    const publishable = existing.filter(
+      (t) => t.status === 'SCHEDULED' || t.status === 'HELD' || t.status === 'FAILED',
+    );
+
+    let taskIds: string[];
+    if (publishable.length > 0) {
+      // Tasks already materialized (item has a slot) — mark them due now.
+      taskIds = publishable.map((t) => t.id);
+      await ctx.prisma.publishTask.updateMany({
+        where: { id: { in: taskIds } },
+        data: { status: 'SCHEDULED', attemptCount: 0, nextAttemptAt: null, scheduledAt: new Date() },
+      });
+    } else if (existing.length === 0) {
+      // No tasks yet (item still awaiting a slot) — materialize them now for the
+      // item's connected target platforms, mirroring the scheduler.
+      const conns = await ctx.prisma.platformConnection.findMany({
+        where: { userId: ctx.userId, status: 'ACTIVE' },
+        select: { id: true, platform: true },
+      });
+      const connByPlatform = new Map<Platform, string>();
+      for (const c of conns) if (!connByPlatform.has(c.platform)) connByPlatform.set(c.platform, c.id);
+
+      const targets = (
+        item.video.targetPlatforms.length > 0
+          ? item.video.targetPlatforms
+          : [...connByPlatform.keys()]
+      ).filter((p) => connByPlatform.has(p));
+
+      if (targets.length === 0) {
+        return { success: false as const, reason: 'no_connection' as const };
+      }
+
+      const now = new Date();
+      const created = await Promise.all(
+        targets.map((platform) =>
+          ctx.prisma.publishTask.create({
+            data: {
+              queueItemId: item.id,
+              platform,
+              connectionId: connByPlatform.get(platform)!,
+              status: 'SCHEDULED',
+              scheduledAt: now,
+            },
+            select: { id: true },
+          }),
+        ),
+      );
+      taskIds = created.map((t) => t.id);
+    } else {
+      // Tasks exist but none are publishable (already posted/processing).
+      return { success: false as const, reason: 'nothing_to_publish' as const };
+    }
+
+    // Sequential to respect platform rate limits, mirroring publishDueTasks.
+    const results: Array<{ platform: Platform; outcome: string; detail?: string }> = [];
+    for (const id of taskIds) {
+      const r = await processTask(id);
+      results.push({ platform: r.platform, outcome: r.outcome, detail: r.detail });
+    }
+    return { success: true as const, results };
+  }),
+
+  /** Remove all published (COMPLETED) items from the queue. Posts stay live. */
+  clearCompleted: protectedProcedure.mutation(async ({ ctx }) => {
+    const queue = await userQueue(ctx.prisma, ctx.userId);
+    const res = await ctx.prisma.queueItem.deleteMany({
+      where: { queueId: queue.id, status: 'COMPLETED' },
+    });
+    return { removed: res.count };
   }),
 
   /** Retry a failed/held publish task — requeues it for the next worker run. */
