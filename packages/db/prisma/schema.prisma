@@ -293,6 +293,7 @@ model PlatformConnection {
   externalAccountId String
   username          String?
   displayName       String?
+  avatarUrl         String?   @db.Text
 
   // Encrypted OAuth material.
   accessToken           String?   @db.Text

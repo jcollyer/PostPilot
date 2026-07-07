@@ -15,6 +15,8 @@ export interface PlatformIdentity {
   externalAccountId: string;
   username?: string | null;
   displayName?: string | null;
+  /** Profile picture URL, when the platform exposes one. */
+  avatarUrl?: string | null;
 }
 
 export interface AuthorizationRequest {
@@ -37,6 +39,8 @@ export interface RecentPost {
 export interface ProfileSnapshot {
   bio: string | null;
   recentPosts: RecentPost[];
+  /** Latest profile picture URL, when the platform exposes one. */
+  avatarUrl?: string | null;
 }
 
 export interface AuthorizeOptions {

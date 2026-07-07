@@ -46,10 +46,13 @@ interface IgMeResponse {
   id: string;
   username?: string;
   account_type?: string;
+  name?: string;
+  profile_picture_url?: string;
 }
 
 interface IgProfileResponse {
   biography?: string;
+  profile_picture_url?: string;
 }
 
 interface IgMediaListResponse {
@@ -154,7 +157,7 @@ export const instagramAdapter: PlatformAdapter = {
   async fetchIdentity(accessToken: string): Promise<PlatformIdentity> {
     const me = await requestJson<IgMeResponse>(
       buildUrl(`${GRAPH}/me`, {
-        fields: 'id,username,account_type',
+        fields: 'id,username,account_type,name,profile_picture_url',
         access_token: accessToken,
       }),
       { context: 'Instagram me', platform: Platform.INSTAGRAM },
@@ -168,7 +171,8 @@ export const instagramAdapter: PlatformAdapter = {
     return {
       externalAccountId: me.id,
       username: me.username ?? null,
-      displayName: me.username ?? null,
+      displayName: me.name ?? me.username ?? null,
+      avatarUrl: me.profile_picture_url ?? null,
     };
   },
 
@@ -187,7 +191,7 @@ export const instagramAdapter: PlatformAdapter = {
   }): Promise<ProfileSnapshot> {
     const profile = await requestJson<IgProfileResponse>(
       buildUrl(`${GRAPH}/${externalAccountId}`, {
-        fields: 'biography',
+        fields: 'biography,profile_picture_url',
         access_token: accessToken,
       }),
       { context: 'Instagram profile (bio)', platform: Platform.INSTAGRAM },
@@ -213,6 +217,6 @@ export const instagramAdapter: PlatformAdapter = {
         postedAt: m.timestamp ?? null,
       }));
 
-    return { bio, recentPosts };
+    return { bio, recentPosts, avatarUrl: profile?.profile_picture_url ?? null };
   },
 };

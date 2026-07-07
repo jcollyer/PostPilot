@@ -37,6 +37,10 @@ export async function refreshProfileSnapshot(conn: PlatformConnection): Promise<
         profileBio: snapshot.bio,
         profileRecentPosts: snapshot.recentPosts as unknown as Prisma.InputJsonValue,
         profileFetchedAt: new Date(),
+        // Refresh the cached avatar too. Only overwrite when the platform
+        // returned one, so a null (unsupported/absent) never clobbers a good
+        // value. This also backfills connections made before avatarUrl existed.
+        ...(snapshot.avatarUrl ? { avatarUrl: snapshot.avatarUrl } : {}),
       },
     });
     return true;
@@ -66,7 +70,14 @@ export async function refreshDueProfiles(): Promise<ProfileRefreshResult[]> {
   const due = await prisma.platformConnection.findMany({
     where: {
       status: 'ACTIVE',
-      OR: [{ profileFetchedAt: null }, { profileFetchedAt: { lt: cutoff } }],
+      OR: [
+        { profileFetchedAt: null },
+        { profileFetchedAt: { lt: cutoff } },
+        // Backfill: connections that predate avatarUrl (or never got one) are
+        // picked up on the next run so the real profile picture appears without
+        // requiring the user to reconnect.
+        { avatarUrl: null },
+      ],
     },
   });
 
