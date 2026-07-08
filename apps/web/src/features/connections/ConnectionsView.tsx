@@ -24,6 +24,14 @@ const CONNECT_BRAND: Partial<Record<Platform, string>> = {
   YOUTUBE: 'YouTube',
 };
 
+/**
+ * Display a username as an @-handle without doubling the prefix — some
+ * platforms (e.g. YouTube's customUrl) already include a leading "@".
+ */
+function formatHandle(username: string): string {
+  return username.startsWith('@') ? username : `@${username}`;
+}
+
 const ERROR_MESSAGES: Record<string, string> = {
   not_configured: "That platform isn't configured yet (missing API credentials).",
   unknown_platform: 'Unknown platform.',
@@ -83,7 +91,10 @@ export function ConnectionsView({ connected, error }: ConnectionsViewProps) {
                 key={entry.platform}
                 entry={entry}
                 onDisconnect={(connectionId) => disconnect.mutate({ connectionId })}
-                disconnecting={disconnect.isPending}
+                disconnecting={
+                  disconnect.isPending &&
+                  disconnect.variables?.connectionId === entry.connection?.id
+                }
               />
             ))
           )}
@@ -123,7 +134,7 @@ function PlatformRow({
             <StatusBadge status={status} />
             {conn?.username || conn?.displayName ? (
               <span className="text-foreground truncate text-sm font-medium">
-                {conn.username ? `@${conn.username}` : conn.displayName}
+                {conn.username ? formatHandle(conn.username) : conn.displayName}
               </span>
             ) : null}
             {conn?.username && conn?.displayName && conn.displayName !== conn.username ? (

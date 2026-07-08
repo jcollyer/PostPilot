@@ -44,13 +44,27 @@ interface GoogleTokenResponse {
   token_type?: string;
 }
 
+interface ThumbnailSet {
+  default?: { url?: string };
+  medium?: { url?: string };
+  high?: { url?: string };
+}
+
+/** Pick the best available channel thumbnail (highest res first). */
+function pickThumbnail(thumbnails?: ThumbnailSet): string | null {
+  return thumbnails?.high?.url ?? thumbnails?.medium?.url ?? thumbnails?.default?.url ?? null;
+}
+
 interface ChannelsResponse {
-  items?: Array<{ id?: string; snippet?: { title?: string; customUrl?: string } }>;
+  items?: Array<{
+    id?: string;
+    snippet?: { title?: string; customUrl?: string; thumbnails?: ThumbnailSet };
+  }>;
 }
 
 interface ChannelsWithDetailsResponse {
   items?: Array<{
-    snippet?: { description?: string };
+    snippet?: { description?: string; thumbnails?: ThumbnailSet };
     contentDetails?: { relatedPlaylists?: { uploads?: string } };
   }>;
 }
@@ -166,6 +180,7 @@ export const youtubeAdapter: PlatformAdapter = {
       externalAccountId: channel.id,
       username: channel.snippet?.customUrl ?? null,
       displayName: channel.snippet?.title ?? null,
+      avatarUrl: pickThumbnail(channel.snippet?.thumbnails),
     };
   },
 
@@ -192,6 +207,7 @@ export const youtubeAdapter: PlatformAdapter = {
 
     const channel = channelRes?.items?.[0];
     const bio = channel?.snippet?.description?.trim() || null;
+    const avatarUrl = pickThumbnail(channel?.snippet?.thumbnails);
     const uploadsPlaylistId = channel?.contentDetails?.relatedPlaylists?.uploads;
 
     let recentPosts: RecentPost[] = [];
@@ -223,7 +239,7 @@ export const youtubeAdapter: PlatformAdapter = {
         });
     }
 
-    return { bio, recentPosts };
+    return { bio, recentPosts, avatarUrl };
   },
 
   async revoke({ accessToken, refreshToken }: RefreshParams): Promise<void> {
