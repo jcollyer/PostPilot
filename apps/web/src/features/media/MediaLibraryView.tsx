@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Check,
@@ -595,7 +596,21 @@ export function MediaLibraryView() {
           <div className="flex items-start justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
             <span className="flex items-center gap-2">
               <TriangleAlert className="h-4 w-4 shrink-0" />
-              {queueMsg}
+              <span>
+                {queueMsg.split(/\b(queue)\b/).map((part, i) =>
+                  part === 'queue' ? (
+                    <Link
+                      key={i}
+                      href="/queue"
+                      className="font-medium underline hover:text-amber-900"
+                    >
+                      queue
+                    </Link>
+                  ) : (
+                    part
+                  ),
+                )}
+              </span>
             </span>
             <button
               type="button"
@@ -979,7 +994,9 @@ export function MediaLibraryView() {
                   p === 'TIKTOK'
                     ? (tiktokAccount.username ?? tiktokAccount.nickname ?? accountLabels.TIKTOK)
                     : accountLabels[p];
-                const handle = label ? `@${label}` : null;
+                // Some platforms (e.g. YouTube's customUrl) already include a
+                // leading "@" — don't double it.
+                const handle = label ? (label.startsWith('@') ? label : `@${label}`) : null;
                 const heading =
                   p === 'TIKTOK'
                     ? 'Post to TikTok'
