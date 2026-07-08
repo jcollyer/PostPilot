@@ -59,6 +59,7 @@ interface TikTokUserResponse {
       open_id?: string;
       union_id?: string;
       display_name?: string;
+      avatar_url?: string;
       bio_description?: string;
     };
   };
@@ -171,7 +172,7 @@ export const tiktokAdapter: PlatformAdapter = {
 
   async fetchIdentity(accessToken: string): Promise<PlatformIdentity> {
     const res = await requestJson<TikTokUserResponse>(
-      buildUrl(USER_URL, { fields: 'open_id,union_id,display_name' }),
+      buildUrl(USER_URL, { fields: 'open_id,union_id,display_name,avatar_url' }),
       {
         headers: { Authorization: `Bearer ${accessToken}` },
         context: 'TikTok user.info',
@@ -188,6 +189,7 @@ export const tiktokAdapter: PlatformAdapter = {
     return {
       externalAccountId: user.open_id,
       displayName: user.display_name ?? null,
+      avatarUrl: user.avatar_url ?? null,
     };
   },
 
@@ -204,7 +206,7 @@ export const tiktokAdapter: PlatformAdapter = {
     externalAccountId: string;
   }): Promise<ProfileSnapshot> {
     const userRes = await requestJson<TikTokUserResponse>(
-      buildUrl(USER_URL, { fields: 'open_id,display_name,bio_description' }),
+      buildUrl(USER_URL, { fields: 'open_id,display_name,avatar_url,bio_description' }),
       {
         headers: { Authorization: `Bearer ${accessToken}` },
         context: 'TikTok user.info (profile)',
@@ -229,6 +231,7 @@ export const tiktokAdapter: PlatformAdapter = {
     ).catch(() => null);
 
     const bio = userRes?.data?.user?.bio_description?.trim() || null;
+    const avatarUrl = userRes?.data?.user?.avatar_url ?? null;
 
     const recentPosts: RecentPost[] = (videoRes?.data?.videos ?? [])
       .slice(0, RECENT_POSTS_LIMIT)
@@ -240,7 +243,7 @@ export const tiktokAdapter: PlatformAdapter = {
         postedAt: v.createTime ? new Date(v.createTime * 1000).toISOString() : null,
       }));
 
-    return { bio, recentPosts };
+    return { bio, recentPosts, avatarUrl };
   },
 
   async revoke({ accessToken }: RefreshParams): Promise<void> {

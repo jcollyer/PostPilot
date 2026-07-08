@@ -61,6 +61,12 @@ type InstagramAccount = {
   username: string | null;
 };
 
+/** The connected YouTube account, surfaced next to YouTube-bound items. */
+type YouTubeAccount = {
+  avatarUrl: string | null;
+  username: string | null;
+};
+
 const PLATFORM_SHORT: Record<Platform, string> = {
   TIKTOK: 'TikTok',
   INSTAGRAM: 'IG',
@@ -106,6 +112,14 @@ export function QueueView() {
   const instagram: InstagramAccount | null = useMemo(() => {
     const conn = connections.data?.find(
       (e) => e.platform === 'INSTAGRAM' && e.connection?.status === 'ACTIVE',
+    )?.connection;
+    return conn ? { avatarUrl: conn.avatarUrl, username: conn.username } : null;
+  }, [connections.data]);
+
+  // The connected YouTube account — used to badge YouTube-bound items.
+  const youtube: YouTubeAccount | null = useMemo(() => {
+    const conn = connections.data?.find(
+      (e) => e.platform === 'YOUTUBE' && e.connection?.status === 'ACTIVE',
     )?.connection;
     return conn ? { avatarUrl: conn.avatarUrl, username: conn.username } : null;
   }, [connections.data]);
@@ -261,6 +275,7 @@ export function QueueView() {
                           item={item}
                           tiktok={tiktok}
                           instagram={instagram}
+                          youtube={youtube}
                           onSkip={() => skip.mutate({ itemId: item.id })}
                           onRemove={() => removeItem.mutate({ itemId: item.id })}
                           onRetry={(taskId) => retryPublish.mutate({ taskId })}
@@ -308,6 +323,7 @@ export function QueueView() {
                               task={t}
                               tiktok={tiktok}
                               instagram={instagram}
+                              youtube={youtube}
                               onRetry={() => retryPublish.mutate({ taskId: t.id })}
                             />
                           ))}
@@ -388,6 +404,7 @@ export function QueueView() {
                 loading={upcoming.isLoading}
                 tiktok={tiktok}
                 instagram={instagram}
+                youtube={youtube}
               />
             </CardContent>
           </Card>
@@ -440,9 +457,11 @@ function platformAvatarUrl(
   platform: Platform,
   tiktok: TikTokAccount | null,
   instagram: InstagramAccount | null,
+  youtube: YouTubeAccount | null,
 ): string | null {
   if (platform === 'TIKTOK') return tiktok?.avatarUrl ?? null;
   if (platform === 'INSTAGRAM') return instagram?.avatarUrl ?? null;
+  if (platform === 'YOUTUBE') return youtube?.avatarUrl ?? null;
   return null;
 }
 
@@ -450,6 +469,7 @@ function SortableRow({
   item,
   tiktok,
   instagram,
+  youtube,
   onSkip,
   onRemove,
   onRetry,
@@ -459,6 +479,7 @@ function SortableRow({
   item: QueueItem;
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
+  youtube: YouTubeAccount | null;
   onSkip: () => void;
   onRemove: () => void;
   onRetry: (taskId: string) => void;
@@ -508,11 +529,17 @@ function SortableRow({
                 task={t}
                 tiktok={tiktok}
                 instagram={instagram}
+                youtube={youtube}
                 onRetry={() => onRetry(t.id)}
               />
             ))
           ) : (
-            <Destinations platforms={item.postsTo} tiktok={tiktok} instagram={instagram} />
+            <Destinations
+              platforms={item.postsTo}
+              tiktok={tiktok}
+              instagram={instagram}
+              youtube={youtube}
+            />
           )}
         </div>
       </div>
@@ -564,10 +591,12 @@ function Destinations({
   platforms,
   tiktok,
   instagram,
+  youtube,
 }: {
   platforms: Platform[];
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
+  youtube: YouTubeAccount | null;
 }) {
   if (platforms.length === 0) {
     return <span className="text-muted-foreground">No connected platforms</span>;
@@ -577,14 +606,20 @@ function Destinations({
       <span className="text-muted-foreground/70">Posts to</span>
       {platforms.map((p) => {
         const handle =
-          p === 'TIKTOK' ? tiktok?.username : p === 'INSTAGRAM' ? instagram?.username : null;
+          p === 'TIKTOK'
+            ? tiktok?.username
+            : p === 'INSTAGRAM'
+              ? instagram?.username
+              : p === 'YOUTUBE'
+                ? youtube?.username
+                : null;
         return (
           <span
             key={p}
             className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1 text-slate-600"
             title={handle ? `${PLATFORM_LABELS[p]} · @${handle}` : PLATFORM_LABELS[p]}
           >
-            <PlatformAvatar url={platformAvatarUrl(p, tiktok, instagram)} />
+            <PlatformAvatar url={platformAvatarUrl(p, tiktok, instagram, youtube)} />
             {PLATFORM_SHORT[p]}
           </span>
         );
@@ -599,24 +634,30 @@ function TaskChip({
   task,
   tiktok,
   instagram,
+  youtube,
   onRetry,
 }: {
   task: QueueTask;
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
+  youtube: YouTubeAccount | null;
   onRetry: () => void;
 }) {
   const label = PLATFORM_SHORT[task.platform];
   const full = PLATFORM_LABELS[task.platform];
   const base = 'inline-flex items-center gap-0.5 rounded px-1';
-  // Show the connected account avatar inside the pill (TikTok, Instagram).
-  const avatar = <PlatformAvatar url={platformAvatarUrl(task.platform, tiktok, instagram)} />;
+  // Show the connected account avatar inside the pill (TikTok, Instagram, YouTube).
+  const avatar = (
+    <PlatformAvatar url={platformAvatarUrl(task.platform, tiktok, instagram, youtube)} />
+  );
   const handle =
     task.platform === 'TIKTOK'
       ? tiktok?.username
       : task.platform === 'INSTAGRAM'
         ? instagram?.username
-        : null;
+        : task.platform === 'YOUTUBE'
+          ? youtube?.username
+          : null;
   const at = handle ? ` · @${handle}` : '';
 
   if (task.status === 'PUBLISHED') {
@@ -678,11 +719,13 @@ function UpcomingList({
   loading,
   tiktok,
   instagram,
+  youtube,
 }: {
   data: Upcoming | undefined;
   loading: boolean;
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
+  youtube: YouTubeAccount | null;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, Upcoming>();
@@ -719,13 +762,15 @@ function UpcomingList({
           </p>
           <ul className="space-y-1.5">
             {posts.map((p) => {
-              const avatarUrl = platformAvatarUrl(p.platform, tiktok, instagram);
+              const avatarUrl = platformAvatarUrl(p.platform, tiktok, instagram, youtube);
               const handle =
                 p.platform === 'TIKTOK'
                   ? (tiktok?.username ?? tiktok?.nickname ?? null)
                   : p.platform === 'INSTAGRAM'
                     ? (instagram?.username ?? null)
-                    : null;
+                    : p.platform === 'YOUTUBE'
+                      ? (youtube?.username ?? null)
+                      : null;
               return (
                 <li key={p.taskId} className="flex items-center gap-2 text-sm">
                   <Thumb url={p.thumbnailUrl} />
@@ -745,7 +790,11 @@ function UpcomingList({
                               className="h-4 w-4 shrink-0 rounded-full object-cover"
                             />
                           ) : null}
-                          {handle ? <span className="truncate">@{handle}</span> : null}
+                          {handle ? (
+                            <span className="truncate">
+                              {handle.startsWith('@') ? handle : `@${handle}`}
+                            </span>
+                          ) : null}
                         </span>
                       ) : null}
                       {p.needsConnection ? (

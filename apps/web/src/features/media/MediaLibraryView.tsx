@@ -480,7 +480,7 @@ export function MediaLibraryView() {
   const hasFilters = Boolean(search || status || categoryId);
 
   return (
-    <div className="mx-auto flex max-w-6xl gap-6">
+    <div className="mx-auto flex max-w-screen-2xl gap-6">
       {/* Left: lazy-loading folder tree (Dropbox-style). */}
       <aside className="hidden w-60 shrink-0 lg:block">
         <div className="sticky top-4 space-y-2">
@@ -867,6 +867,8 @@ export function MediaLibraryView() {
                     tiktokAvatarUrl={tiktokAccount.avatarUrl}
                     instagramAccountLabel={accountLabels.INSTAGRAM}
                     instagramAvatarUrl={avatarUrls.INSTAGRAM}
+                    youtubeAccountLabel={accountLabels.YOUTUBE}
+                    youtubeAvatarUrl={avatarUrls.YOUTUBE}
                     onSetTargets={(platforms) => {
                       patchVideoTargets(video.id, platforms);
                       setTargets.mutate({ videoId: video.id, platforms });
@@ -1267,6 +1269,8 @@ function VideoCard({
   tiktokAvatarUrl,
   instagramAccountLabel,
   instagramAvatarUrl,
+  youtubeAccountLabel,
+  youtubeAvatarUrl,
   onSetTargets,
 }: {
   video: VideoDto;
@@ -1284,6 +1288,8 @@ function VideoCard({
   tiktokAvatarUrl: string | null;
   instagramAccountLabel: string | null;
   instagramAvatarUrl: string | null;
+  youtubeAccountLabel: string | null;
+  youtubeAvatarUrl: string | null;
   onSetTargets: (platforms: Platform[]) => void;
 }) {
   const badge = STATUS_BADGE[video.status];
@@ -1535,6 +1541,7 @@ function VideoCard({
             size="xs"
             tiktokAvatarUrl={tiktokAvatarUrl}
             instagramAvatarUrl={instagramAvatarUrl}
+            youtubeAvatarUrl={youtubeAvatarUrl}
           />
           {targetSel.has('TIKTOK') && connected.has('TIKTOK') && tiktokAccountLabel ? (
             <p
@@ -1550,6 +1557,14 @@ function VideoCard({
               title={`Will post to Instagram as ${instagramAccountLabel}`}
             >
               Instagram: <span className="font-medium">@{instagramAccountLabel}</span>
+            </p>
+          ) : null}
+          {targetSel.has('YOUTUBE') && connected.has('YOUTUBE') && youtubeAccountLabel ? (
+            <p
+              className="text-muted-foreground truncate text-[10px]"
+              title={`Will post to YouTube as ${youtubeAccountLabel}`}
+            >
+              YouTube: <span className="font-medium">{youtubeAccountLabel}</span>
             </p>
           ) : null}
         </div>

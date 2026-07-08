@@ -146,6 +146,7 @@ export function PlatformChips({
   disabled,
   tiktokAvatarUrl,
   instagramAvatarUrl,
+  youtubeAvatarUrl,
 }: {
   selected: Set<Platform>;
   connected: Set<Platform>;
@@ -156,6 +157,8 @@ export function PlatformChips({
   tiktokAvatarUrl?: string | null;
   /** Connected Instagram account's avatar, shown inside the Instagram pill. */
   instagramAvatarUrl?: string | null;
+  /** Connected YouTube channel's avatar, shown inside the YouTube pill. */
+  youtubeAvatarUrl?: string | null;
 }) {
   const toggle = (p: Platform) => {
     const next = new Set(selected);
@@ -177,7 +180,13 @@ export function PlatformChips({
         const isConnected = connected.has(p);
         const label = size === 'xs' ? SHORT_BADGE[p] : PLATFORM_SHORT[p];
         const avatarUrl =
-          p === 'TIKTOK' ? tiktokAvatarUrl : p === 'INSTAGRAM' ? instagramAvatarUrl : null;
+          p === 'TIKTOK'
+            ? tiktokAvatarUrl
+            : p === 'INSTAGRAM'
+              ? instagramAvatarUrl
+              : p === 'YOUTUBE'
+                ? youtubeAvatarUrl
+                : null;
         const showAvatar = isConnected && Boolean(avatarUrl);
         const avatarSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
         const checkCircle = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';

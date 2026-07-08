@@ -1,9 +1,11 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
   CalendarClock,
+  Check,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -145,12 +147,30 @@ export function DashboardView({ greeting }: { greeting: string }) {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
-          {data.connections.map((c) => (
-            <div key={c.platform} className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium">{PLATFORM_LABELS[c.platform as Platform]}</span>
-              <ConnHealth configured={c.configured} status={c.connection?.status ?? null} />
-            </div>
-          ))}
+          {data.connections.map((c) => {
+            const conn = c.connection;
+            const handle = conn?.username ?? conn?.displayName ?? null;
+            return (
+              <div key={c.platform} className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {conn && handle ? (
+                    <ConnAvatar avatarUrl={conn.avatarUrl} name={handle} />
+                  ) : null}
+                  <div className="min-w-0">
+                    <span className="block text-sm font-medium leading-none">
+                      {PLATFORM_LABELS[c.platform as Platform]}
+                    </span>
+                    {handle ? (
+                      <span className="text-muted-foreground block truncate text-xs">
+                        {conn?.username ? formatHandle(conn.username) : handle}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+                <ConnHealth configured={c.configured} status={c.connection?.status ?? null} />
+              </div>
+            );
+          })}
         </CardContent>
       </Card>
     </div>
@@ -296,12 +316,55 @@ function Empty({ text }: { text: string }) {
   return <p className="text-muted-foreground text-sm">{text}</p>;
 }
 
+/**
+ * Display a username as an @-handle without doubling the prefix — some
+ * platforms (e.g. YouTube's customUrl) already include a leading "@".
+ */
+function formatHandle(username: string): string {
+  return username.startsWith('@') ? username : `@${username}`;
+}
+
+/**
+ * Connected-account avatar: the platform profile picture when available,
+ * falling back to a letter tile if it's missing or fails to load.
+ */
+function ConnAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
+  const [broken, setBroken] = useState(false);
+  if (avatarUrl && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={avatarUrl}
+        alt=""
+        aria-hidden="true"
+        onError={() => setBroken(true)}
+        className="h-7 w-7 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div
+      aria-hidden="true"
+      className="bg-muted text-muted-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
+    >
+      {name.replace(/^@/, '').charAt(0)}
+    </div>
+  );
+}
+
 function ConnHealth({ configured, status }: { configured: boolean; status: string | null }) {
   if (!configured) {
     return <Badge className="bg-slate-100 text-slate-500">Unavailable</Badge>;
   }
   if (status === 'ACTIVE')
-    return <Badge className="bg-emerald-100 text-emerald-800">Connected</Badge>;
+    return (
+      <Badge className="bg-emerald-100 text-emerald-800">
+        <span className="inline-flex items-center gap-1">
+          Connected
+          <Check className="h-3 w-3" aria-hidden="true" />
+        </span>
+      </Badge>
+    );
   if (status === 'NEEDS_RECONNECT')
     return (
       <Link href="/settings/connections">
