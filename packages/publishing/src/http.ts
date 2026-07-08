@@ -61,6 +61,14 @@ interface RequestOptions {
   body?: string | Buffer | Uint8Array;
   context: string;
   platform?: Platform;
+  /**
+   * Optional adapter hook to classify a non-2xx response by the platform's own
+   * error body (e.g. TikTok returns a `{error:{code}}` envelope even on 403).
+   * Return a PublishError to override the default status-based classification,
+   * or null/undefined to fall back to `errorFromStatus`. This prevents, e.g., a
+   * content-guideline 403 from being mis-read as a dead-auth "reconnect".
+   */
+  classifyError?: (status: number, body: string) => PublishError | null;
 }
 
 /** fetch returning the raw Response, normalizing network errors to recoverable. */
@@ -87,7 +95,10 @@ export async function rawFetch(url: string, opts: RequestOptions): Promise<Respo
 export async function fetchJson<T>(url: string, opts: RequestOptions): Promise<T> {
   const res = await rawFetch(url, opts);
   const text = await res.text();
-  if (!res.ok) throw errorFromStatus(opts.context, res.status, text, opts.platform);
+  if (!res.ok) {
+    const classified = opts.classifyError?.(res.status, text);
+    throw classified ?? errorFromStatus(opts.context, res.status, text, opts.platform);
+  }
   try {
     return (text ? JSON.parse(text) : {}) as T;
   } catch {

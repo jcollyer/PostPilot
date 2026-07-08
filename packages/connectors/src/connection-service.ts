@@ -82,6 +82,24 @@ export async function completeConnection(params: {
     },
   });
 
+  // A user should only ever have ONE connection per platform. The unique key is
+  // (userId, platform, externalAccountId), so if the platform hands back a
+  // different account id on reconnect (e.g. TikTok issuing a new open_id after a
+  // credential/scope/environment change), the upsert above creates a *second*
+  // row instead of reactivating the old one. That leaves a stale
+  // NEEDS_RECONNECT row lying around — which the settings overview would surface
+  // as "Reconnect" even though a healthy ACTIVE row now exists. Collapse any
+  // other rows for this platform into the one we just connected. PublishTask has
+  // onDelete: SetNull on its connection relation, so their connectionId is
+  // nulled (and re-resolved to the active connection when next run).
+  await prisma.platformConnection.deleteMany({
+    where: {
+      userId: params.userId,
+      platform: params.platform,
+      id: { not: connection.id },
+    },
+  });
+
   // Warm the profile snapshot cache (bio + recent posts) right away so the
   // very next video generated after connecting already benefits from it,
   // instead of waiting for the periodic refresh job. Best-effort — never
@@ -176,10 +194,18 @@ export interface PlatformOverviewEntry {
 export async function getConnectionOverview(userId: string): Promise<PlatformOverviewEntry[]> {
   const conns = await prisma.platformConnection.findMany({
     where: { userId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
   });
+  // Prefer an ACTIVE connection per platform, then the most recent. Guards
+  // against a stale (e.g. NEEDS_RECONNECT) row masking a healthy one if any
+  // duplicates ever slip through.
   const byPlatform = new Map<Platform, PlatformConnection>();
-  for (const c of conns) if (!byPlatform.has(c.platform)) byPlatform.set(c.platform, c);
+  for (const c of conns) {
+    const current = byPlatform.get(c.platform);
+    if (!current || (current.status !== 'ACTIVE' && c.status === 'ACTIVE')) {
+      byPlatform.set(c.platform, c);
+    }
+  }
 
   return SUPPORTED_PLATFORMS.map((platform) => {
     const conn = byPlatform.get(platform);

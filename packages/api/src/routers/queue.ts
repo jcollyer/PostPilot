@@ -319,7 +319,7 @@ export const queueRouter = router({
 
     const existing = await ctx.prisma.publishTask.findMany({
       where: { queueItemId: item.id },
-      select: { id: true, status: true },
+      select: { id: true, status: true, platform: true },
     });
     const publishable = existing.filter(
       (t) => t.status === 'SCHEDULED' || t.status === 'HELD' || t.status === 'FAILED',
@@ -328,11 +328,36 @@ export const queueRouter = router({
     let taskIds: string[];
     if (publishable.length > 0) {
       // Tasks already materialized (item has a slot) — mark them due now.
-      taskIds = publishable.map((t) => t.id);
-      await ctx.prisma.publishTask.updateMany({
-        where: { id: { in: taskIds } },
-        data: { status: 'SCHEDULED', attemptCount: 0, nextAttemptAt: null, scheduledAt: new Date() },
+      // Re-bind each task to the user's *current* ACTIVE connection for its
+      // platform: the connectionId snapshotted at schedule time can be stale
+      // after a reconnect (new/updated row), which otherwise makes the task
+      // fail forever with "connection not active".
+      const conns = await ctx.prisma.platformConnection.findMany({
+        where: { userId: ctx.userId, status: 'ACTIVE' },
+        select: { id: true, platform: true },
       });
+      const connByPlatform = new Map<Platform, string>();
+      for (const c of conns) if (!connByPlatform.has(c.platform)) connByPlatform.set(c.platform, c.id);
+
+      taskIds = publishable.map((t) => t.id);
+      await Promise.all(
+        publishable.map((t) =>
+          ctx.prisma.publishTask.update({
+            where: { id: t.id },
+            data: {
+              status: 'SCHEDULED',
+              attemptCount: 0,
+              nextAttemptAt: null,
+              scheduledAt: new Date(),
+              // Only overwrite when we have a current active connection for the
+              // platform; otherwise leave the existing id for the runner to hold.
+              ...(connByPlatform.has(t.platform)
+                ? { connectionId: connByPlatform.get(t.platform)! }
+                : {}),
+            },
+          }),
+        ),
+      );
     } else if (existing.length === 0) {
       // No tasks yet (item still awaiting a slot) — materialize them now for the
       // item's connected target platforms, mirroring the scheduler.
@@ -396,12 +421,19 @@ export const queueRouter = router({
   retryPublish: protectedProcedure.input(retryPublishSchema).mutation(async ({ ctx, input }) => {
     const task = await ctx.prisma.publishTask.findFirst({
       where: { id: input.taskId, queueItem: { queue: { userId: ctx.userId } } },
-      select: { id: true, status: true, connectionId: true },
+      select: { id: true, status: true, connectionId: true, platform: true },
     });
     if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Publish task not found.' });
     if (task.status !== 'FAILED' && task.status !== 'HELD') {
       return { success: false as const, reason: 'not_retryable' as const };
     }
+    // Re-bind to the current ACTIVE connection for the platform — the snapshotted
+    // connectionId can be stale after a reconnect, which would make the retry hit
+    // "connection not active" again.
+    const activeConn = await ctx.prisma.platformConnection.findFirst({
+      where: { userId: ctx.userId, platform: task.platform, status: 'ACTIVE' },
+      select: { id: true },
+    });
     await ctx.prisma.publishTask.update({
       where: { id: task.id },
       data: {
@@ -412,6 +444,7 @@ export const queueRouter = router({
         nextAttemptAt: null,
         lastError: null,
         scheduledAt: new Date(),
+        ...(activeConn ? { connectionId: activeConn.id } : {}),
       },
     });
     return { success: true as const };

@@ -30,18 +30,66 @@ interface TikTokEnvelope<T> {
   error?: { code?: string; message?: string };
 }
 
+/**
+ * Map a TikTok error code onto a classified PublishError. Shared by the 200
+ * error-envelope path (`assertOk`) and the non-2xx path (`classifyTikTokError`)
+ * so a given code is always treated the same regardless of HTTP status — TikTok
+ * returns the same `{error:{code}}` envelope on 200 and on 4xx.
+ */
+function tiktokErrorFor(code: string, message: string): PublishError {
+  // A genuinely bad/expired token — reconnecting re-issues a valid one. This is
+  // the ONLY code that should mark the connection NEEDS_RECONNECT.
+  if (code === 'access_token_invalid') {
+    return new PublishError(message, { needsReconnect: true, platform: Platform.TIKTOK });
+  }
+  // Valid token, but the app/account can't publish. Reconnecting won't help
+  // while the app is sandbox/unaudited, so DON'T flip the connection (that
+  // caused a connect→publish→disconnect loop). Fail terminally with an
+  // actionable message and leave the connection intact.
+  if (code === 'scope_not_authorized') {
+    return new PublishError(
+      `${message} — this TikTok connection doesn't have the video-publishing permission. ` +
+        `Reconnect and approve "Post to TikTok"; if the TikTok app is still in sandbox/unaudited, ` +
+        `publishing stays blocked until it passes TikTok's audit.`,
+      { rejected: true, platform: Platform.TIKTOK },
+    );
+  }
+  if (code === 'unaudited_client_can_only_post_to_private_accounts') {
+    return new PublishError(
+      `${message} — an unaudited TikTok app can only post to a TikTok account set to private. ` +
+        `Set this TikTok account to Private (Settings → Privacy → Private account) to test, ` +
+        `or get the app audited to post to public accounts.`,
+      { rejected: true, platform: Platform.TIKTOK },
+    );
+  }
+  if (code === 'rate_limit_exceeded' || code === 'internal_error') {
+    return new PublishError(message, { recoverable: true, platform: Platform.TIKTOK });
+  }
+  return new PublishError(message, { rejected: true, platform: Platform.TIKTOK });
+}
+
 /** TikTok returns 200 with an error envelope; classify it. */
 function assertOk(env: { error?: { code?: string; message?: string } }, context: string) {
   const code = env.error?.code;
   if (!code || code === 'ok') return;
-  const message = `${context}: ${code} ${env.error?.message ?? ''}`;
-  if (code === 'access_token_invalid' || code === 'scope_not_authorized') {
-    throw new PublishError(message, { needsReconnect: true, platform: Platform.TIKTOK });
+  throw tiktokErrorFor(code, `${context}: ${code} ${env.error?.message ?? ''}`);
+}
+
+/**
+ * Classify a non-2xx TikTok response by its error envelope. Returned to
+ * `fetchJson` so, e.g., a 403 `unaudited_client_can_only_post_to_private_accounts`
+ * is treated as a terminal rejection rather than a dead-auth "reconnect".
+ * Falls back (null) to the default status-based classification when the body
+ * has no recognizable TikTok error code.
+ */
+function classifyTikTokError(context: string, status: number, body: string): PublishError | null {
+  try {
+    const code = (JSON.parse(body) as { error?: { code?: string; message?: string } }).error?.code;
+    if (!code || code === 'ok') return null;
+    return tiktokErrorFor(code, `${context}: HTTP ${status} ${code}`);
+  } catch {
+    return null;
   }
-  if (code === 'rate_limit_exceeded' || code === 'internal_error') {
-    throw new PublishError(message, { recoverable: true, platform: Platform.TIKTOK });
-  }
-  throw new PublishError(message, { rejected: true, platform: Platform.TIKTOK });
 }
 
 function pickPrivacy(options: string[] | undefined): TikTokPrivacy {
@@ -87,6 +135,7 @@ export async function fetchTikTokCreatorInfo(accessToken: string): Promise<TikTo
     headers: authHeaders(accessToken),
     context: 'tiktok creator_info',
     platform: Platform.TIKTOK,
+    classifyError: (status, body) => classifyTikTokError('tiktok creator_info', status, body),
   });
   assertOk(res, 'tiktok creator_info');
   const d = res.data;
@@ -163,6 +212,7 @@ export const tiktokPublishAdapter: PublishAdapter = {
         headers: authHeaders(input.accessToken),
         context: 'tiktok video/init',
         platform: Platform.TIKTOK,
+        classifyError: (status, body) => classifyTikTokError('tiktok video/init', status, body),
         body: JSON.stringify({
           post_info: {
             title: captionWithHashtags(input.caption || input.title, input.hashtags).slice(0, 2200),
@@ -200,6 +250,7 @@ export const tiktokPublishAdapter: PublishAdapter = {
       headers: authHeaders(accessToken),
       context: 'tiktok status/fetch',
       platform: Platform.TIKTOK,
+      classifyError: (s, body) => classifyTikTokError('tiktok status/fetch', s, body),
       body: JSON.stringify({ publish_id: containerId }),
     });
     assertOk(res, 'tiktok status/fetch');

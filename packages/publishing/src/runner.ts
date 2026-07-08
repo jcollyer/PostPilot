@@ -211,7 +211,9 @@ async function handleError(task: TaskWithRelations, err: unknown): Promise<Publi
   if (err instanceof PublishError) {
     if (err.needsReconnect) {
       if (task.connection) await markNeedsReconnect(task.connection, err.message);
-      return holdTask(task, 'reconnect required');
+      // Preserve the real cause (e.g. the platform error code) instead of a
+      // generic label, so it surfaces in the task error and the UI toast.
+      return holdTask(task, err.message);
     }
     if (err.rejected) return failTask(task, err.message, { reject: true });
     // Recoverable: back off and retry, or give up after MAX_PUBLISH_ATTEMPTS.
