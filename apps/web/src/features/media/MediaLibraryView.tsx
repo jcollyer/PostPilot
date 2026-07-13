@@ -69,6 +69,7 @@ import {
 import { UploadDialog, UploadItemList } from './UploadDialog';
 import { useVideoUpload } from './useVideoUpload';
 import { readDroppedContents } from './dropped-entries';
+import { importDroppedFolders } from './import-dropped';
 import { FolderBreadcrumbs } from './FolderBreadcrumbs';
 import { FolderCard } from './FolderCard';
 import { FolderTree } from './FolderTree';
@@ -1203,21 +1204,6 @@ function EmptyStateDropzone({
     e.target.value = '';
   };
 
-  // Resolve a dropped folder's name to a folder id under the current folder,
-  // creating it if needed. If a sibling with that name already exists (a repeat
-  // drop), reuse it instead of surfacing a conflict.
-  const resolveFolderId = async (name: string): Promise<string | null> => {
-    const trimmed = name.trim().slice(0, 120);
-    if (!trimmed) return null;
-    try {
-      const created = await createFolder.mutateAsync({ name: trimmed, parentId: folderId });
-      return created.id;
-    } catch {
-      const siblings = await utils.folder.children.fetch({ parentId: folderId });
-      return siblings.find((f) => f.name === trimmed)?.id ?? null;
-    }
-  };
-
   const handleDrop = async (e: React.DragEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setDragging(false);
@@ -1225,14 +1211,16 @@ function EmptyStateDropzone({
 
     if (looseFiles.length) addFiles(looseFiles);
 
-    // Each dropped folder becomes a new subfolder holding its qualifying files.
-    for (const folder of folders) {
-      if (folder.files.length === 0) continue;
-      const targetId = await resolveFolderId(folder.name);
-      if (targetId) addFiles(folder.files, targetId);
-    }
+    // Rebuild each dropped folder tree (subfolders included) under the current
+    // folder, uploading every file into its matching folder.
+    const touchedFolders = await importDroppedFolders(folders, {
+      parentId: folderId,
+      createFolder: (name, parentId) => createFolder.mutateAsync({ name, parentId }),
+      fetchSiblings: (parentId) => utils.folder.children.fetch({ parentId }),
+      addFiles,
+    });
 
-    if (folders.length) {
+    if (touchedFolders) {
       void utils.folder.list.invalidate();
       void utils.folder.children.invalidate();
     }

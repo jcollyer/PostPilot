@@ -3,22 +3,25 @@
  *
  * A plain multi-file drop still lands in `looseFiles`. When a directory is
  * dragged in, browsers expose it through the (non-standard but widely
- * supported) `webkitGetAsEntry` API; we walk each directory tree and flatten
- * every file it contains into that folder's `files` list. MIME/size filtering
- * happens later in `useVideoUpload.addFiles`, so we return everything here.
+ * supported) `webkitGetAsEntry` API; we walk each directory tree and preserve
+ * its full nested structure — a folder's own files land in `files`, and any
+ * child directories become nested `DroppedFolder`s under `folders`. MIME/size
+ * filtering happens later in `useVideoUpload.addFiles`, so we return everything.
  */
 
 export interface DroppedFolder {
   /** The dropped directory's own name (used as the new folder's name). */
   name: string;
-  /** Every file found anywhere inside that directory tree. */
+  /** Files directly inside this directory (not inside a child directory). */
   files: File[];
+  /** Child directories, each preserved as its own nested folder. */
+  folders: DroppedFolder[];
 }
 
 export interface DroppedContents {
   /** Files dropped directly (not inside a folder). */
   looseFiles: File[];
-  /** One entry per top-level directory that was dropped. */
+  /** One entry per top-level directory that was dropped, with its subtree. */
   folders: DroppedFolder[];
 }
 
@@ -30,22 +33,27 @@ function readDir(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> 
   return new Promise((resolve, reject) => reader.readEntries(resolve, reject));
 }
 
-/** Recursively flatten a directory tree into a list of files. */
-async function collectFiles(entry: FileSystemEntry): Promise<File[]> {
-  if (entry.isFile) {
-    return [await readFile(entry as FileSystemFileEntry)];
-  }
-  const reader = (entry as FileSystemDirectoryEntry).createReader();
-  const out: File[] = [];
+/**
+ * Recursively read a directory entry into a nested `DroppedFolder`, keeping
+ * each level's own files separate from its child directories.
+ */
+async function readFolderTree(entry: FileSystemDirectoryEntry): Promise<DroppedFolder> {
+  const reader = entry.createReader();
+  const files: File[] = [];
+  const folders: DroppedFolder[] = [];
   // `readEntries` yields the directory in batches; keep reading until drained.
   for (;;) {
     const batch = await readDir(reader);
     if (batch.length === 0) break;
     for (const child of batch) {
-      out.push(...(await collectFiles(child)));
+      if (child.isDirectory) {
+        folders.push(await readFolderTree(child as FileSystemDirectoryEntry));
+      } else {
+        files.push(await readFile(child as FileSystemFileEntry));
+      }
     }
   }
-  return out;
+  return { name: entry.name, files, folders };
 }
 
 /**
@@ -78,7 +86,7 @@ export async function readDroppedContents(dataTransfer: DataTransfer): Promise<D
   const folders: DroppedFolder[] = [];
   for (const entry of entries) {
     if (entry.isDirectory) {
-      folders.push({ name: entry.name, files: await collectFiles(entry) });
+      folders.push(await readFolderTree(entry as FileSystemDirectoryEntry));
     } else {
       looseFiles.push(await readFile(entry as FileSystemFileEntry));
     }
