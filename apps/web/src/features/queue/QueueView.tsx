@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -33,6 +33,7 @@ import {
   Shuffle,
   SkipForward,
   Trash2,
+  X,
 } from 'lucide-react';
 import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@postpilot/api';
@@ -178,6 +179,53 @@ export function QueueView() {
   const skipped = order.filter((i) => i.status === 'SKIPPED');
   const visiblePublished = showAllPublished ? completed : completed.slice(0, PUBLISHED_CAP);
 
+  // Multi-select for bulk actions on the "Up next" list.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Keep selection in sync with what's actually still active in the queue.
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const activeSet = new Set(active.map((i) => i.id));
+      const next = new Set([...prev].filter((id) => activeSet.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [order]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedActive = active.filter((i) => selectedIds.has(i.id));
+  const selectedCount = selectedActive.length;
+  const allSelected = active.length > 0 && selectedCount === active.length;
+  const someSelected = selectedCount > 0;
+
+  const toggleSelect = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const toggleSelectAll = () =>
+    setSelectedIds((prev) => {
+      if (active.every((i) => prev.has(i.id))) return new Set();
+      return new Set(active.map((i) => i.id));
+    });
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const bulkBusy = publishNow.isPending || skip.isPending || removeItem.isPending;
+
+  const bulkPublish = () => {
+    selectedActive.forEach((i) => publishNow.mutate({ itemId: i.id }));
+    clearSelection();
+  };
+  const bulkSkip = () => {
+    selectedActive.forEach((i) => skip.mutate({ itemId: i.id }));
+    clearSelection();
+  };
+  const bulkDelete = () => {
+    selectedActive.forEach((i) => removeItem.mutate({ itemId: i.id }));
+    clearSelection();
+  };
+
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -259,33 +307,93 @@ export function QueueView() {
               ) : active.length === 0 ? (
                 <EmptyQueue />
               ) : (
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={onDragEnd}
-                >
-                  <SortableContext
-                    items={active.map((i) => i.id)}
-                    strategy={verticalListSortingStrategy}
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+                    <label className="text-muted-foreground flex cursor-pointer select-none items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={someSelected && !allSelected}
+                        onChange={toggleSelectAll}
+                        aria-label={allSelected ? 'Deselect all' : 'Select all'}
+                      />
+                      {someSelected ? `${selectedCount} selected` : 'Select all'}
+                    </label>
+
+                    {someSelected ? (
+                      <div className="flex flex-wrap items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={bulkPublish}
+                          disabled={bulkBusy}
+                          title="Publish the selected items now"
+                        >
+                          <Send className="mr-1 h-4 w-4" /> Publish now
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={bulkSkip}
+                          disabled={bulkBusy}
+                          title="Skip the selected items"
+                        >
+                          <SkipForward className="mr-1 h-4 w-4" /> Skip
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={bulkDelete}
+                          disabled={bulkBusy}
+                          className="text-destructive hover:text-destructive"
+                          title="Remove the selected items from the queue"
+                        >
+                          <Trash2 className="mr-1 h-4 w-4" /> Delete
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={clearSelection}
+                          className="text-muted-foreground hover:text-foreground p-1"
+                          aria-label="Clear selection"
+                          title="Clear selection"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={onDragEnd}
                   >
-                    <ul className="space-y-2">
-                      {active.map((item) => (
-                        <SortableRow
-                          key={item.id}
-                          item={item}
-                          tiktok={tiktok}
-                          instagram={instagram}
-                          youtube={youtube}
-                          onSkip={() => skip.mutate({ itemId: item.id })}
-                          onRemove={() => removeItem.mutate({ itemId: item.id })}
-                          onRetry={(taskId) => retryPublish.mutate({ taskId })}
-                          onPublishNow={() => publishNow.mutate({ itemId: item.id })}
-                          publishing={publishNow.isPending && publishNow.variables?.itemId === item.id}
-                        />
-                      ))}
-                    </ul>
-                  </SortableContext>
-                </DndContext>
+                    <SortableContext
+                      items={active.map((i) => i.id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <ul className="space-y-2">
+                        {active.map((item) => (
+                          <SortableRow
+                            key={item.id}
+                            item={item}
+                            tiktok={tiktok}
+                            instagram={instagram}
+                            youtube={youtube}
+                            selected={selectedIds.has(item.id)}
+                            onToggleSelect={() => toggleSelect(item.id)}
+                            onSkip={() => skip.mutate({ itemId: item.id })}
+                            onRemove={() => removeItem.mutate({ itemId: item.id })}
+                            onRetry={(taskId) => retryPublish.mutate({ taskId })}
+                            onPublishNow={() => publishNow.mutate({ itemId: item.id })}
+                            publishing={
+                              publishNow.isPending && publishNow.variables?.itemId === item.id
+                            }
+                          />
+                        ))}
+                      </ul>
+                    </SortableContext>
+                  </DndContext>
+                </>
               )}
 
               {completed.length > 0 ? (
@@ -426,6 +534,35 @@ function EmptyQueue() {
   );
 }
 
+/** A small square checkbox with optional indeterminate ("some selected") state. */
+function Checkbox({
+  checked,
+  indeterminate,
+  onChange,
+  'aria-label': ariaLabel,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: () => void;
+  'aria-label'?: string;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = !!indeterminate && !checked;
+  }, [indeterminate, checked]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      onClick={(e) => e.stopPropagation()}
+      aria-label={ariaLabel}
+      className="border-input accent-primary h-4 w-4 shrink-0 cursor-pointer rounded"
+    />
+  );
+}
+
 function Thumb({ url }: { url: string | null }) {
   return (
     <div className="bg-muted flex h-12 w-8 shrink-0 items-center justify-center overflow-hidden rounded">
@@ -470,6 +607,8 @@ function SortableRow({
   tiktok,
   instagram,
   youtube,
+  selected,
+  onToggleSelect,
   onSkip,
   onRemove,
   onRetry,
@@ -480,6 +619,8 @@ function SortableRow({
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
   youtube: YouTubeAccount | null;
+  selected: boolean;
+  onToggleSelect: () => void;
   onSkip: () => void;
   onRemove: () => void;
   onRetry: (taskId: string) => void;
@@ -497,8 +638,14 @@ function SortableRow({
       style={style}
       className={`bg-card flex items-center gap-2 rounded-md border p-2 ${
         isDragging ? 'shadow-lg' : ''
-      }`}
+      } ${selected ? 'border-primary ring-primary/30 ring-1' : ''}`}
     >
+      <Checkbox
+        checked={selected}
+        onChange={onToggleSelect}
+        aria-label={selected ? 'Deselect item' : 'Select item'}
+      />
+
       <button
         type="button"
         className="text-muted-foreground hover:text-foreground cursor-grab touch-none"

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@postpilot/api';
@@ -190,6 +190,20 @@ function ScheduleForm({
     ? tiktokInfo.data.info.creatorAvatarUrl
     : null;
 
+  // The connected Instagram/YouTube accounts, used to badge their pills with avatars.
+  const connections = trpc.connections.overview.useQuery();
+  const platformAvatarUrls = useMemo<Partial<Record<Platform, string | null>>>(() => {
+    const findAvatar = (platform: Platform) =>
+      connections.data?.find(
+        (e) => e.platform === platform && e.connection?.status === 'ACTIVE',
+      )?.connection?.avatarUrl ?? null;
+    return {
+      TIKTOK: tiktokAvatarUrl,
+      INSTAGRAM: findAvatar('INSTAGRAM'),
+      YOUTUBE: findAvatar('YOUTUBE'),
+    };
+  }, [connections.data, tiktokAvatarUrl]);
+
   const create = trpc.queue.createSchedule.useMutation({ onSuccess: onSaved });
   const update = trpc.queue.updateSchedule.useMutation({ onSuccess: onSaved });
   const saving = create.isPending || update.isPending;
@@ -295,6 +309,7 @@ function ScheduleForm({
         <div className="flex flex-wrap gap-1">
           {platformSchema.options.map((pl) => {
             const selected = draft.platforms.includes(pl);
+            const avatarUrl = platformAvatarUrls[pl];
             return (
               <button
                 key={pl}
@@ -304,10 +319,10 @@ function ScheduleForm({
                   selected ? 'bg-primary text-primary-foreground' : 'hover:bg-accent border'
                 }`}
               >
-                {pl === 'TIKTOK' && tiktokAvatarUrl ? (
+                {avatarUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
-                    src={tiktokAvatarUrl}
+                    src={avatarUrl}
                     alt=""
                     className="-ml-0.5 h-4 w-4 shrink-0 rounded-full object-cover"
                   />
