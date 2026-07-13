@@ -907,6 +907,26 @@ export function MediaLibraryView() {
                 </Button>
               </div>
             ) : null}
+
+            {/* Always offer the drag-n-drop uploader at the bottom of a folder's
+              contents (browse mode only — search results are a flat, library-wide
+              view where an upload target folder is ambiguous). The empty-folder
+              case is still handled by the EmptyState branch above. */}
+            {!isSearching ? (
+              <EmptyStateDropzone
+                title="Drop videos to upload"
+                body={
+                  currentFolderId
+                    ? 'Drop videos here to add them to this folder, or drop a folder to keep it grouped.'
+                    : 'Drop videos here to upload — or drop a folder to keep it grouped.'
+                }
+                folderId={currentFolderId}
+                onUploaded={() => {
+                  refresh();
+                  aiSummary.refetch();
+                }}
+              />
+            ) : null}
           </>
         )}
 
