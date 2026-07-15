@@ -8,13 +8,16 @@ import OpenAI from 'openai';
  * Required env:
  *   OPENAI_API_KEY
  * Optional env (defaults shown):
- *   OPENAI_VISION_MODEL      gpt-4o
- *   OPENAI_TRANSCRIBE_MODEL  whisper-1
+ *   OPENAI_VISION_MODEL      gpt-5-mini
+ *   OPENAI_TRANSCRIBE_MODEL  gpt-4o-mini-transcribe
  *   OPENAI_EMBEDDING_MODEL   text-embedding-3-small
  */
 
-export const VISION_MODEL = process.env.OPENAI_VISION_MODEL ?? 'gpt-4o';
-export const TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL ?? 'whisper-1';
+// gpt-5-mini: ~10x cheaper input / 5x cheaper output than the grandfathered
+// gpt-4o pricing this shipped with, with equal-or-better vision quality.
+export const VISION_MODEL = process.env.OPENAI_VISION_MODEL ?? 'gpt-5-mini';
+// gpt-4o-mini-transcribe: $0.003/min vs whisper-1's $0.006/min, same accuracy.
+export const TRANSCRIBE_MODEL = process.env.OPENAI_TRANSCRIBE_MODEL ?? 'gpt-4o-mini-transcribe';
 export const EMBEDDING_MODEL = process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small';
 
 /** Embedding dimension — must match the pgvector column (vector(1536)). */
