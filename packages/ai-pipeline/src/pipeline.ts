@@ -101,18 +101,24 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
         info,
       });
 
-      // 3. Transcription (null when there's no audio). Non-fatal: a Whisper
-      //    failure shouldn't sink the whole video — we fall back to frames-only.
-      let transcript: string | null = null;
-      try {
-        transcript = await transcribeVideo({ localPath, info, tmpDir: dir });
-        if (transcript) {
-          await prisma.video.update({ where: { id: videoId }, data: { transcript } });
+      // 3. Transcription (null when there's no audio). Non-fatal: a failure
+      //    shouldn't sink the whole video — we fall back to frames-only.
+      //    A transcript already stored on the row (from a previous run — e.g.
+      //    a "Generate Metadata" re-queue, or a retry after a later step
+      //    failed) is reused as-is: the audio hasn't changed, so re-paying
+      //    the per-minute transcription cost would buy nothing.
+      let transcript: string | null = video.transcript?.trim() || null;
+      if (!transcript) {
+        try {
+          transcript = await transcribeVideo({ localPath, info, tmpDir: dir });
+          if (transcript) {
+            await prisma.video.update({ where: { id: videoId }, data: { transcript } });
+          }
+        } catch (err) {
+          console.warn(
+            `[ai] transcription failed for ${videoId} (continuing): ${describeOpenAIError(err)}`,
+          );
         }
-      } catch (err) {
-        console.warn(
-          `[ai] transcription failed for ${videoId} (continuing): ${describeOpenAIError(err)}`,
-        );
       }
 
       // 4. Creator context — bio + past posts, preferring the creator's own

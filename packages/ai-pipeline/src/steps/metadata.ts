@@ -329,6 +329,14 @@ export async function generateMetadata(params: {
   const completion = await getOpenAI().chat.completions.create({
     model: VISION_MODEL,
     response_format: { type: 'json_object' },
+    // gpt-5-family models are reasoning models and bill reasoning tokens as
+    // output ($/M output is the priciest line). Caption-writing doesn't need
+    // deep reasoning, so pin effort to minimal. Older models (gpt-4o etc.)
+    // reject the param, hence the guard. (Cast: this SDK version's type union
+    // predates 'minimal', but the API accepts it for gpt-5-family models.)
+    ...(VISION_MODEL.startsWith('gpt-5')
+      ? { reasoning_effort: 'minimal' as unknown as 'low' }
+      : {}),
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       {
