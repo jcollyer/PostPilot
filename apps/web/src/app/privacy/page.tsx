@@ -4,7 +4,7 @@ import { SiteFooter } from '@/features/marketing/SiteFooter';
 import { SiteHeader } from '@/features/marketing/SiteHeader';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy — PostPilot',
+  title: 'PostPilot Privacy Policy',
   description: 'How PostPilot handles your data. Short version: we don’t store your personal information.',
 };
 
@@ -20,7 +20,7 @@ export default function PrivacyPage() {
 
       <main className="flex-1">
         <section className="mx-auto max-w-3xl px-6 py-16 sm:py-20">
-          <h1 className="text-4xl font-semibold tracking-tight">Privacy Policy</h1>
+          <h1 className="text-4xl font-semibold tracking-tight">PostPilot Privacy Policy</h1>
           <p className="text-muted-foreground mt-3 text-sm">Last updated {lastUpdated}</p>
 
           <div className="mt-10 space-y-8 text-base leading-relaxed">
