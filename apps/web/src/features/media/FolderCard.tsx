@@ -11,8 +11,8 @@ import {
 import type { FolderDto } from './types';
 
 /**
- * A folder tile in the library grid. Double-click (or the menu's Open) navigates
- * into it; the menu also exposes rename and delete, handled by the parent.
+ * A folder tile in the library grid. Click (or the menu's Open) navigates into
+ * it; the menu also exposes rename and delete, handled by the parent.
  */
 export function FolderCard({
   folder,
@@ -31,7 +31,7 @@ export function FolderCard({
     <div
       role="button"
       tabIndex={0}
-      onDoubleClick={onOpen}
+      onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
