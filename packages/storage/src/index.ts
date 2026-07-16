@@ -17,6 +17,8 @@ export {
   sourceKey,
   coverKey,
   thumbnailKey,
+  imagePrefix,
+  imageSourceKey,
 } from './keys';
 
 // Server-side object IO (worker / AI pipeline only)

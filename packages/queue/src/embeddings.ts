@@ -1,21 +1,26 @@
 import { type PrismaClient, Prisma } from '@postpilot/db';
 
 /**
- * Bulk-read video embeddings for smart ordering. The `embedding` column is
- * pgvector (`Unsupported` in Prisma), so we read it as text and parse — same
- * raw-SQL constraint as the AI pipeline, just the read side.
+ * Bulk-read media embeddings (videos AND images) for smart ordering. The
+ * `embedding` column is pgvector (`Unsupported` in Prisma), so we read it as
+ * text and parse — same raw-SQL constraint as the AI pipeline, just the read
+ * side. Ids are unique across both tables (cuid), so a UNION is safe.
  */
 export async function readEmbeddings(
   prisma: PrismaClient,
-  videoIds: string[],
+  ids: string[],
 ): Promise<Map<string, number[]>> {
   const out = new Map<string, number[]>();
-  if (videoIds.length === 0) return out;
+  if (ids.length === 0) return out;
 
   const rows = await prisma.$queryRaw<Array<{ id: string; embedding: string | null }>>(Prisma.sql`
     SELECT "id", "embedding"::text AS "embedding"
     FROM "Video"
-    WHERE "id" IN (${Prisma.join(videoIds)}) AND "embedding" IS NOT NULL
+    WHERE "id" IN (${Prisma.join(ids)}) AND "embedding" IS NOT NULL
+    UNION ALL
+    SELECT "id", "embedding"::text AS "embedding"
+    FROM "Image"
+    WHERE "id" IN (${Prisma.join(ids)}) AND "embedding" IS NOT NULL
   `);
 
   for (const row of rows) {

@@ -17,19 +17,31 @@ export async function smartArrangeQueue(
   const items = await prisma.queueItem.findMany({
     where: { queueId, status: { in: ['PENDING', 'SCHEDULED'] } },
     orderBy: { position: 'asc' },
-    select: { id: true, videoId: true, video: { select: { categoryId: true } } },
+    select: {
+      id: true,
+      videoId: true,
+      imageId: true,
+      video: { select: { categoryId: true } },
+      image: { select: { categoryId: true } },
+    },
   });
   if (items.length <= 2) return { reordered: items.length };
 
+  // A queue item is a video or an image/carousel; unify to one media id +
+  // category for spacing (embeddings are read from both tables).
+  const mediaIdOf = (i: (typeof items)[number]): string => (i.videoId ?? i.imageId)!;
+  const categoryOf = (i: (typeof items)[number]): string | null =>
+    i.video?.categoryId ?? i.image?.categoryId ?? null;
+
   const emb = await readEmbeddings(
     prisma,
-    items.map((i) => i.videoId),
+    items.map(mediaIdOf),
   );
 
   const orderable: OrderableItem[] = items.map((i) => ({
     id: i.id,
-    videoId: i.videoId,
-    categoryId: i.video.categoryId,
+    videoId: mediaIdOf(i),
+    categoryId: categoryOf(i),
   }));
   const orderedIds = orderBySpacing(orderable, emb);
   const positions = normalizedPositions(orderedIds);

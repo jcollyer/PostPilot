@@ -472,7 +472,7 @@ function PlatformMetaEditor({
  * Backspace on an empty field removes the last one. Tags are stored normalized
  * (no leading `#`, trimmed, de-duped); the `#` is only shown in the pill.
  */
-function HashtagInput({
+export function HashtagInput({
   value,
   onChange,
   placeholder,

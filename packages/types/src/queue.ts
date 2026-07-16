@@ -14,6 +14,12 @@ export const addVideosToQueueSchema = z.object({
 });
 export type AddVideosToQueueInput = z.infer<typeof addVideosToQueueSchema>;
 
+/** Add one or more images/carousels to the end of the queue (Instagram-only). */
+export const addImagesToQueueSchema = z.object({
+  imageIds: z.array(z.string().min(1)).min(1).max(500),
+});
+export type AddImagesToQueueInput = z.infer<typeof addImagesToQueueSchema>;
+
 export const queueItemIdSchema = z.object({ itemId: z.string().min(1) });
 export type QueueItemIdInput = z.infer<typeof queueItemIdSchema>;
 

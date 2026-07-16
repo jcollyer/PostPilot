@@ -10,6 +10,7 @@ export {
 
 // Orchestration
 export { processVideo, type ProcessResult } from './pipeline';
+export { processImage } from './pipeline-image';
 export { processPending, processUploadSession } from './batch';
 
 // pgvector helpers (reused by the queue's smart ordering in Chunk 6)

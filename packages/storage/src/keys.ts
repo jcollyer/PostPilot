@@ -50,3 +50,16 @@ export function coverKey(userId: string, videoId: string, ext: string): string {
 export function thumbnailKey(userId: string, videoId: string, thumbId: string): string {
   return `${videoPrefix(userId, videoId)}/thumbs/${thumbId}.jpg`;
 }
+
+/**
+ * Photo object keys, laid out like videos but under an `images/` namespace:
+ *
+ *   users/<userId>/images/<imageId>/source<ext>
+ */
+export function imagePrefix(userId: string, imageId: string): string {
+  return `users/${userId}/images/${imageId}`;
+}
+
+export function imageSourceKey(userId: string, imageId: string, ext: string): string {
+  return `${imagePrefix(userId, imageId)}/source${ext}`;
+}

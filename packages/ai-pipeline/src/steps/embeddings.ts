@@ -1,7 +1,7 @@
 import { type PrismaClient } from '@postpilot/db';
 
 import { EMBEDDING_MODEL, getOpenAI } from '../config';
-import { writeEmbedding } from '../vectors';
+import { writeEmbedding, writeImageEmbedding } from '../vectors';
 
 /**
  * Compute and persist the video's content embedding. One embedding set powers
@@ -40,5 +40,34 @@ export async function embedVideo(
   if (!embedding) throw new Error('Embedding API returned no vector.');
 
   await writeEmbedding(prisma, params.videoId, embedding);
+  return embedding;
+}
+
+/**
+ * Compute and persist an image's content embedding (title/caption/hashtags/
+ * category — images have no transcript). Powers smart queue ordering.
+ */
+export async function embedImage(
+  prisma: PrismaClient,
+  params: {
+    imageId: string;
+    title: string;
+    caption: string;
+    hashtags: string[];
+    category: string;
+  },
+): Promise<number[]> {
+  const text = [params.title, params.category, params.hashtags.join(' '), params.caption]
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 8000)
+    .trim();
+  const input = text.length > 0 ? text : 'photo';
+
+  const res = await getOpenAI().embeddings.create({ model: EMBEDDING_MODEL, input });
+  const embedding = res.data[0]?.embedding;
+  if (!embedding) throw new Error('Embedding API returned no vector.');
+
+  await writeImageEmbedding(prisma, params.imageId, embedding);
   return embedding;
 }

@@ -1,6 +1,7 @@
 import { TRPCError } from '@trpc/server';
 import { Platform, type PrismaClient } from '@postpilot/db';
 import {
+  addImagesToQueueSchema,
   addVideosToQueueSchema,
   createScheduleSchema,
   evaluateTikTokRequirements,
@@ -67,6 +68,17 @@ export const queueRouter = router({
             targetPlatforms: true,
           },
         },
+        image: {
+          select: {
+            id: true,
+            title: true,
+            originalFilename: true,
+            cdnUrl: true,
+            category: { select: { name: true, color: true } },
+            isDuplicate: true,
+            _count: { select: { carouselItems: true } },
+          },
+        },
         publishTasks: {
           select: {
             id: true,
@@ -86,27 +98,48 @@ export const queueRouter = router({
     return {
       status: queue.status,
       pausedAt: queue.pausedAt,
-      items: items.map((it) => ({
-        id: it.id,
-        position: it.position,
-        status: it.status,
-        scheduledAt: it.scheduledAt,
-        // Where this item is intended to post: the video's explicit choice, or
-        // all currently-connected platforms when left on the default. Shown on
-        // the row even before publish tasks are materialized.
-        postsTo:
-          it.video.targetPlatforms.length > 0 ? it.video.targetPlatforms : connectedPlatforms,
-        video: {
-          id: it.video.id,
-          title: it.video.title,
-          originalFilename: it.video.originalFilename,
-          durationSec: it.video.durationSec,
-          thumbnailUrl: it.video.coverImageUrl ?? it.video.selectedThumbnail?.url ?? null,
-          category: it.video.category,
-          isDuplicate: it.video.isDuplicate,
-          targetPlatforms: it.video.targetPlatforms,
-        },
-        tasks: it.publishTasks.map((t) => ({
+      items: items.map((it) => {
+        // A queue item is either a video or an image/carousel. Normalize to one
+        // `media` shape so the queue view renders both the same way.
+        const isImage = Boolean(it.image);
+        const media = isImage
+          ? {
+              mediaType: (it.image!._count.carouselItems > 0 ? 'CAROUSEL' : 'IMAGE') as
+                | 'CAROUSEL'
+                | 'IMAGE',
+              id: it.image!.id,
+              title: it.image!.title,
+              originalFilename: it.image!.originalFilename,
+              durationSec: null as number | null,
+              thumbnailUrl: it.image!.cdnUrl,
+              category: it.image!.category,
+              isDuplicate: it.image!.isDuplicate,
+              // Images are Instagram-only.
+              targetPlatforms: [Platform.INSTAGRAM] as Platform[],
+            }
+          : {
+              mediaType: 'VIDEO' as const,
+              id: it.video!.id,
+              title: it.video!.title,
+              originalFilename: it.video!.originalFilename,
+              durationSec: it.video!.durationSec,
+              thumbnailUrl: it.video!.coverImageUrl ?? it.video!.selectedThumbnail?.url ?? null,
+              category: it.video!.category,
+              isDuplicate: it.video!.isDuplicate,
+              targetPlatforms: it.video!.targetPlatforms,
+            };
+        return {
+          id: it.id,
+          position: it.position,
+          status: it.status,
+          scheduledAt: it.scheduledAt,
+          // Where this item is intended to post: the media's explicit choice, or
+          // all currently-connected platforms when left on the default. Shown on
+          // the row even before publish tasks are materialized.
+          postsTo:
+            media.targetPlatforms.length > 0 ? media.targetPlatforms : connectedPlatforms,
+          media,
+          tasks: it.publishTasks.map((t) => ({
           id: t.id,
           platform: t.platform,
           status: t.status,
@@ -116,7 +149,8 @@ export const queueRouter = router({
           lastError: t.lastError,
           needsConnection: t.status === 'HELD' || !t.connectionId,
         })),
-      })),
+        };
+      }),
     };
   }),
 
@@ -207,6 +241,44 @@ export const queueRouter = router({
       // Of the skipped, how many were held back for missing TikTok input.
       blocked: blocked.length,
     };
+  }),
+
+  /**
+   * Append READY images/carousels to the queue. Images are Instagram-only, so
+   * there are no per-platform gates (unlike TikTok on videos); the only skips
+   * are items already queued or not yet ready.
+   */
+  addImages: protectedProcedure.input(addImagesToQueueSchema).mutation(async ({ ctx, input }) => {
+    const queue = await userQueue(ctx.prisma, ctx.userId);
+
+    const images = await ctx.prisma.image.findMany({
+      where: { id: { in: input.imageIds }, userId: ctx.userId, status: 'READY' },
+      select: { id: true },
+    });
+    const existing = await ctx.prisma.queueItem.findMany({
+      where: { queueId: queue.id, imageId: { in: input.imageIds } },
+      select: { imageId: true },
+    });
+    const already = new Set(existing.map((e) => e.imageId));
+    const toAdd = images.filter((img) => !already.has(img.id));
+
+    let maxPos =
+      (
+        await ctx.prisma.queueItem.aggregate({
+          where: { queueId: queue.id },
+          _max: { position: true },
+        })
+      )._max.position ?? 0;
+
+    for (const img of toAdd) {
+      maxPos = appendPosition(maxPos);
+      await ctx.prisma.queueItem.create({
+        data: { queueId: queue.id, imageId: img.id, position: maxPos, status: 'PENDING' },
+      });
+    }
+
+    await recomputeSchedule(ctx.prisma, queue.id);
+    return { added: toAdd.length, skipped: input.imageIds.length - toAdd.length };
   }),
 
   /** Remove an item from the queue. */
@@ -313,9 +385,15 @@ export const queueRouter = router({
   publishNow: protectedProcedure.input(queueItemIdSchema).mutation(async ({ ctx, input }) => {
     const item = await ctx.prisma.queueItem.findFirst({
       where: { id: input.itemId, queue: { userId: ctx.userId } },
-      select: { id: true, video: { select: { targetPlatforms: true } } },
+      select: { id: true, imageId: true, video: { select: { targetPlatforms: true } } },
     });
     if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'Queue item not found.' });
+
+    // An image/carousel targets Instagram only; a video uses its own targets
+    // (empty = "all connected").
+    const itemTargets: Platform[] = item.imageId
+      ? [Platform.INSTAGRAM]
+      : (item.video?.targetPlatforms ?? []);
 
     const existing = await ctx.prisma.publishTask.findMany({
       where: { queueItemId: item.id },
@@ -369,9 +447,7 @@ export const queueRouter = router({
       for (const c of conns) if (!connByPlatform.has(c.platform)) connByPlatform.set(c.platform, c.id);
 
       const targets = (
-        item.video.targetPlatforms.length > 0
-          ? item.video.targetPlatforms
-          : [...connByPlatform.keys()]
+        itemTargets.length > 0 ? itemTargets : [...connByPlatform.keys()]
       ).filter((p) => connByPlatform.has(p));
 
       if (targets.length === 0) {

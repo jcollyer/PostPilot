@@ -419,10 +419,10 @@ export function QueueView() {
                   </div>
                   {visiblePublished.map((item) => (
                     <div key={item.id} className="flex items-center gap-3 rounded-md border p-2">
-                      <Thumb url={item.video.thumbnailUrl} />
+                      <Thumb url={item.media.thumbnailUrl} />
                       <div className="min-w-0 flex-1">
                         <span className="block min-w-0 truncate text-sm font-medium">
-                          {item.video.title ?? item.video.originalFilename ?? 'Untitled'}
+                          {item.media.title ?? item.media.originalFilename ?? 'Untitled'}
                         </span>
                         <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                           {item.tasks.map((t) => (
@@ -471,9 +471,9 @@ export function QueueView() {
                       key={item.id}
                       className="flex items-center gap-3 rounded-md border border-dashed p-2 opacity-70"
                     >
-                      <Thumb url={item.video.thumbnailUrl} />
+                      <Thumb url={item.media.thumbnailUrl} />
                       <span className="min-w-0 flex-1 truncate text-sm">
-                        {item.video.title ?? item.video.originalFilename ?? 'Untitled'}
+                        {item.media.title ?? item.media.originalFilename ?? 'Untitled'}
                       </span>
                       <Button
                         size="sm"
@@ -656,14 +656,14 @@ function SortableRow({
         <GripVertical className="h-4 w-4" />
       </button>
 
-      <Thumb url={item.video.thumbnailUrl} />
+      <Thumb url={item.media.thumbnailUrl} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
           <span className="min-w-0 truncate text-sm font-medium">
-            {item.video.title ?? item.video.originalFilename ?? 'Untitled'}
+            {item.media.title ?? item.media.originalFilename ?? 'Untitled'}
           </span>
-          {item.video.isDuplicate ? (
+          {item.media.isDuplicate ? (
             <Copy className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="Possible duplicate" />
           ) : null}
         </div>

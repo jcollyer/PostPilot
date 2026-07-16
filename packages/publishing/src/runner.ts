@@ -31,6 +31,16 @@ function loadTask(client: PrismaClient, taskId: string) {
           video: {
             include: { platformMeta: true },
           },
+          // Image/carousel items: the parent's own file is slide 1, then each
+          // ordered child slide (Instagram only).
+          image: {
+            include: {
+              carouselItems: {
+                orderBy: { position: 'asc' },
+                include: { child: { select: { cdnUrl: true } } },
+              },
+            },
+          },
         },
       },
     },
@@ -91,12 +101,41 @@ async function resolveToken(task: TaskWithRelations): Promise<string | null> {
 }
 
 function buildInput(task: TaskWithRelations, accessToken: string): PublishInput {
-  const video = task.queueItem.video;
+  const image = task.queueItem.image;
+
+  // Image / carousel item (Instagram only). Slide 1 is the parent's own file;
+  // the ordered children are the remaining slides.
+  if (image) {
+    const slideUrls = [
+      image.cdnUrl,
+      ...image.carouselItems.map((ci) => ci.child.cdnUrl),
+    ].filter((u): u is string => Boolean(u));
+    const isCarousel = image.carouselItems.length > 0;
+    return {
+      mediaType: isCarousel ? 'CAROUSEL' : 'IMAGE',
+      accessToken,
+      externalAccountId: task.connection!.externalAccountId,
+      videoUrl: '',
+      imageUrls: slideUrls,
+      getBytes: () => getObjectBuffer(image.storageKey),
+      mimeType: image.mimeType,
+      fileSize: image.fileSize != null ? Number(image.fileSize) : null,
+      durationSec: null,
+      title: image.title || '',
+      caption: image.caption || '',
+      hashtags: image.hashtags ?? [],
+      tiktok: null,
+    };
+  }
+
+  const video = task.queueItem.video!;
   const meta = video.platformMeta.find((m) => m.platform === task.platform);
   return {
+    mediaType: 'VIDEO',
     accessToken,
     externalAccountId: task.connection!.externalAccountId,
     videoUrl: video.cdnUrl ?? '',
+    imageUrls: [],
     getBytes: () => getObjectBuffer(video.storageKey),
     mimeType: video.mimeType,
     fileSize: video.fileSize != null ? Number(video.fileSize) : null,
@@ -124,9 +163,16 @@ async function startPublish(task: TaskWithRelations): Promise<PublishRunResult> 
   const token = await resolveToken(task);
   if (!token) return holdTask(task, 'connection not active');
 
-  const video = task.queueItem.video;
+  const { video, image } = task.queueItem;
   // TikTok + Instagram fetch the file from a public URL; YouTube uploads bytes.
-  if (task.platform !== Platform.YOUTUBE && !video.cdnUrl) {
+  if (image) {
+    // Every slide (parent + children) must have a public URL before we can post.
+    const missing =
+      !image.cdnUrl || image.carouselItems.some((ci) => !ci.child.cdnUrl);
+    if (missing) {
+      return failTask(task, 'a photo in this post has no public URL yet', { reject: true });
+    }
+  } else if (task.platform !== Platform.YOUTUBE && !video?.cdnUrl) {
     return failTask(task, 'video has no public URL yet', { reject: true });
   }
 
@@ -268,12 +314,15 @@ async function failTask(
     const tmpl = opts.reject
       ? contentRejectedNotification(task.platform)
       : publishFailedNotification(task.platform);
+    // A queue item is a video or an image/carousel; key the alert off whichever.
+    const mediaId = task.queueItem.videoId ?? task.queueItem.imageId;
     await createNotification(prisma, {
       userId,
       ...tmpl,
       platform: task.platform,
-      relatedVideoId: task.queueItem.videoId,
-      dedupeKey: `${opts.reject ? 'rejected' : 'failed'}:${task.platform}:${task.queueItem.videoId}`,
+      // relatedVideoId is a loose (no-FK) reference; only set it for videos.
+      relatedVideoId: task.queueItem.videoId ?? undefined,
+      dedupeKey: `${opts.reject ? 'rejected' : 'failed'}:${task.platform}:${mediaId}`,
     });
   }
   return { taskId: task.id, platform: task.platform, outcome: 'failed', detail };
