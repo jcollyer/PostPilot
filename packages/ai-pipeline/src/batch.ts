@@ -12,6 +12,17 @@ import { processImage } from './pipeline-image';
 const STALE_RUNNING_MS = Number(process.env.AI_STALE_RUNNING_MS ?? 15 * 60 * 1000);
 
 /**
+ * How many times the worker may move a single row into RUNNING before we give
+ * up and mark it FAILED. Without this cap, a "poison-pill" item that reliably
+ * kills the run mid-pipeline (e.g. an OOM on an oversized video) is left in
+ * RUNNING, reclaimed once it goes stale, and retried forever — every run
+ * crashes on the same item. aiAttempts is incremented up front by
+ * processVideo/processImage, so it counts even OOM-killed attempts. Overridable
+ * via env.
+ */
+const MAX_AI_ATTEMPTS = Number(process.env.AI_MAX_ATTEMPTS ?? 3);
+
+/**
  * Claim and process videos whose AI metadata is still PENDING, plus any left
  * stranded in RUNNING past STALE_RUNNING_MS (a previous run died before it
  * could set COMPLETED/FAILED). The "Generate Metadata" button sets videos back
@@ -25,21 +36,53 @@ export async function processPending(params?: {
 }): Promise<ProcessResult[]> {
   const limit = params?.limit ?? 5;
   const staleBefore = new Date(Date.now() - STALE_RUNNING_MS);
+  const scope = params?.userId ? { userId: params.userId } : {};
+
+  // A stranded RUNNING row (killed before it could set COMPLETED/FAILED) is only
+  // eligible to be reclaimed while it's stale — i.e. no longer plausibly still
+  // in flight.
+  const stranded = {
+    OR: [
+      { aiStartedAt: { lt: staleBefore } },
+      { aiStartedAt: null },
+    ],
+  };
+
+  // Retire poison pills first: rows that have burned through MAX_AI_ATTEMPTS and
+  // are stranded in RUNNING get marked FAILED so the reclaim below never picks
+  // them up again (and the UI shows an error badge instead of a stuck spinner).
+  // Runs before the claim so an exhausted item frees its slot this cycle. status
+  // is added inline (not hoisted) so Prisma infers the MediaStatus enum instead
+  // of widening the string literals.
+  const retire = {
+    ...scope,
+    aiStatus: 'RUNNING' as const,
+    aiAttempts: { gte: MAX_AI_ATTEMPTS },
+    ...stranded,
+  };
+  await prisma.video.updateMany({
+    where: { status: { in: ['READY', 'PROCESSING'] }, ...retire },
+    data: { aiStatus: 'FAILED' },
+  });
+  await prisma.image.updateMany({
+    where: { status: { in: ['READY', 'PROCESSING'] }, ...retire },
+    data: { aiStatus: 'FAILED' },
+  });
 
   // Same claim predicate for videos and images: still PENDING, or stranded in
-  // RUNNING past the stale window.
+  // RUNNING past the stale window — but only while under the attempt cap, so a
+  // repeatedly-crashing item drops out instead of looping.
   const aiClaim = {
     OR: [
       { aiStatus: 'PENDING' as const },
-      { aiStatus: 'RUNNING' as const, aiStartedAt: { lt: staleBefore } },
-      { aiStatus: 'RUNNING' as const, aiStartedAt: null },
+      { aiStatus: 'RUNNING' as const, aiAttempts: { lt: MAX_AI_ATTEMPTS }, ...stranded },
     ],
   };
 
   const pending = await prisma.video.findMany({
     where: {
       status: { in: ['READY', 'PROCESSING'] },
-      ...(params?.userId ? { userId: params.userId } : {}),
+      ...scope,
       ...aiClaim,
     },
     orderBy: { createdAt: 'asc' },
@@ -58,7 +101,7 @@ export async function processPending(params?: {
     const pendingImages = await prisma.image.findMany({
       where: {
         status: { in: ['READY', 'PROCESSING'] },
-        ...(params?.userId ? { userId: params.userId } : {}),
+        ...scope,
         ...aiClaim,
       },
       orderBy: { createdAt: 'asc' },

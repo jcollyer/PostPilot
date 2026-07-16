@@ -14,6 +14,9 @@ import { processPending } from '@postpilot/ai-pipeline';
  */
 export const aiProcessUser = task({
   id: 'ai-process-user',
+  // Same pipeline as the cron (ffmpeg + in-memory frames), so it needs the same
+  // memory headroom or it OOMs on large videos. Keep in sync with `ai-process`.
+  machine: 'medium-1x',
   // Same bound as the cron: a wedged video can't hold the run for the full
   // global 3600s; the next drain (this or the cron) reclaims stale RUNNING rows.
   maxDuration: 600,

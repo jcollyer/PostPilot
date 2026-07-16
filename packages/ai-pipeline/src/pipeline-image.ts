@@ -4,6 +4,7 @@ import { prisma } from '@postpilot/db';
 import { downloadToFile } from '@postpilot/storage';
 
 import { describeOpenAIError, isAiConfigured } from './config';
+import { checkImageLimits } from './limits';
 import { extractFrame, extractGray9x8, probeMedia } from './ffmpeg';
 import { dHashFromGray9x8 } from './phash';
 import { resolveFolderPath } from './pipeline';
@@ -37,9 +38,25 @@ export async function processImage(imageId: string): Promise<ProcessResult> {
   if (!image) return { videoId: imageId, ok: false, error: 'image not found' };
   if (!image.storageKey) return { videoId: imageId, ok: false, error: 'image has no storage key' };
 
+  // Cheap pre-download guard (see processVideo): fail oversized images before
+  // pulling the file down, using the size/dimensions we already have.
+  const preReason = checkImageLimits({
+    fileSize: image.fileSize,
+    width: image.width,
+    height: image.height,
+  });
+  if (preReason) {
+    await prisma.image
+      .update({ where: { id: imageId }, data: { aiStatus: 'FAILED' } })
+      .catch(() => {});
+    return { videoId: imageId, ok: false, error: `skipped oversized image: ${preReason}` };
+  }
+
+  // Bump aiAttempts up front (see processVideo) so an OOM-killed run still
+  // counts toward the retry cap and can't loop forever.
   await prisma.image.update({
     where: { id: imageId },
-    data: { aiStatus: 'RUNNING', aiStartedAt: new Date() },
+    data: { aiStatus: 'RUNNING', aiStartedAt: new Date(), aiAttempts: { increment: 1 } },
   });
 
   try {
@@ -57,6 +74,11 @@ export async function processImage(imageId: string): Promise<ProcessResult> {
           status: image.status === 'UPLOADING' ? 'READY' : image.status,
         },
       });
+
+      // Re-check with the real dimensions from ffprobe (the upload often has no
+      // stored width/height). Bail before decoding/normalizing the full image.
+      const probeReason = checkImageLimits({ width: info.width, height: info.height });
+      if (probeReason) throw new Error(`skipped oversized image: ${probeReason}`);
 
       // 2. Normalize to a single JPEG buffer for the vision model (handles
       //    PNG/WebP sources uniformly). Time 0 of a still image is the image.

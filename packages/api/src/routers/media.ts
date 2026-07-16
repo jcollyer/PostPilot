@@ -1085,7 +1085,10 @@ export const mediaRouter = router({
 
       const { count } = await ctx.prisma.video.updateMany({
         where,
-        data: { aiStatus: 'PENDING' },
+        // Reset aiAttempts so a manual re-queue gets a fresh retry budget — a
+        // video the worker retired to FAILED after MAX_AI_ATTEMPTS can be tried
+        // again (e.g. after bumping the machine size or fixing the source).
+        data: { aiStatus: 'PENDING', aiAttempts: 0 },
       });
       return { queued: count };
     }),

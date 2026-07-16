@@ -449,6 +449,12 @@ model Video {
   // deploy restart) so they don't spin forever.
   aiStartedAt    DateTime?
   aiProcessedAt  DateTime?
+  // Number of times the worker has moved this row into RUNNING. Incremented up
+  // front (before the heavy pipeline work) so it survives a run killed
+  // mid-pipeline by an OOM/restart, which never reaches a catch block. Bounds
+  // the reclaim loop: once this hits AI_MAX_ATTEMPTS the row is retired to
+  // FAILED instead of being retried forever. Reset to 0 on manual re-queue.
+  aiAttempts     Int              @default(0)
   categoryId     String?
 
   // Media Library folder this video lives in (null = the root). A video lives
@@ -582,6 +588,8 @@ model Image {
   aiStatus      AiPipelineStatus @default(PENDING)
   aiStartedAt   DateTime?
   aiProcessedAt DateTime?
+  // See Video.aiAttempts — bounds the reclaim loop for images too.
+  aiAttempts    Int              @default(0)
   categoryId    String?
 
   // Media Library folder (null = the root), same semantics as Video.folderId.
