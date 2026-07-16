@@ -15,11 +15,11 @@
     "@postpilot/notifications": "*",
     "@postpilot/publishing": "*",
     "@postpilot/queue": "*",
-    "@trigger.dev/sdk": "^4.0.0"
+    "@trigger.dev/sdk": "4.5.4"
   },
   "devDependencies": {
     "@postpilot/config": "*",
-    "@trigger.dev/build": "^4.0.0",
+    "@trigger.dev/build": "4.5.4",
     "@types/node": "^22.9.0",
     "typescript": "^5.6.3"
   }

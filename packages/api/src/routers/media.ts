@@ -1045,7 +1045,14 @@ export const mediaRouter = router({
 
   /** Counts by AI status (optionally scoped to one upload session). */
   aiSummary: protectedProcedure.input(aiSummarySchema).query(async ({ ctx, input }) => {
-    const where: Prisma.VideoWhereInput = { userId: ctx.userId };
+    // Only count media the AI worker can actually drain. processPending claims
+    // rows with status READY/PROCESSING, so a PENDING video still stuck in
+    // UPLOADING (upload never finalized) or FAILED is not queued work — counting
+    // it inflated "queued" forever with rows the worker correctly skips.
+    const where: Prisma.VideoWhereInput = {
+      userId: ctx.userId,
+      status: { in: ['READY', 'PROCESSING'] },
+    };
     if (input.uploadSessionId) where.uploadSessionId = input.uploadSessionId;
     const grouped = await ctx.prisma.video.groupBy({
       by: ['aiStatus'],
