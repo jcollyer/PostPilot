@@ -408,6 +408,29 @@ export function MediaLibraryView() {
 
   const clearSelection = () => setSelectedIds(new Set());
 
+  // The bulk-action toolbar is `sticky top-0`. Keep its rounded corners while it
+  // sits inline, but drop them once it's pinned to the top (flush, floating).
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarStuck, setToolbarStuck] = useState(false);
+  useEffect(() => {
+    if (selectedIds.size === 0) {
+      setToolbarStuck(false);
+      return;
+    }
+    const update = () => {
+      const el = toolbarRef.current;
+      if (el) setToolbarStuck(el.getBoundingClientRect().top <= 0);
+    };
+    update();
+    // Capture-phase so we also catch scrolls from any inner scroll container.
+    window.addEventListener('scroll', update, { passive: true, capture: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, { capture: true });
+      window.removeEventListener('resize', update);
+    };
+  }, [selectedIds]);
+
   // Navigate the main pane to a folder (null = root). Updates the `?folder=`
   // query param so the URL reflects the folder you're viewing, and clears any
   // selection and the search box so you land in a clean browse view of it.
@@ -704,10 +727,21 @@ export function MediaLibraryView() {
               ))}
             </SelectContent>
           </Select>
+          {videos.length > 0 && !selectionActive ? (
+            <Button variant="outline" onClick={toggleSelectAll}>
+              <ListChecks className="mr-2 h-4 w-4" />
+              Select all
+            </Button>
+          ) : null}
         </div>
 
         {selectionActive ? (
-          <div className="bg-background/95 supports-[backdrop-filter]:bg-background/80 sticky top-2 z-20 rounded-lg border shadow-sm backdrop-blur">
+          <div
+            ref={toolbarRef}
+            className={`bg-muted/95 supports-[backdrop-filter]:bg-muted/80 sticky top-0 z-30 border shadow-sm backdrop-blur ${
+              toolbarStuck ? '' : 'rounded-lg'
+            }`}
+          >
             <div className="flex flex-wrap items-center gap-2 px-3 py-2">
             <button
               type="button"
@@ -820,7 +854,7 @@ export function MediaLibraryView() {
             </div>
 
             {connected.has('TIKTOK') ? (
-              <div className="flex flex-wrap items-center gap-2 border-t px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2 border-t bg-muted-foreground/5 px-3 py-2">
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
                   {tiktokAccount.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
