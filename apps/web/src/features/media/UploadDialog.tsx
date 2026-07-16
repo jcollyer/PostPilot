@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react';
 import { CheckCircle2, Loader2, Upload, X, AlertCircle } from 'lucide-react';
 
-import { ACCEPTED_VIDEO_MIME_TYPES } from '@postpilot/types';
+import { ACCEPTED_IMAGE_MIME_TYPES, ACCEPTED_VIDEO_MIME_TYPES } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,7 +20,7 @@ import { useVideoUpload, type UploadItem } from './useVideoUpload';
 import { readDroppedContents } from './dropped-entries';
 import { importDroppedFolders } from './import-dropped';
 
-const ACCEPT = ACCEPTED_VIDEO_MIME_TYPES.join(',');
+const ACCEPT = [...ACCEPTED_VIDEO_MIME_TYPES, ...ACCEPTED_IMAGE_MIME_TYPES].join(',');
 
 export function UploadDialog({
   onUploaded,

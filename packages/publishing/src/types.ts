@@ -1,13 +1,23 @@
 import type { Platform } from '@postpilot/db';
 
-/** Everything an adapter needs to publish one video to one platform. */
+/** The kind of media a publish task carries. */
+export type PublishMediaType = 'VIDEO' | 'IMAGE' | 'CAROUSEL';
+
+/** Everything an adapter needs to publish one item to one platform. */
 export interface PublishInput {
+  /** What's being published. Defaults to VIDEO for callers that don't set it. */
+  mediaType: PublishMediaType;
   /** Fresh, decrypted OAuth access token for the target connection. */
   accessToken: string;
   /** The connected account's platform id (TikTok open_id / IG user id / YT channel). */
   externalAccountId: string;
   /** Public CDN URL of the video (TikTok + Instagram fetch from this). */
   videoUrl: string;
+  /**
+   * Public CDN URLs of the image(s), in slide order (Instagram only). A single
+   * IMAGE has one entry; a CAROUSEL has 2–10. Empty for videos.
+   */
+  imageUrls: string[];
   /** Lazily download the raw bytes (YouTube uploads the file directly). */
   getBytes: () => Promise<Buffer>;
   mimeType: string | null;

@@ -8,18 +8,28 @@ import {
   moveFolderSchema,
   renameFolderSchema,
 } from '@postpilot/types';
-import { deletePrefix, isStorageConfigured, videoPrefix } from '@postpilot/storage';
+import { deletePrefix, imagePrefix, isStorageConfigured, videoPrefix } from '@postpilot/storage';
 
 import { protectedProcedure, router } from '../trpc';
-import { hasActiveTikTok, toVideoDto, VIDEO_INCLUDE } from './media';
+import {
+  decodeMediaCursor,
+  hasActiveTikTok,
+  IMAGE_INCLUDE,
+  mergeMediaPage,
+  olderThanCursor,
+  toImageDto,
+  toVideoDto,
+  VIDEO_INCLUDE,
+} from './media';
 
 /** Shape used by both the grid (folder cards) and the tree panel. */
 const FOLDER_SELECT = {
   id: true,
   name: true,
   parentId: true,
-  // Drives "open" affordance + item-count badges in the UI.
-  _count: { select: { children: true, videos: true } },
+  // Drives "open" affordance + item-count badges in the UI. Media items are
+  // videos + images.
+  _count: { select: { children: true, videos: true, images: true } },
 } as const;
 type FolderRow = Prisma.FolderGetPayload<{ select: typeof FOLDER_SELECT }>;
 
@@ -29,7 +39,7 @@ function toFolderDto(f: FolderRow) {
     name: f.name,
     parentId: f.parentId,
     childFolderCount: f._count.children,
-    itemCount: f._count.videos,
+    itemCount: f._count.videos + f._count.images,
   };
 }
 
@@ -90,18 +100,21 @@ export const folderRouter = router({
 
   /**
    * The contents of one level: all child folders, plus a cursor-paginated page
-   * of that level's videos. `parentId === null` is the root. Folders are few, so
-   * they're returned whole; videos page via `cursor`/`nextCursor`.
+   * of that level's media (videos AND images, merged by recency). `parentId ===
+   * null` is the root. Folders are few, so they're returned whole; media pages
+   * via the opaque composite `cursor`/`nextCursor`.
    */
   list: protectedProcedure.input(listFolderSchema).query(async ({ ctx, input }) => {
     const { parentId } = input;
     await assertParentOwned(ctx.prisma, ctx.userId, parentId);
 
     // Folders are returned only on the first page (no cursor) — they don't
-    // paginate, so "load more" fetches only the next page of videos.
+    // paginate, so "load more" fetches only the next page of media.
     const firstPage = !input.cursor;
+    const cursor = input.cursor ? decodeMediaCursor(input.cursor) : null;
+    const older = olderThanCursor(cursor);
 
-    const [folders, videoRows, tiktokConnected] = await Promise.all([
+    const [folders, videoRows, imageRows, tiktokConnected] = await Promise.all([
       firstPage
         ? ctx.prisma.folder.findMany({
             where: { userId: ctx.userId, parentId },
@@ -110,21 +123,29 @@ export const folderRouter = router({
           })
         : Promise.resolve([] as FolderRow[]),
       ctx.prisma.video.findMany({
-        where: { userId: ctx.userId, folderId: parentId },
+        where: { userId: ctx.userId, folderId: parentId, ...older },
         include: VIDEO_INCLUDE,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: input.limit + 1,
-        ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
+      }),
+      ctx.prisma.image.findMany({
+        where: { userId: ctx.userId, folderId: parentId, ...older },
+        include: IMAGE_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: input.limit + 1,
       }),
       hasActiveTikTok(ctx.prisma, ctx.userId),
     ]);
 
-    let nextCursor: string | undefined;
-    if (videoRows.length > input.limit) nextCursor = videoRows.pop()!.id;
+    const media = mergeMediaPage(
+      videoRows.map((r) => ({ ...toVideoDto(r, tiktokConnected), createdAt: r.createdAt })),
+      imageRows.map((r) => ({ ...toImageDto(r), createdAt: r.createdAt })),
+      input.limit,
+    );
 
     return {
       folders: folders.map(toFolderDto),
-      videos: { items: videoRows.map((r) => toVideoDto(r, tiktokConnected)), nextCursor },
+      media,
     };
   }),
 
@@ -281,9 +302,40 @@ export const folderRouter = router({
       where: { id: { in: videos.map((v) => v.id) }, userId: ctx.userId },
     });
 
+    // 2b. Same for images in the subtree: clean R2 prefixes, keep session counts
+    //     in sync, then delete the rows (CarouselItem rows cascade away).
+    const images = await ctx.prisma.image.findMany({
+      where: { userId: ctx.userId, folderId: { in: folderIds } },
+      select: { id: true, uploadSessionId: true },
+    });
+    if (isStorageConfigured()) {
+      await Promise.all(
+        images.map((img) => deletePrefix(imagePrefix(ctx.userId, img.id)).catch(() => {})),
+      );
+    }
+    const imageSessionDecrements = new Map<string, number>();
+    for (const img of images) {
+      if (img.uploadSessionId) {
+        imageSessionDecrements.set(
+          img.uploadSessionId,
+          (imageSessionDecrements.get(img.uploadSessionId) ?? 0) + 1,
+        );
+      }
+    }
+    await Promise.all(
+      [...imageSessionDecrements].map(([id, count]) =>
+        ctx.prisma.uploadSession
+          .update({ where: { id }, data: { videoCount: { decrement: count } } })
+          .catch(() => {}),
+      ),
+    );
+    await ctx.prisma.image.deleteMany({
+      where: { id: { in: images.map((img) => img.id) }, userId: ctx.userId },
+    });
+
     // 3. Delete the subtree root; child folders cascade away.
     await ctx.prisma.folder.delete({ where: { id: input.folderId } });
 
-    return { success: true as const, deletedVideos: videos.length };
+    return { success: true as const, deletedVideos: videos.length, deletedImages: images.length };
   }),
 });
