@@ -445,6 +445,12 @@ model Video {
   // deploy restart) so they don't spin forever.
   aiStartedAt    DateTime?
   aiProcessedAt  DateTime?
+  // Number of times the worker has moved this row into RUNNING. Incremented up
+  // front (before the heavy pipeline work) so it survives a run killed
+  // mid-pipeline by an OOM/restart, which never reaches a catch block. Bounds
+  // the reclaim loop: once this hits AI_MAX_ATTEMPTS the row is retired to
+  // FAILED instead of being retried forever. Reset to 0 on manual re-queue.
+  aiAttempts     Int              @default(0)
   categoryId     String?
 
   // Media Library folder this video lives in (null = the root). A video lives
@@ -545,6 +551,105 @@ model ThumbnailCandidate {
   @@index([videoId])
 }
 
+<<<<<<< Updated upstream
+=======
+/// A photo media item, parallel to Video. Images are Instagram-only for now
+/// (no TikTok/YouTube), so there is no per-platform metadata or thumbnail
+/// selection — the file itself is the visual. An Image that has `carouselItems`
+/// is a *carousel* post: its own file is slide 1, and each CarouselItem points
+/// (in `position` order) at another Image used as an additional slide. Child
+/// images keep existing as independent library items.
+model Image {
+  id     String      @id @default(cuid())
+  userId String
+  status MediaStatus @default(UPLOADING)
+
+  // Storage (Cloudflare R2 + CDN). Uploaded direct-to-storage via a single
+  // presigned PUT (photos are small — no multipart), mirroring the cover flow.
+  storageKey       String
+  cdnUrl           String?
+  originalFilename String?
+  mimeType         String?
+  fileSize         BigInt?
+
+  // Media properties.
+  width  Int?
+  height Int?
+
+  // Base metadata (Instagram is the only target, so there are no per-platform
+  // overrides). `hashtags` mirrors Video for a shared editing UI.
+  title    String?
+  caption  String? @db.Text
+  hashtags String[]
+
+  // AI pipeline outputs (vision metadata over the single image).
+  aiStatus      AiPipelineStatus @default(PENDING)
+  aiStartedAt   DateTime?
+  aiProcessedAt DateTime?
+  // See Video.aiAttempts — bounds the reclaim loop for images too.
+  aiAttempts    Int              @default(0)
+  categoryId    String?
+
+  // Media Library folder (null = the root), same semantics as Video.folderId.
+  folderId String?
+
+  // Duplicate detection / smart ordering (image pHash + embedding).
+  pHash         String?
+  embedding     Unsupported("vector(1536)")?
+  isDuplicate   Boolean                      @default(false)
+  duplicateOfId String?
+
+  uploadSessionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      Category?      @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  folder        Folder?        @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  uploadSession UploadSession? @relation(fields: [uploadSessionId], references: [id], onDelete: SetNull)
+
+  // onUpdate: NoAction breaks the self-relation cycle on this self reference.
+  duplicateOf Image?  @relation("ImageDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  duplicates  Image[] @relation("ImageDuplicates")
+
+  // Carousel membership. `carouselItems` = slides this image owns as a carousel
+  // parent; `memberOf` = carousels this image is a slide of.
+  carouselItems CarouselItem[] @relation("CarouselParent")
+  memberOf      CarouselItem[] @relation("CarouselChild")
+
+  queueItems QueueItem[]
+
+  @@index([userId])
+  @@index([userId, status])
+  @@index([categoryId])
+  @@index([userId, folderId])
+  @@index([uploadSessionId])
+  @@index([duplicateOfId])
+}
+
+/// One ordered slide of a carousel. Links a carousel parent Image to a child
+/// Image (referenced by id — the child still exists independently in the
+/// library). `position` orders the slides after the parent's own file (slide 1).
+model CarouselItem {
+  id            String @id @default(cuid())
+  parentImageId String
+  childImageId  String
+  position      Float
+
+  createdAt DateTime @default(now())
+
+  parent Image @relation("CarouselParent", fields: [parentImageId], references: [id], onDelete: Cascade)
+  // onUpdate: NoAction keeps the validator from flagging the two Image FKs on
+  // this table as a referential-action cycle (cuid ids never change).
+  child  Image @relation("CarouselChild", fields: [childImageId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([parentImageId, childImageId])
+  @@index([parentImageId, position])
+  @@index([childImageId])
+}
+
+>>>>>>> Stashed changes
 /// A detected duplicate/near-duplicate relationship between two videos, with the
 /// method and similarity that produced it. Surfaced as a warning before queueing.
 model DuplicateMatch {

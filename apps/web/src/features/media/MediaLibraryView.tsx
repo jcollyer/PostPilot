@@ -1195,7 +1195,7 @@ function EmptyStateDropzone({
 }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { items, addFiles } = useVideoUpload({ folderId, onUploaded });
+  const { items, rejections, addFiles, clearRejections } = useVideoUpload({ folderId, onUploaded });
   const utils = trpc.useUtils();
   const createFolder = trpc.folder.create.useMutation();
 
@@ -1262,9 +1262,13 @@ function EmptyStateDropzone({
         className="hidden"
         onChange={onSelect}
       />
-      {items.length > 0 ? (
+      {items.length > 0 || rejections.length > 0 ? (
         <div className="mt-4">
-          <UploadItemList items={items} />
+          <UploadItemList
+            items={items}
+            rejections={rejections}
+            onDismissRejections={clearRejections}
+          />
         </div>
       ) : null}
     </div>

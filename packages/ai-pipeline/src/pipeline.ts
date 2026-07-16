@@ -4,6 +4,7 @@ import { prisma } from '@postpilot/db';
 import { downloadToFile } from '@postpilot/storage';
 
 import { describeOpenAIError, isAiConfigured } from './config';
+import { checkVideoLimits } from './limits';
 import { extractGray9x8, probeMedia } from './ffmpeg';
 import { dHashFromGray9x8 } from './phash';
 import { extractThumbnails } from './steps/frames';
@@ -69,11 +70,29 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
   if (!video) return { videoId, ok: false, error: 'video not found' };
   if (!video.storageKey) return { videoId, ok: false, error: 'video has no storage key' };
 
+  // Cheap pre-download guard: if what we already know (upload file size, any
+  // stored duration) is over the limits, fail now — before pulling a multi-GB
+  // file down and OOMing the worker. Marking FAILED (not leaving it PENDING)
+  // keeps the cron from re-picking it every 5 min and surfaces the reason.
+  const preReason = checkVideoLimits({
+    fileSize: video.fileSize,
+    durationSec: video.durationSec,
+  });
+  if (preReason) {
+    await prisma.video
+      .update({ where: { id: videoId }, data: { aiStatus: 'FAILED' } })
+      .catch(() => {});
+    return { videoId, ok: false, error: `skipped oversized video: ${preReason}` };
+  }
+
   // Stamp aiStartedAt so a run killed mid-pipeline (before the catch below can
-  // set FAILED) can be detected as stale and reclaimed by processPending.
+  // set FAILED) can be detected as stale and reclaimed by processPending. Bump
+  // aiAttempts in the same write, up front, so the count survives an OOM kill
+  // that never reaches the catch — this is what lets processPending eventually
+  // retire a poison-pill video instead of reclaiming it forever.
   await prisma.video.update({
     where: { id: videoId },
-    data: { aiStatus: 'RUNNING', aiStartedAt: new Date() },
+    data: { aiStatus: 'RUNNING', aiStartedAt: new Date(), aiAttempts: { increment: 1 } },
   });
 
   try {
@@ -92,6 +111,13 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
           status: video.status === 'UPLOADING' ? 'READY' : video.status,
         },
       });
+
+      // Re-check limits now that ffprobe has given us the real duration (the
+      // upload often has no stored durationSec). Bail before extractThumbnails —
+      // the memory-heavy step — so a too-long video fails cleanly instead of
+      // OOMing here. Thrown → caught below → marked FAILED with this reason.
+      const probeReason = checkVideoLimits({ durationSec: info.durationSec });
+      if (probeReason) throw new Error(`skipped oversized video: ${probeReason}`);
 
       // 2. Candidate thumbnails (kept in memory for the vision step).
       const frames = await extractThumbnails(prisma, {

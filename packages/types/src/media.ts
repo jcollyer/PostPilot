@@ -22,6 +22,38 @@ export const MAX_VIDEO_BYTES = 10 * 1024 * 1024 * 1024;
 /** 15 MB cap for optional cover images. */
 export const MAX_COVER_BYTES = 15 * 1024 * 1024;
 
+/**
+ * Ceiling above which the AI metadata pipeline skips a video rather than risk
+ * OOM-ing the worker on frame extraction. This is *not* an upload limit — a
+ * bigger video still uploads and can be posted; it just won't get
+ * auto-generated metadata. The worker enforces these (env-overridable via
+ * AI_MAX_VIDEO_BYTES / AI_MAX_VIDEO_DURATION_SEC); the client uses them only to
+ * warn at upload time, so they're the shared default source of truth. Keep well
+ * below MAX_VIDEO_BYTES (the hard upload cap).
+ */
+export const AI_METADATA_MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
+/** 60 minutes — frame/transcript work scales with length. */
+export const AI_METADATA_MAX_VIDEO_DURATION_SEC = 60 * 60;
+
+/**
+ * Whether a video is too large/long for auto-generated metadata, with a short
+ * human-readable reason. `sizeBytes`/`durationSec` may be undefined when not yet
+ * known (e.g. duration before the client has probed the file) — an unknown
+ * field is simply not checked. Returns null when the video is within limits.
+ */
+export function videoExceedsAiLimit(input: {
+  sizeBytes?: number | null;
+  durationSec?: number | null;
+}): string | null {
+  if (input.sizeBytes != null && input.sizeBytes > AI_METADATA_MAX_VIDEO_BYTES) {
+    return 'Over 2 GB, so it will upload and can be posted, but won’t get auto-generated metadata.';
+  }
+  if (input.durationSec != null && input.durationSec > AI_METADATA_MAX_VIDEO_DURATION_SEC) {
+    return 'Longer than 60 min, so it will upload and can be posted, but won’t get auto-generated metadata.';
+  }
+  return null;
+}
+
 export const videoMimeSchema = z.enum(ACCEPTED_VIDEO_MIME_TYPES);
 export const imageMimeSchema = z.enum(ACCEPTED_IMAGE_MIME_TYPES);
 

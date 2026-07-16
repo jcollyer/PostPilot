@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { CheckCircle2, Loader2, Upload, X, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, Upload, X, AlertCircle, TriangleAlert } from 'lucide-react';
 
 import { ACCEPTED_VIDEO_MIME_TYPES } from '@postpilot/types';
 
@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { trpc } from '@/lib/trpc/client';
 import { formatBytes } from './upload';
-import { useVideoUpload, type UploadItem } from './useVideoUpload';
+import { useVideoUpload, type UploadItem, type UploadRejection } from './useVideoUpload';
 import { readDroppedContents } from './dropped-entries';
 import { importDroppedFolders } from './import-dropped';
 
@@ -34,7 +34,10 @@ export function UploadDialog({
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { items, addFiles, reset, inProgress } = useVideoUpload({ folderId, onUploaded });
+  const { items, rejections, addFiles, reset, clearRejections, inProgress } = useVideoUpload({
+    folderId,
+    onUploaded,
+  });
   const utils = trpc.useUtils();
   const createFolder = trpc.folder.create.useMutation();
 
@@ -120,39 +123,88 @@ export function UploadDialog({
           onChange={onSelect}
         />
 
-        <UploadItemList items={items} />
+        <UploadItemList items={items} rejections={rejections} onDismissRejections={clearRejections} />
       </DialogContent>
     </Dialog>
   );
 }
 
-export function UploadItemList({ items }: { items: UploadItem[] }) {
-  if (items.length === 0) return null;
+export function UploadItemList({
+  items,
+  rejections = [],
+  onDismissRejections,
+}: {
+  items: UploadItem[];
+  rejections?: UploadRejection[];
+  onDismissRejections?: () => void;
+}) {
+  if (items.length === 0 && rejections.length === 0) return null;
   return (
-    <ul className="max-h-64 space-y-2 overflow-y-auto">
-      {items.map((it) => (
-        <li key={it.id} className="rounded-md border p-3 text-left">
-          <div className="flex items-center justify-between gap-3">
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">{it.file.name}</span>
-            <span className="text-muted-foreground shrink-0 text-xs">
-              {formatBytes(it.file.size)}
-            </span>
-            <UploadStatusIcon item={it} onCancel={() => it.controller.abort()} />
-          </div>
-          {it.status === 'uploading' ? (
-            <div className="bg-muted mt-2 h-1.5 w-full overflow-hidden rounded-full">
-              <div
-                className="bg-primary h-full transition-[width]"
-                style={{ width: `${Math.round(it.progress * 100)}%` }}
-              />
+    <div className="space-y-2">
+      {rejections.length > 0 ? (
+        <div className="border-destructive/30 bg-destructive/5 text-destructive rounded-md border p-3 text-left text-xs">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium">
+                {rejections.length === 1
+                  ? "1 file wasn't uploaded"
+                  : `${rejections.length} files weren't uploaded`}
+              </p>
+              <ul className="mt-1 space-y-0.5">
+                {rejections.map((r) => (
+                  <li key={r.id} className="truncate">
+                    <span className="font-medium">{r.name}</span> — {r.reason}
+                  </li>
+                ))}
+              </ul>
             </div>
-          ) : null}
-          {it.status === 'error' ? (
-            <p className="text-destructive mt-1 text-xs">{it.error}</p>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+            {onDismissRejections ? (
+              <button
+                type="button"
+                onClick={onDismissRejections}
+                aria-label="Dismiss"
+                className="hover:text-foreground shrink-0"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {items.length > 0 ? (
+        <ul className="max-h-64 space-y-2 overflow-y-auto">
+          {items.map((it) => (
+            <li key={it.id} className="rounded-md border p-3 text-left">
+              <div className="flex items-center justify-between gap-3">
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">{it.file.name}</span>
+                <span className="text-muted-foreground shrink-0 text-xs">
+                  {formatBytes(it.file.size)}
+                </span>
+                <UploadStatusIcon item={it} onCancel={() => it.controller.abort()} />
+              </div>
+              {it.status === 'uploading' ? (
+                <div className="bg-muted mt-2 h-1.5 w-full overflow-hidden rounded-full">
+                  <div
+                    className="bg-primary h-full transition-[width]"
+                    style={{ width: `${Math.round(it.progress * 100)}%` }}
+                  />
+                </div>
+              ) : null}
+              {it.status === 'error' ? (
+                <p className="text-destructive mt-1 text-xs">{it.error}</p>
+              ) : null}
+              {it.warning && it.status !== 'error' ? (
+                <p className="text-muted-foreground mt-1 flex items-start gap-1 text-xs">
+                  <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+                  <span>{it.warning}</span>
+                </p>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
   );
 }
 
