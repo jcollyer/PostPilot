@@ -13,11 +13,29 @@ const videoSelect = {
   selectedThumbnail: { select: { url: true } },
 } as const;
 
-function thumb(v: {
-  coverImageUrl: string | null;
-  selectedThumbnail: { url: string | null } | null;
-}) {
-  return v.coverImageUrl ?? v.selectedThumbnail?.url ?? null;
+const imageSelect = {
+  title: true,
+  cdnUrl: true,
+} as const;
+
+/** The media on a queue item is either a video or an image; pick either. */
+const queueItemMediaSelect = {
+  select: { video: { select: videoSelect }, image: { select: imageSelect } },
+} as const;
+
+function mediaTitle(item: {
+  video: { title: string | null } | null;
+  image: { title: string | null } | null;
+}): string | null {
+  return item.video?.title ?? item.image?.title ?? null;
+}
+
+function mediaThumb(item: {
+  video: { coverImageUrl: string | null; selectedThumbnail: { url: string | null } | null } | null;
+  image: { cdnUrl: string | null } | null;
+}): string | null {
+  if (item.video) return item.video.coverImageUrl ?? item.video.selectedThumbnail?.url ?? null;
+  return item.image?.cdnUrl ?? null;
 }
 
 /**
@@ -46,7 +64,7 @@ export const dashboardRouter = router({
         select: {
           platform: true,
           scheduledAt: true,
-          queueItem: { select: { video: { select: videoSelect } } },
+          queueItem: queueItemMediaSelect,
         },
       }),
       ctx.prisma.publishTask.findFirst({
@@ -56,7 +74,7 @@ export const dashboardRouter = router({
           platform: true,
           publishedAt: true,
           platformPostUrl: true,
-          queueItem: { select: { video: { select: videoSelect } } },
+          queueItem: queueItemMediaSelect,
         },
       }),
       ctx.prisma.video.count({ where: { userId: ctx.userId, status: 'READY' } }),
@@ -77,8 +95,8 @@ export const dashboardRouter = router({
         ? {
             platform: nextTask.platform,
             scheduledAt: nextTask.scheduledAt,
-            title: nextTask.queueItem.video.title,
-            thumbnailUrl: thumb(nextTask.queueItem.video),
+            title: mediaTitle(nextTask.queueItem),
+            thumbnailUrl: mediaThumb(nextTask.queueItem),
           }
         : null,
       lastPublished: lastTask
@@ -86,8 +104,8 @@ export const dashboardRouter = router({
             platform: lastTask.platform,
             publishedAt: lastTask.publishedAt,
             postUrl: lastTask.platformPostUrl,
-            title: lastTask.queueItem.video.title,
-            thumbnailUrl: thumb(lastTask.queueItem.video),
+            title: mediaTitle(lastTask.queueItem),
+            thumbnailUrl: mediaThumb(lastTask.queueItem),
           }
         : null,
       connections,

@@ -8,7 +8,9 @@ import {
   Film,
   FolderInput,
   FolderPlus,
+  Image as ImageIcon,
   Info,
+  Layers,
   ListChecks,
   ListPlus,
   Loader2,
@@ -27,6 +29,7 @@ import {
 } from 'lucide-react';
 
 import {
+  ACCEPTED_IMAGE_MIME_TYPES,
   ACCEPTED_VIDEO_MIME_TYPES,
   DEFAULT_TIKTOK_OPTIONS,
   mediaStatusSchema,
@@ -56,6 +59,8 @@ import {
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc/client';
 import { EditMetadataDialog } from './EditMetadataDialog';
+import { ImageEditDialog } from './ImageEditDialog';
+import { CarouselBuilderDialog } from './CarouselBuilderDialog';
 import {
   PLATFORM_ORDER,
   PlatformChips,
@@ -76,7 +81,7 @@ import { FolderTree } from './FolderTree';
 import { MoveToFolderDialog } from './MoveToFolderDialog';
 import { NewFolderDialog } from './NewFolderDialog';
 import { RenameFolderDialog } from './RenameFolderDialog';
-import type { FolderDto, VideoDto } from './types';
+import type { FolderDto, ImageDto, MediaItem, VideoDto } from './types';
 import { formatBytes, formatDuration } from './upload';
 
 const STATUS_OPTIONS = mediaStatusSchema.options;
@@ -195,13 +200,13 @@ export function MediaLibraryView() {
   // Any active search/filter switches the view to flat, library-wide results.
   const isSearching = search.length > 0 || Boolean(status) || Boolean(categoryId);
 
-  // Browse mode — the current folder's direct contents (folders + its videos).
+  // Browse mode — the current folder's direct contents (folders + its media).
   const browseQuery = trpc.folder.list.useInfiniteQuery(
     { parentId: currentFolderId, limit: 24 },
-    { getNextPageParam: (last) => last.videos.nextCursor, enabled: !isSearching },
+    { getNextPageParam: (last) => last.media.nextCursor, enabled: !isSearching },
   );
 
-  // Search mode — flat video results across the whole library (folder ignored).
+  // Search mode — flat media results across the whole library (folder ignored).
   const searchQuery = trpc.media.list.useInfiniteQuery(
     {
       limit: 24,
@@ -214,10 +219,18 @@ export function MediaLibraryView() {
 
   const query = isSearching ? searchQuery : browseQuery;
 
-  const videos = useMemo<VideoDto[]>(() => {
+  // The merged grid list (videos + images, date-ordered by the server).
+  const mediaItems = useMemo<MediaItem[]>(() => {
     if (isSearching) return searchQuery.data?.pages.flatMap((p) => p.items) ?? [];
-    return browseQuery.data?.pages.flatMap((p) => p.videos.items) ?? [];
+    return browseQuery.data?.pages.flatMap((p) => p.media.items) ?? [];
   }, [isSearching, searchQuery.data, browseQuery.data]);
+
+  // Split for the existing video-only machinery (selection, queue, TikTok gates)
+  // which never applies to Instagram-only images.
+  const videos = useMemo<VideoDto[]>(
+    () => mediaItems.filter((m): m is VideoDto => m.mediaType === 'VIDEO'),
+    [mediaItems],
+  );
 
   // Folders only appear when browsing (not in search results).
   const folders = useMemo<FolderDto[]>(
@@ -310,6 +323,29 @@ export function MediaLibraryView() {
   const [editing, setEditing] = useState<VideoDto | null>(null);
   const [previewing, setPreviewing] = useState<VideoDto | null>(null);
 
+  // Image/carousel counterparts (Instagram-only items).
+  const [editingImage, setEditingImage] = useState<ImageDto | null>(null);
+  const [previewingImage, setPreviewingImage] = useState<ImageDto | null>(null);
+  const [carouselFor, setCarouselFor] = useState<ImageDto | null>(null);
+
+  const removeImage = trpc.media.removeImage.useMutation({
+    onSuccess: () => {
+      refresh();
+      aiSummary.refetch();
+    },
+  });
+  const addImagesToQueue = trpc.queue.addImages.useMutation({
+    onSuccess: (res) => {
+      utils.queue.invalidate();
+      refresh();
+      setQueueMsg(
+        res.added > 0
+          ? `${res.added} photo post${res.added === 1 ? '' : 's'} added to the queue. After publishing, it can take a few minutes to appear on your profile.`
+          : null,
+      );
+    },
+  });
+
   // Optimistically reflect a video's new platform targets in whichever list
   // cache is active (we intentionally don't refetch the list on a chip toggle),
   // plus any open Edit panel snapshot. This keeps the card, the queue gate, and
@@ -335,13 +371,15 @@ export function MediaLibraryView() {
             tiktokNeedsInput: v.tiktokOptionsIncomplete && connected.has('TIKTOK') && targetsTikTok,
           }
         : v;
+    // Only video items carry platform targets; images (IG-only) pass through.
+    const patchItem = (m: MediaItem): MediaItem => (m.mediaType === 'VIDEO' ? patch(m) : m);
     utils.folder.list.setInfiniteData({ parentId: currentFolderId, limit: 24 }, (data) =>
       data
         ? {
             ...data,
             pages: data.pages.map((p) => ({
               ...p,
-              videos: { ...p.videos, items: p.videos.items.map(patch) },
+              media: { ...p.media, items: p.media.items.map(patchItem) },
             })),
           }
         : data,
@@ -355,7 +393,7 @@ export function MediaLibraryView() {
       },
       (data) =>
         data
-          ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map(patch) })) }
+          ? { ...data, pages: data.pages.map((p) => ({ ...p, items: p.items.map(patchItem) })) }
           : data,
     );
     setEditing((cur) => (cur ? patch(cur) : cur));
@@ -836,7 +874,7 @@ export function MediaLibraryView() {
           <div className="text-muted-foreground flex items-center gap-2 py-16 text-sm">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading your library…
           </div>
-        ) : folders.length === 0 && videos.length === 0 ? (
+        ) : folders.length === 0 && mediaItems.length === 0 ? (
           <EmptyState
             hasFilters={hasFilters}
             isSearching={isSearching}
@@ -863,34 +901,53 @@ export function MediaLibraryView() {
               </div>
             ) : null}
 
-            {videos.length > 0 ? (
+            {mediaItems.length > 0 ? (
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4">
-                {videos.map((video) => (
-                  <VideoCard
-                    key={video.id}
-                    video={video}
-                    selected={selectedIds.has(video.id)}
-                    selectionActive={selectionActive}
-                    onToggleSelect={() => toggleSelect(video.id)}
-                    onPreview={() => setPreviewing(video)}
-                    onEdit={() => setEditing(video)}
-                    onDelete={() => remove.mutate({ videoId: video.id })}
-                    deleting={remove.isPending && remove.variables?.videoId === video.id}
-                    onAddToQueue={() => requestQueue([video.id])}
-                    queued={queuedIds.has(video.id)}
-                    connected={connected}
-                    tiktokAccountLabel={tiktokAccount.nickname ?? tiktokAccount.username}
-                    tiktokAvatarUrl={tiktokAccount.avatarUrl}
-                    instagramAccountLabel={accountLabels.INSTAGRAM}
-                    instagramAvatarUrl={avatarUrls.INSTAGRAM}
-                    youtubeAccountLabel={accountLabels.YOUTUBE}
-                    youtubeAvatarUrl={avatarUrls.YOUTUBE}
-                    onSetTargets={(platforms) => {
-                      patchVideoTargets(video.id, platforms);
-                      setTargets.mutate({ videoId: video.id, platforms });
-                    }}
-                  />
-                ))}
+                {mediaItems.map((item) =>
+                  item.mediaType === 'VIDEO' ? (
+                    <VideoCard
+                      key={item.id}
+                      video={item}
+                      selected={selectedIds.has(item.id)}
+                      selectionActive={selectionActive}
+                      onToggleSelect={() => toggleSelect(item.id)}
+                      onPreview={() => setPreviewing(item)}
+                      onEdit={() => setEditing(item)}
+                      onDelete={() => remove.mutate({ videoId: item.id })}
+                      deleting={remove.isPending && remove.variables?.videoId === item.id}
+                      onAddToQueue={() => requestQueue([item.id])}
+                      queued={queuedIds.has(item.id)}
+                      connected={connected}
+                      tiktokAccountLabel={tiktokAccount.nickname ?? tiktokAccount.username}
+                      tiktokAvatarUrl={tiktokAccount.avatarUrl}
+                      instagramAccountLabel={accountLabels.INSTAGRAM}
+                      instagramAvatarUrl={avatarUrls.INSTAGRAM}
+                      youtubeAccountLabel={accountLabels.YOUTUBE}
+                      youtubeAvatarUrl={avatarUrls.YOUTUBE}
+                      onSetTargets={(platforms) => {
+                        patchVideoTargets(item.id, platforms);
+                        setTargets.mutate({ videoId: item.id, platforms });
+                      }}
+                    />
+                  ) : (
+                    <ImageCard
+                      key={item.id}
+                      image={item}
+                      onPreview={() => setPreviewingImage(item)}
+                      onEdit={() => setEditingImage(item)}
+                      onMakeCarousel={() => setCarouselFor(item)}
+                      onDelete={() => removeImage.mutate({ imageId: item.id })}
+                      deleting={
+                        removeImage.isPending && removeImage.variables?.imageId === item.id
+                      }
+                      onAddToQueue={() => addImagesToQueue.mutate({ imageIds: [item.id] })}
+                      queued={queuedIds.has(item.id)}
+                      instagramAccountLabel={accountLabels.INSTAGRAM}
+                      instagramAvatarUrl={avatarUrls.INSTAGRAM}
+                      instagramConnected={connected.has('INSTAGRAM')}
+                    />
+                  ),
+                )}
               </div>
             ) : null}
 
@@ -940,7 +997,34 @@ export function MediaLibraryView() {
           />
         ) : null}
 
+        {editingImage ? (
+          <ImageEditDialog
+            image={editingImage}
+            open={Boolean(editingImage)}
+            onOpenChange={(o) => !o && setEditingImage(null)}
+            onSaved={refresh}
+            onMakeCarousel={() => {
+              setCarouselFor(editingImage);
+              setEditingImage(null);
+            }}
+          />
+        ) : null}
+
+        {carouselFor ? (
+          <CarouselBuilderDialog
+            image={carouselFor}
+            open={Boolean(carouselFor)}
+            onOpenChange={(o) => !o && setCarouselFor(null)}
+            onSaved={refresh}
+          />
+        ) : null}
+
         <PreviewDialog video={previewing} onOpenChange={(o) => !o && setPreviewing(null)} />
+
+        <ImagePreviewDialog
+          image={previewingImage}
+          onOpenChange={(o) => !o && setPreviewingImage(null)}
+        />
 
         <Dialog open={confirmDelete} onOpenChange={(o) => !o && setConfirmDelete(false)}>
           <DialogContent className="max-w-sm">
@@ -1257,7 +1341,7 @@ function EmptyStateDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept={ACCEPTED_VIDEO_MIME_TYPES.join(',')}
+        accept={[...ACCEPTED_VIDEO_MIME_TYPES, ...ACCEPTED_IMAGE_MIME_TYPES].join(',')}
         multiple
         className="hidden"
         onChange={onSelect}
@@ -1624,6 +1708,272 @@ function PreviewDialog({
             controls
             autoPlay
             className="max-h-[70vh] w-full rounded-md bg-black"
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * A photo / carousel card. Mirrors VideoCard but for Instagram-only images: an
+ * image icon on hover (not a play button), no duration, and a stacked-layers
+ * visual for carousels. Images don't join the video multi-select toolbar, so
+ * there's no selection checkbox — actions live in the card menu.
+ */
+function ImageCard({
+  image,
+  onPreview,
+  onEdit,
+  onMakeCarousel,
+  onDelete,
+  deleting,
+  onAddToQueue,
+  queued,
+  instagramAccountLabel,
+  instagramAvatarUrl,
+  instagramConnected,
+}: {
+  image: ImageDto;
+  onPreview: () => void;
+  onEdit: () => void;
+  onMakeCarousel: () => void;
+  onDelete: () => void;
+  deleting: boolean;
+  onAddToQueue: () => void;
+  queued: boolean;
+  instagramAccountLabel: string | null;
+  instagramAvatarUrl: string | null;
+  instagramConnected: boolean;
+}) {
+  const badge = STATUS_BADGE[image.status];
+  const isCarousel = image.mediaType === 'CAROUSEL';
+  const canPreview = Boolean(image.cdnUrl) && image.status === 'READY';
+  const aiBusy = image.aiStatus === 'PENDING' || image.aiStatus === 'RUNNING';
+  const isQueued = image.inQueue || queued;
+
+  return (
+    <div className="bg-card group relative overflow-hidden rounded-lg border transition">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onEdit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onEdit();
+          }
+        }}
+        aria-label="Edit details"
+        className="bg-muted relative flex aspect-square w-full cursor-pointer items-center justify-center"
+      >
+        {/* Stacked layers behind the top image hint at a carousel. */}
+        {isCarousel ? (
+          <>
+            <span className="bg-muted-foreground/20 absolute -right-1 -top-1 h-full w-full rounded-lg border" />
+            <span className="bg-muted-foreground/30 absolute -right-0.5 -top-0.5 h-full w-full rounded-lg border" />
+          </>
+        ) : null}
+
+        <div className="bg-muted relative h-full w-full overflow-hidden rounded-lg">
+          {image.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={image.thumbnailUrl}
+              alt={image.title ?? 'Photo'}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            <ImageIcon className="text-muted-foreground absolute left-1/2 top-1/2 h-8 w-8 -translate-x-1/2 -translate-y-1/2" />
+          )}
+
+          <span className="absolute left-1.5 top-1.5 flex flex-wrap gap-1">
+            {isCarousel ? (
+              <span
+                title={`Carousel · ${image.slideCount} slides`}
+                className="flex items-center gap-0.5 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                <Layers className="h-3 w-3" /> {image.slideCount}
+              </span>
+            ) : null}
+            {isQueued ? (
+              <span
+                title="This post is in your queue"
+                className="flex items-center gap-0.5 rounded bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                <ListChecks className="h-3 w-3" /> Queued
+              </span>
+            ) : null}
+            {aiBusy ? (
+              <span
+                title="AI is processing this photo"
+                className="flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                <Loader2 className="h-3 w-3 animate-spin" /> Processing
+              </span>
+            ) : image.aiStatus === 'COMPLETED' ? (
+              <span
+                title="AI metadata ready"
+                className="flex items-center rounded bg-violet-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                <Sparkles className="h-3 w-3" />
+              </span>
+            ) : image.aiStatus === 'FAILED' ? (
+              <span
+                title="AI processing failed"
+                className="flex items-center rounded bg-red-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                <TriangleAlert className="h-3 w-3" />
+              </span>
+            ) : null}
+          </span>
+
+          {/* Image icon affordance on hover (opens the larger preview). */}
+          {canPreview ? (
+            <button
+              type="button"
+              aria-label="View photo"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPreview();
+              }}
+              className="absolute left-1/2 top-1/2 z-10 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
+            >
+              <ImageIcon className="h-6 w-6" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-2 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <p
+            className="min-w-0 flex-1 truncate text-sm font-medium"
+            title={image.title ?? undefined}
+          >
+            {image.title ?? image.originalFilename ?? 'Untitled'}
+          </p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Photo actions"
+                className="text-muted-foreground hover:text-foreground -mr-1 shrink-0"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {image.status === 'READY' ? (
+                <DropdownMenuItem
+                  onClick={onAddToQueue}
+                  disabled={isQueued}
+                  className="cursor-pointer"
+                >
+                  {isQueued ? (
+                    <Check className="mr-2 h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <ListPlus className="mr-2 h-4 w-4" />
+                  )}
+                  {isQueued ? 'In queue' : 'Add to queue'}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onClick={onEdit} className="cursor-pointer">
+                <Pencil className="mr-2 h-4 w-4" /> Edit details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onMakeCarousel} className="cursor-pointer">
+                <Layers className="mr-2 h-4 w-4" /> {isCarousel ? 'Edit carousel' : 'Make carousel'}
+              </DropdownMenuItem>
+              {canPreview ? (
+                <DropdownMenuItem onClick={onPreview} className="cursor-pointer">
+                  <ImageIcon className="mr-2 h-4 w-4" /> View
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                onClick={onDelete}
+                disabled={deleting}
+                className="text-destructive focus:text-destructive cursor-pointer"
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.className}`}>
+            {badge.label}
+          </span>
+          <span className="text-muted-foreground text-[11px]">{formatBytes(image.fileSize)}</span>
+        </div>
+
+        <div className="space-y-1 border-t pt-2">
+          <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">
+            Post to
+          </p>
+          <div className="flex items-center gap-1.5">
+            {instagramAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={instagramAvatarUrl}
+                alt="Instagram"
+                className="h-5 w-5 rounded-full object-cover"
+              />
+            ) : null}
+            <span className="text-muted-foreground text-[11px]">
+              Instagram
+              {instagramConnected && instagramAccountLabel ? (
+                <span className="font-medium"> · @{instagramAccountLabel}</span>
+              ) : !instagramConnected ? (
+                <span className="text-amber-600"> · connect to post</span>
+              ) : null}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** View a photo (or a carousel's slides) at a larger size. */
+function ImagePreviewDialog({
+  image,
+  onOpenChange,
+}: {
+  image: ImageDto | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const slides = image
+    ? [image.cdnUrl, ...image.carouselChildren.map((c) => c.cdnUrl)].filter(
+        (u): u is string => Boolean(u),
+      )
+    : [];
+  return (
+    <Dialog open={Boolean(image)} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="truncate">
+            {image?.title ?? image?.originalFilename ?? 'Preview'}
+          </DialogTitle>
+        </DialogHeader>
+        {slides.length > 1 ? (
+          <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto pb-1">
+            {slides.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={`${url}-${i}`}
+                src={url}
+                alt={`Slide ${i + 1}`}
+                className="max-h-[70vh] w-full shrink-0 snap-center rounded-md bg-black object-contain"
+              />
+            ))}
+          </div>
+        ) : slides[0] ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={slides[0]}
+            alt={image?.title ?? 'Photo'}
+            className="max-h-[70vh] w-full rounded-md bg-black object-contain"
           />
         ) : null}
       </DialogContent>

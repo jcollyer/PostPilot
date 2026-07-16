@@ -56,6 +56,7 @@ model User {
   // Product
   platformConnections PlatformConnection[]
   videos              Video[]
+  images              Image[]
   folders             Folder[]
   categories          Category[]
   uploadSessions      UploadSession[]
@@ -345,6 +346,7 @@ model UploadSession {
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   videos Video[]
+  images Image[]
 
   @@index([userId])
 }
@@ -372,6 +374,7 @@ model Folder {
   parent   Folder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   children Folder[] @relation("FolderTree")
   videos   Video[]
+  images   Image[]
 
   // No two sibling folders may share a name. NOTE: Postgres treats NULLs as
   // distinct, so this does NOT constrain root-level names against each other —
@@ -391,6 +394,7 @@ model Category {
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   videos Video[]
+  images Image[]
 
   @@unique([userId, slug])
   @@index([userId])
@@ -551,8 +555,6 @@ model ThumbnailCandidate {
   @@index([videoId])
 }
 
-<<<<<<< Updated upstream
-=======
 /// A photo media item, parallel to Video. Images are Instagram-only for now
 /// (no TikTok/YouTube), so there is no per-platform metadata or thumbnail
 /// selection — the file itself is the visual. An Image that has `carouselItems`
@@ -649,7 +651,6 @@ model CarouselItem {
   @@index([childImageId])
 }
 
->>>>>>> Stashed changes
 /// A detected duplicate/near-duplicate relationship between two videos, with the
 /// method and similarity that produced it. Surfaced as a warning before queueing.
 model DuplicateMatch {
@@ -688,13 +689,19 @@ model Queue {
   schedules Schedule[]
 }
 
-/// A video's slot in the queue. `position` is a float so drag-to-reorder can
-/// insert between neighbors without renumbering the whole list. The actual
-/// per-platform publishing is tracked by the child PublishTask rows.
+/// A queued media slot. `position` is a float so drag-to-reorder can insert
+/// between neighbors without renumbering the whole list. The actual per-platform
+/// publishing is tracked by the child PublishTask rows.
+///
+/// Exactly one of `videoId` / `imageId` is set: the queue carries both videos
+/// and images (a carousel is an Image with children). This XOR is enforced in
+/// application code (Prisma can't express a CHECK constraint, so we don't add
+/// one — it would show up as migration drift).
 model QueueItem {
   id          String          @id @default(cuid())
   queueId     String
-  videoId     String
+  videoId     String?
+  imageId     String?
   position    Float
   status      QueueItemStatus @default(PENDING)
   // When the whole item is due (earliest of its publish tasks); denormalized
@@ -704,12 +711,14 @@ model QueueItem {
   updatedAt   DateTime        @updatedAt
 
   queue        Queue         @relation(fields: [queueId], references: [id], onDelete: Cascade)
-  video        Video         @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  video        Video?        @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  image        Image?        @relation(fields: [imageId], references: [id], onDelete: Cascade)
   publishTasks PublishTask[]
 
   @@index([queueId, position])
   @@index([queueId, status])
   @@index([videoId])
+  @@index([imageId])
 }
 
 /// A simple recurring posting schedule. Avoids a calendar UI: combine

@@ -5,19 +5,25 @@ import {
   abortUploadSchema,
   aiSummarySchema,
   clearStoppedMetadataSchema,
+  completeImageUploadSchema,
   completeUploadSchema,
   confirmCoverUploadSchema,
   createUploadSessionSchema,
   DEFAULT_TIKTOK_OPTIONS,
   evaluateTikTokRequirements,
+  imageIdSchema,
   initCoverUploadSchema,
+  initImageUploadSchema,
   initUploadSchema,
+  listImagesInFolderSchema,
   listVideosSchema,
   regenerateMetadataSchema,
   selectThumbnailSchema,
+  setCarouselItemsSchema,
   setCategoryManySchema,
   setFolderManySchema,
   setPlatformMetaSchema,
+  updateImageMetadataSchema,
   setTargetPlatformsManySchema,
   setTargetPlatformsSchema,
   setTiktokMetaSchema,
@@ -37,6 +43,8 @@ import {
   deletePrefix,
   extensionFor,
   extensionForMime,
+  imagePrefix,
+  imageSourceKey,
   isStorageConfigured,
   planMultipart,
   presignPut,
@@ -171,6 +179,8 @@ function tiktokNeedsInput(v: VideoRecord, tiktokConnected: boolean): boolean {
 /** Map a Video row to a safe client DTO (BigInt → number, never exposes keys we don't need). */
 export function toVideoDto(v: VideoRecord, tiktokConnected = false) {
   return {
+    // Discriminates video vs image/carousel rows in the merged library grid.
+    mediaType: 'VIDEO' as const,
     id: v.id,
     status: v.status,
     aiStatus: v.aiStatus,
@@ -214,6 +224,141 @@ export function toVideoDto(v: VideoRecord, tiktokConnected = false) {
     })(),
     createdAt: v.createdAt,
     updatedAt: v.updatedAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Images & carousels (Instagram-only). Images live in their own table but share
+// the library grid with videos; a `mediaType` discriminator on each DTO lets the
+// client tell them apart. A carousel is an Image that owns ordered CarouselItem
+// child slides (its own file is slide 1).
+// ---------------------------------------------------------------------------
+
+/** Photos are Instagram-only for now; there is no per-platform fan-out. */
+const IMAGE_TARGET_PLATFORMS: Platform[] = [Platform.INSTAGRAM];
+
+export const IMAGE_INCLUDE = {
+  category: true,
+  _count: { select: { queueItems: true } },
+  // Ordered child slides (empty for a plain photo). Includes each child's file
+  // so the grid/preview can render the stacked carousel visual without a second
+  // round-trip.
+  carouselItems: {
+    orderBy: { position: 'asc' },
+    include: {
+      child: {
+        select: { id: true, cdnUrl: true, status: true, width: true, height: true },
+      },
+    },
+  },
+} as const;
+export type ImageRecord = Prisma.ImageGetPayload<{ include: typeof IMAGE_INCLUDE }>;
+
+/** Load an image the caller owns, or throw NOT_FOUND. */
+async function ownedImage(prisma: PrismaClient, userId: string, imageId: string) {
+  const image = await prisma.image.findFirst({ where: { id: imageId, userId } });
+  if (!image) throw new TRPCError({ code: 'NOT_FOUND', message: 'Photo not found.' });
+  return image;
+}
+
+/** Map an Image row to a client DTO, discriminated from videos by `mediaType`. */
+export function toImageDto(img: ImageRecord) {
+  const childSlides = img.carouselItems.map((ci) => ({
+    id: ci.child.id,
+    cdnUrl: ci.child.cdnUrl,
+  }));
+  const isCarousel = childSlides.length > 0;
+  return {
+    mediaType: (isCarousel ? 'CAROUSEL' : 'IMAGE') as 'CAROUSEL' | 'IMAGE',
+    id: img.id,
+    status: img.status,
+    aiStatus: img.aiStatus,
+    cdnUrl: img.cdnUrl,
+    originalFilename: img.originalFilename,
+    mimeType: img.mimeType,
+    fileSize: img.fileSize !== null && img.fileSize !== undefined ? Number(img.fileSize) : null,
+    width: img.width,
+    height: img.height,
+    // The image is its own thumbnail; a carousel shows its slide-1 (own) file.
+    thumbnailUrl: img.cdnUrl,
+    title: img.title,
+    caption: img.caption,
+    hashtags: img.hashtags,
+    // Instagram-only — surfaced so the shared card can reuse platform badges.
+    targetPlatforms: IMAGE_TARGET_PLATFORMS,
+    categoryId: img.categoryId,
+    category: img.category
+      ? { id: img.category.id, name: img.category.name, color: img.category.color }
+      : null,
+    folderId: img.folderId,
+    uploadSessionId: img.uploadSessionId,
+    isDuplicate: img.isDuplicate,
+    inQueue: img._count.queueItems > 0,
+    // Carousel shape: total slide count (1 for a plain photo) + the child file
+    // urls, in order, for the stacked-preview visual and the builder.
+    slideCount: 1 + childSlides.length,
+    carouselChildren: childSlides,
+    createdAt: img.createdAt,
+    updatedAt: img.updatedAt,
+  };
+}
+
+export type MediaItemDto = ReturnType<typeof toVideoDto> | ReturnType<typeof toImageDto>;
+
+/**
+ * Opaque cursor for the merged video+image library grid. Both tables order by
+ * (createdAt desc, id desc); the cursor encodes the last item's sort key so the
+ * next page fetches strictly "older" rows from each table.
+ */
+function encodeMediaCursor(item: { createdAt: Date; id: string }): string {
+  return Buffer.from(`${item.createdAt.toISOString()}|${item.id}`).toString('base64url');
+}
+export function decodeMediaCursor(cursor: string): { createdAt: Date; id: string } | null {
+  try {
+    const [iso, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+    if (!iso || !id) return null;
+    const createdAt = new Date(iso);
+    if (Number.isNaN(createdAt.getTime())) return null;
+    return { createdAt, id };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A "fetch everything strictly older than the cursor" predicate for either the
+ * Video or Image table, matching the (createdAt desc, id desc) ordering.
+ */
+export function olderThanCursor(cursor: { createdAt: Date; id: string } | null) {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { createdAt: { lt: cursor.createdAt } },
+      { createdAt: cursor.createdAt, id: { lt: cursor.id } },
+    ],
+  };
+}
+
+/**
+ * Merge already-fetched video and image DTOs (each fetched with `limit + 1`
+ * using `olderThanCursor`) into a single page ordered by (createdAt desc,
+ * id desc), returning the page plus the next cursor.
+ */
+export function mergeMediaPage(
+  videos: (MediaItemDto & { createdAt: Date })[],
+  images: (MediaItemDto & { createdAt: Date })[],
+  limit: number,
+): { items: MediaItemDto[]; nextCursor: string | undefined } {
+  const merged = [...videos, ...images].sort((a, b) => {
+    const t = b.createdAt.getTime() - a.createdAt.getTime();
+    return t !== 0 ? t : b.id.localeCompare(a.id);
+  });
+  const hasMore = merged.length > limit;
+  const page = merged.slice(0, limit);
+  const last = page[page.length - 1];
+  return {
+    items: page,
+    nextCursor: hasMore && last ? encodeMediaCursor(last) : undefined,
   };
 }
 
@@ -415,41 +560,314 @@ export const mediaRouter = router({
     }),
 
   // -------------------------------------------------------------------------
+  // Photo upload (single presigned PUT — photos are small, no multipart) +
+  // carousel building. Images are Instagram-only.
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start a photo upload. Records an Image row in UPLOADING state and returns a
+   * single presigned PUT URL; the client uploads the file directly, then calls
+   * `completeImageUpload`.
+   */
+  initImageUpload: protectedProcedure
+    .input(initImageUploadSchema)
+    .mutation(async ({ ctx, input }) => {
+      assertStorageConfigured();
+
+      if (input.uploadSessionId) {
+        const session = await ctx.prisma.uploadSession.findFirst({
+          where: { id: input.uploadSessionId, userId: ctx.userId },
+          select: { id: true },
+        });
+        if (!session) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload session not found.' });
+        }
+      }
+      if (input.folderId) {
+        const folder = await ctx.prisma.folder.findFirst({
+          where: { id: input.folderId, userId: ctx.userId },
+          select: { id: true },
+        });
+        if (!folder) throw new TRPCError({ code: 'NOT_FOUND', message: 'Folder not found.' });
+      }
+
+      const ext = extensionFor(input.filename) || extensionForMime(input.contentType) || '.jpg';
+
+      const image = await ctx.prisma.image.create({
+        data: {
+          userId: ctx.userId,
+          status: 'UPLOADING',
+          storageKey: '', // set below, once we know the id
+          originalFilename: input.filename,
+          mimeType: input.contentType,
+          fileSize: BigInt(input.fileSize),
+          width: input.width ?? null,
+          height: input.height ?? null,
+          hashtags: [],
+          uploadSessionId: input.uploadSessionId ?? null,
+          folderId: input.folderId ?? null,
+        },
+      });
+
+      const key = imageSourceKey(ctx.userId, image.id, ext);
+      try {
+        const { url } = await presignPut({ key, contentType: input.contentType });
+        await ctx.prisma.image.update({ where: { id: image.id }, data: { storageKey: key } });
+        return { imageId: image.id, key, url };
+      } catch (err) {
+        await ctx.prisma.image.delete({ where: { id: image.id } }).catch(() => {});
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Could not start the upload. Please try again.',
+          cause: err,
+        });
+      }
+    }),
+
+  /** Finalize a photo upload: mark READY and hand it to the AI pipeline. */
+  completeImageUpload: protectedProcedure
+    .input(completeImageUploadSchema)
+    .mutation(async ({ ctx, input }) => {
+      const image = await ownedImage(ctx.prisma, ctx.userId, input.imageId);
+
+      const updated = await ctx.prisma.image.update({
+        where: { id: image.id },
+        data: { status: 'READY', cdnUrl: publicUrlForKey(image.storageKey) },
+        include: IMAGE_INCLUDE,
+      });
+
+      if (image.uploadSessionId) {
+        await ctx.prisma.uploadSession
+          .update({
+            where: { id: image.uploadSessionId },
+            data: { videoCount: { increment: 1 } },
+          })
+          .catch(() => {});
+      }
+
+      await kickAiProcessing(ctx.userId);
+      return toImageDto(updated);
+    }),
+
+  /** Full detail for one image (Instagram-only, so no per-platform variants). */
+  getImage: protectedProcedure.input(imageIdSchema).query(async ({ ctx, input }) => {
+    const image = await ctx.prisma.image.findFirst({
+      where: { id: input.imageId, userId: ctx.userId },
+      include: IMAGE_INCLUDE,
+    });
+    if (!image) throw new TRPCError({ code: 'NOT_FOUND', message: 'Photo not found.' });
+    return toImageDto(image);
+  }),
+
+  /** Edit an image's base metadata. */
+  updateImageMetadata: protectedProcedure
+    .input(updateImageMetadataSchema)
+    .mutation(async ({ ctx, input }) => {
+      await ownedImage(ctx.prisma, ctx.userId, input.imageId);
+
+      if (input.categoryId) {
+        const category = await ctx.prisma.category.findFirst({
+          where: { id: input.categoryId, userId: ctx.userId },
+          select: { id: true },
+        });
+        if (!category) throw new TRPCError({ code: 'NOT_FOUND', message: 'Category not found.' });
+      }
+
+      const data: Prisma.ImageUpdateInput = {};
+      if (input.title !== undefined) data.title = input.title;
+      if (input.caption !== undefined) data.caption = input.caption;
+      if (input.hashtags !== undefined) data.hashtags = input.hashtags;
+      if (input.categoryId !== undefined) {
+        data.category = input.categoryId
+          ? { connect: { id: input.categoryId } }
+          : { disconnect: true };
+      }
+
+      const updated = await ctx.prisma.image.update({
+        where: { id: input.imageId },
+        data,
+        include: IMAGE_INCLUDE,
+      });
+      return toImageDto(updated);
+    }),
+
+  /** Permanently delete an image and its storage objects. */
+  removeImage: protectedProcedure.input(imageIdSchema).mutation(async ({ ctx, input }) => {
+    const image = await ownedImage(ctx.prisma, ctx.userId, input.imageId);
+    if (isStorageConfigured()) {
+      await deletePrefix(imagePrefix(ctx.userId, image.id)).catch(() => {});
+    }
+    if (image.uploadSessionId) {
+      await ctx.prisma.uploadSession
+        .update({
+          where: { id: image.uploadSessionId },
+          data: { videoCount: { decrement: 1 } },
+        })
+        .catch(() => {});
+    }
+    // CarouselItem rows referencing this image (as parent OR child) cascade away.
+    await ctx.prisma.image.delete({ where: { id: image.id } });
+    return { success: true as const };
+  }),
+
+  /** Move many images into a folder (null = the root). */
+  moveImagesMany: protectedProcedure.input(setFolderManySchema).mutation(async ({ ctx, input }) => {
+    if (input.folderId) {
+      const folder = await ctx.prisma.folder.findFirst({
+        where: { id: input.folderId, userId: ctx.userId },
+        select: { id: true },
+      });
+      if (!folder) throw new TRPCError({ code: 'NOT_FOUND', message: 'Folder not found.' });
+    }
+    const { count } = await ctx.prisma.image.updateMany({
+      where: { id: { in: input.videoIds }, userId: ctx.userId },
+      data: { folderId: input.folderId },
+    });
+    return { updated: count };
+  }),
+
+  /** List a folder's ready images — feeds the carousel builder's right panel. */
+  listImagesInFolder: protectedProcedure
+    .input(listImagesInFolderSchema)
+    .query(async ({ ctx, input }) => {
+      const where: Prisma.ImageWhereInput = {
+        userId: ctx.userId,
+        folderId: input.folderId ?? null,
+        status: 'READY',
+      };
+      if (input.search) {
+        const q = input.search;
+        where.OR = [
+          { title: { contains: q, mode: 'insensitive' } },
+          { originalFilename: { contains: q, mode: 'insensitive' } },
+        ];
+      }
+      const rows = await ctx.prisma.image.findMany({
+        where,
+        include: IMAGE_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 200,
+      });
+      return rows.map(toImageDto);
+    }),
+
+  /**
+   * Turn a photo into a carousel (or update / clear its slides). The parent is
+   * always slide 1; `childImageIds` are the ordered extra slides and must all be
+   * the caller's own images (and not the parent itself). An empty list turns a
+   * carousel back into a plain photo. Replaces the whole slide list atomically.
+   */
+  setCarouselItems: protectedProcedure
+    .input(setCarouselItemsSchema)
+    .mutation(async ({ ctx, input }) => {
+      await ownedImage(ctx.prisma, ctx.userId, input.imageId);
+
+      // De-dupe, drop the parent if it snuck into its own child list, preserve order.
+      const childIds = [...new Set(input.childImageIds)].filter((id) => id !== input.imageId);
+
+      if (childIds.length > 0) {
+        const owned = await ctx.prisma.image.findMany({
+          where: { id: { in: childIds }, userId: ctx.userId },
+          select: { id: true },
+        });
+        if (owned.length !== childIds.length) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'One or more selected photos could not be found.',
+          });
+        }
+      }
+
+      await ctx.prisma.$transaction([
+        ctx.prisma.carouselItem.deleteMany({ where: { parentImageId: input.imageId } }),
+        ...childIds.map((childImageId, i) =>
+          ctx.prisma.carouselItem.create({
+            data: { parentImageId: input.imageId, childImageId, position: i },
+          }),
+        ),
+      ]);
+
+      const updated = await ctx.prisma.image.findUniqueOrThrow({
+        where: { id: input.imageId },
+        include: IMAGE_INCLUDE,
+      });
+      return toImageDto(updated);
+    }),
+
+  // -------------------------------------------------------------------------
   // Browse / edit / delete
   // -------------------------------------------------------------------------
 
-  /** Search + filter the library with cursor pagination. */
+  /**
+   * Search + filter the library (videos AND images) with cursor pagination.
+   * Both tables are ordered by (createdAt desc, id desc) and merged into one
+   * page; the cursor is an opaque composite key (see encode/decodeMediaCursor).
+   */
   list: protectedProcedure.input(listVideosSchema).query(async ({ ctx, input }) => {
-    const where: Prisma.VideoWhereInput = { userId: ctx.userId };
-    if (input.status) where.status = input.status;
-    if (input.categoryId) where.categoryId = input.categoryId;
-    if (input.uploadSessionId) where.uploadSessionId = input.uploadSessionId;
-    if (input.search) {
-      const q = input.search;
-      where.OR = [
-        { title: { contains: q, mode: 'insensitive' } },
-        { caption: { contains: q, mode: 'insensitive' } },
-        { originalFilename: { contains: q, mode: 'insensitive' } },
-        { transcript: { contains: q, mode: 'insensitive' } },
-        { hashtags: { has: q } },
-      ];
-    }
+    const cursor = input.cursor ? decodeMediaCursor(input.cursor) : null;
+    // The cursor predicate and the search predicate both use OR, so combine them
+    // with AND rather than assigning `where.OR` twice (which would clobber one).
+    const older = olderThanCursor(cursor);
+    const q = input.search;
+    const videoSearch: Prisma.VideoWhereInput | null = q
+      ? {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { caption: { contains: q, mode: 'insensitive' } },
+            { originalFilename: { contains: q, mode: 'insensitive' } },
+            { transcript: { contains: q, mode: 'insensitive' } },
+            { hashtags: { has: q } },
+          ],
+        }
+      : null;
+    const imageSearch: Prisma.ImageWhereInput | null = q
+      ? {
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { caption: { contains: q, mode: 'insensitive' } },
+            { originalFilename: { contains: q, mode: 'insensitive' } },
+            { hashtags: { has: q } },
+          ],
+        }
+      : null;
 
-    const rows = await ctx.prisma.video.findMany({
-      where,
-      include: VIDEO_INCLUDE,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: input.limit + 1,
-      ...(input.cursor ? { cursor: { id: input.cursor }, skip: 1 } : {}),
-    });
+    const common = {
+      ...(input.status ? { status: input.status } : {}),
+      ...(input.categoryId ? { categoryId: input.categoryId } : {}),
+      ...(input.uploadSessionId ? { uploadSessionId: input.uploadSessionId } : {}),
+    };
+    const videoWhere: Prisma.VideoWhereInput = {
+      userId: ctx.userId,
+      ...common,
+      AND: [older, ...(videoSearch ? [videoSearch] : [])],
+    };
+    const imageWhere: Prisma.ImageWhereInput = {
+      userId: ctx.userId,
+      ...common,
+      AND: [older, ...(imageSearch ? [imageSearch] : [])],
+    };
 
-    let nextCursor: string | undefined;
-    if (rows.length > input.limit) {
-      nextCursor = rows.pop()!.id;
-    }
+    const [videoRows, imageRows, tiktokConnected] = await Promise.all([
+      ctx.prisma.video.findMany({
+        where: videoWhere,
+        include: VIDEO_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: input.limit + 1,
+      }),
+      ctx.prisma.image.findMany({
+        where: imageWhere,
+        include: IMAGE_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: input.limit + 1,
+      }),
+      hasActiveTikTok(ctx.prisma, ctx.userId),
+    ]);
 
-    const tiktokConnected = await hasActiveTikTok(ctx.prisma, ctx.userId);
-    return { items: rows.map((r) => toVideoDto(r, tiktokConnected)), nextCursor };
+    return mergeMediaPage(
+      videoRows.map((r) => ({ ...toVideoDto(r, tiktokConnected), createdAt: r.createdAt })),
+      imageRows.map((r) => ({ ...toImageDto(r), createdAt: r.createdAt })),
+      input.limit,
+    );
   }),
 
   /** Full detail for one video, including per-platform metadata + thumbnails. */

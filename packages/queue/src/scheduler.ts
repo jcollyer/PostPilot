@@ -1,6 +1,9 @@
-import { type PrismaClient, type Platform } from '@postpilot/db';
+import { type PrismaClient, Platform } from '@postpilot/db';
 
 import { generateSlots, type ScheduleRule, type Slot } from './slots';
+
+/** Images/carousels are Instagram-only, so they carry an explicit IG target. */
+const IMAGE_TARGET_PLATFORMS: Platform[] = [Platform.INSTAGRAM];
 
 /** Ensure the user has a Queue row (1:1) and return it. */
 export async function ensureQueue(prisma: PrismaClient, userId: string) {
@@ -105,8 +108,17 @@ export async function recomputeSchedule(
   const items = await prisma.queueItem.findMany({
     where: { queueId, status: 'PENDING' },
     orderBy: { position: 'asc' },
-    select: { id: true, video: { select: { targetPlatforms: true } } },
+    select: {
+      id: true,
+      imageId: true,
+      video: { select: { targetPlatforms: true } },
+    },
   });
+
+  // An image/carousel item targets Instagram only; a video uses its own
+  // targetPlatforms (empty = "all connected").
+  const targetsOf = (item: (typeof items)[number]): Platform[] =>
+    item.imageId ? IMAGE_TARGET_PLATFORMS : (item.video?.targetPlatforms ?? []);
 
   let scheduledItems = 0;
   let tasks = 0;
@@ -123,7 +135,7 @@ export async function recomputeSchedule(
     let chosen: { id: string; platforms: Platform[] } | null = null;
     for (const item of items) {
       if (used.has(item.id)) continue;
-      const platforms = platformsForItem(slot, connectedPlatforms, item.video.targetPlatforms);
+      const platforms = platformsForItem(slot, connectedPlatforms, targetsOf(item));
       if (platforms.length === 0) continue;
       chosen = { id: item.id, platforms };
       break;
@@ -178,7 +190,9 @@ export async function rescheduleAllActiveQueues(
 export interface UpcomingPost {
   taskId: string;
   queueItemId: string;
-  videoId: string;
+  /** The queued media id — a video id or an image/carousel id. */
+  mediaId: string;
+  mediaType: 'VIDEO' | 'IMAGE' | 'CAROUSEL';
   title: string | null;
   thumbnailUrl: string | null;
   platform: Platform;
@@ -211,6 +225,7 @@ export async function getUpcoming(
       queueItem: {
         select: {
           videoId: true,
+          imageId: true,
           video: {
             select: {
               title: true,
@@ -218,21 +233,38 @@ export async function getUpcoming(
               selectedThumbnail: { select: { url: true } },
             },
           },
+          image: {
+            select: {
+              title: true,
+              cdnUrl: true,
+              _count: { select: { carouselItems: true } },
+            },
+          },
         },
       },
     },
   });
 
-  return tasks.map((t) => ({
-    taskId: t.id,
-    queueItemId: t.queueItemId,
-    videoId: t.queueItem.videoId,
-    title: t.queueItem.video.title,
-    thumbnailUrl:
-      t.queueItem.video.coverImageUrl ?? t.queueItem.video.selectedThumbnail?.url ?? null,
-    platform: t.platform,
-    scheduledAt: t.scheduledAt,
-    status: t.status,
-    needsConnection: t.status === 'HELD' || !t.connectionId,
-  }));
+  return tasks.map((t) => {
+    const { video, image, videoId, imageId } = t.queueItem;
+    const isImage = Boolean(imageId);
+    return {
+      taskId: t.id,
+      queueItemId: t.queueItemId,
+      mediaId: (imageId ?? videoId)!,
+      mediaType: isImage
+        ? ((image && image._count.carouselItems > 0 ? 'CAROUSEL' : 'IMAGE') as
+            | 'CAROUSEL'
+            | 'IMAGE')
+        : ('VIDEO' as const),
+      title: isImage ? (image?.title ?? null) : (video?.title ?? null),
+      thumbnailUrl: isImage
+        ? (image?.cdnUrl ?? null)
+        : (video?.coverImageUrl ?? video?.selectedThumbnail?.url ?? null),
+      platform: t.platform,
+      scheduledAt: t.scheduledAt,
+      status: t.status,
+      needsConnection: t.status === 'HELD' || !t.connectionId,
+    };
+  });
 }

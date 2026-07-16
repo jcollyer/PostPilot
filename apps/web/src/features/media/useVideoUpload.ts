@@ -2,12 +2,6 @@
 
 import { useCallback, useState } from 'react';
 
-<<<<<<< Updated upstream
-import { ACCEPTED_VIDEO_MIME_TYPES, MAX_VIDEO_BYTES } from '@postpilot/types';
-
-import { trpc } from '@/lib/trpc/client';
-import { uploadParts } from './upload';
-=======
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
   ACCEPTED_VIDEO_MIME_TYPES,
@@ -18,7 +12,6 @@ import {
 
 import { trpc } from '@/lib/trpc/client';
 import { formatBytes, putObject, uploadParts } from './upload';
->>>>>>> Stashed changes
 
 export type ItemStatus = 'uploading' | 'done' | 'error' | 'canceled';
 
@@ -85,14 +78,35 @@ export function useVideoUpload({
   const initUpload = trpc.media.initUpload.useMutation();
   const completeUpload = trpc.media.completeUpload.useMutation();
   const abortUpload = trpc.media.abortUpload.useMutation();
+  const initImageUpload = trpc.media.initImageUpload.useMutation();
+  const completeImageUpload = trpc.media.completeImageUpload.useMutation();
 
   const patch = useCallback((id: string, next: Partial<UploadItem>) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...next } : it)));
   }, []);
 
+  const isImageFile = (file: File): boolean =>
+    (ACCEPTED_IMAGE_MIME_TYPES as readonly string[]).includes(file.type);
+
   const runUpload = useCallback(
     async (item: UploadItem) => {
       try {
+        // Photos take the single-PUT path (small files, no multipart); videos
+        // go through the multipart engine.
+        if (isImageFile(item.file)) {
+          const init = await initImageUpload.mutateAsync({
+            filename: item.file.name,
+            contentType: item.file.type as (typeof ACCEPTED_IMAGE_MIME_TYPES)[number],
+            fileSize: item.file.size,
+            folderId: item.folderId,
+          });
+          await putObject(init.url, item.file, item.controller.signal);
+          await completeImageUpload.mutateAsync({ imageId: init.imageId });
+          patch(item.id, { status: 'done', progress: 1 });
+          onUploaded();
+          return;
+        }
+
         const init = await initUpload.mutateAsync({
           filename: item.file.name,
           contentType: item.file.type as (typeof ACCEPTED_VIDEO_MIME_TYPES)[number],
@@ -132,18 +146,19 @@ export function useVideoUpload({
         }
       }
     },
-    [abortUpload, completeUpload, initUpload, onUploaded, patch],
+    [
+      abortUpload,
+      completeUpload,
+      initUpload,
+      completeImageUpload,
+      initImageUpload,
+      onUploaded,
+      patch,
+    ],
   );
 
   const addFiles = useCallback(
     (files: FileList | File[], targetFolderId: string | null = folderId) => {
-<<<<<<< Updated upstream
-      const valid = Array.from(files).filter(
-        (f) =>
-          (ACCEPTED_VIDEO_MIME_TYPES as readonly string[]).includes(f.type) &&
-          f.size <= MAX_VIDEO_BYTES,
-      );
-=======
       const valid: File[] = [];
       const rejected: UploadRejection[] = [];
       for (const f of Array.from(files)) {
@@ -163,7 +178,6 @@ export function useVideoUpload({
 
       if (rejected.length) setRejections((prev) => [...rejected, ...prev]);
 
->>>>>>> Stashed changes
       const newItems: UploadItem[] = valid.map((file) => ({
         id: `${file.name}-${file.size}-${crypto.randomUUID()}`,
         file,

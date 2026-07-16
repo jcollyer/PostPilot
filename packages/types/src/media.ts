@@ -21,6 +21,14 @@ export const ACCEPTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp
 export const MAX_VIDEO_BYTES = 10 * 1024 * 1024 * 1024;
 /** 15 MB cap for optional cover images. */
 export const MAX_COVER_BYTES = 15 * 1024 * 1024;
+/**
+ * 30 MB cap for uploaded photos. Generous for camera originals; note Instagram's
+ * publish API is stricter (~8 MB per image), so oversized photos may need
+ * downscaling before they publish — surfaced at publish time, not upload.
+ */
+export const MAX_IMAGE_BYTES = 30 * 1024 * 1024;
+/** Max slides in a single carousel (Instagram's own limit is 10). */
+export const MAX_CAROUSEL_ITEMS = 10;
 
 /**
  * Ceiling above which the AI metadata pipeline skips a video rather than risk
@@ -235,3 +243,79 @@ export const aiSummarySchema = z.object({
   uploadSessionId: z.string().min(1).optional(),
 });
 export type AiSummaryInput = z.infer<typeof aiSummarySchema>;
+
+// ---------------------------------------------------------------------------
+// Images & carousels (Instagram-only)
+// ---------------------------------------------------------------------------
+
+/**
+ * The kind of a media-library item as returned by `media.list`. Videos and
+ * images live in separate tables but share the grid; `mediaType` discriminates
+ * them client-side. A `CAROUSEL` is an image that owns ordered child slides.
+ */
+export const mediaTypeSchema = z.enum(['VIDEO', 'IMAGE', 'CAROUSEL']);
+export type MediaType = z.infer<typeof mediaTypeSchema>;
+
+/**
+ * Start a photo upload. Unlike videos (multipart), photos are small enough for
+ * a single presigned PUT — the server creates the Image row and returns one URL.
+ */
+export const initImageUploadSchema = z.object({
+  filename: z.string().trim().min(1).max(400),
+  contentType: imageMimeSchema,
+  fileSize: z
+    .number()
+    .int()
+    .positive()
+    .max(MAX_IMAGE_BYTES, 'That photo is larger than the 30 MB limit'),
+  uploadSessionId: z.string().min(1).optional(),
+  folderId: z.string().min(1).nullish(),
+  width: z.number().int().positive().optional(),
+  height: z.number().int().positive().optional(),
+});
+export type InitImageUploadInput = z.infer<typeof initImageUploadSchema>;
+
+/** Record that a photo finished uploading (single-PUT, so no parts/etags). */
+export const completeImageUploadSchema = z.object({
+  imageId: z.string().min(1),
+});
+export type CompleteImageUploadInput = z.infer<typeof completeImageUploadSchema>;
+
+/** Edit base metadata on a photo (Instagram-only, so no per-platform variants). */
+export const updateImageMetadataSchema = z.object({
+  imageId: z.string().min(1),
+  title: z.string().trim().max(150).nullish(),
+  caption: z.string().trim().max(2200).nullish(),
+  hashtags: z.array(z.string().trim().min(1).max(100)).max(60).optional(),
+  categoryId: z.string().min(1).nullish(),
+});
+export type UpdateImageMetadataInput = z.infer<typeof updateImageMetadataSchema>;
+
+export const imageIdSchema = z.object({ imageId: z.string().min(1) });
+export type ImageIdInput = z.infer<typeof imageIdSchema>;
+
+/** Bulk operations over a set of images (delete, recategorize, etc.). */
+export const imageIdsSchema = z.object({
+  imageIds: z.array(z.string().min(1)).min(1).max(1000),
+});
+export type ImageIdsInput = z.infer<typeof imageIdsSchema>;
+
+/**
+ * Turn a photo into a carousel (or replace its slide list). The parent image is
+ * always slide 1; `childImageIds` are the additional slides, in order, and must
+ * all be the caller's own images. An empty list turns a carousel back into a
+ * single photo. The parent may not appear in its own child list.
+ */
+export const setCarouselItemsSchema = z.object({
+  imageId: z.string().min(1),
+  // Up to MAX_CAROUSEL_ITEMS - 1 extra slides (slide 1 is the parent's own file).
+  childImageIds: z.array(z.string().min(1)).max(MAX_CAROUSEL_ITEMS - 1),
+});
+export type SetCarouselItemsInput = z.infer<typeof setCarouselItemsSchema>;
+
+/** List a folder's images for the carousel builder's picker (no cursor needed). */
+export const listImagesInFolderSchema = z.object({
+  folderId: z.string().min(1).nullish(),
+  search: z.string().trim().max(200).optional(),
+});
+export type ListImagesInFolderInput = z.infer<typeof listImagesInFolderSchema>;

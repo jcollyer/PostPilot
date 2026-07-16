@@ -26,6 +26,16 @@ export async function writeEmbedding(
   await prisma.$executeRaw`UPDATE "Video" SET "embedding" = ${literal}::vector WHERE "id" = ${videoId}`;
 }
 
+/** Persist an embedding for an image (same pgvector constraint as videos). */
+export async function writeImageEmbedding(
+  prisma: PrismaClient,
+  imageId: string,
+  embedding: number[],
+): Promise<void> {
+  const literal = toVectorLiteral(embedding);
+  await prisma.$executeRaw`UPDATE "Image" SET "embedding" = ${literal}::vector WHERE "id" = ${imageId}`;
+}
+
 export interface SimilarVideo {
   id: string;
   similarity: number;

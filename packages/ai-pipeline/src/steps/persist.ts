@@ -22,7 +22,7 @@ function colorFor(slug: string): string {
 }
 
 /** Upsert the category and return its id (or null when the model gave none). */
-async function ensureCategory(
+export async function ensureCategory(
   prisma: PrismaClient,
   userId: string,
   name: string,

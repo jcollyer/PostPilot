@@ -1,6 +1,7 @@
 import { prisma } from '@postpilot/db';
 
 import { processVideo, type ProcessResult } from './pipeline';
+import { processImage } from './pipeline-image';
 
 /**
  * How long a video may sit in RUNNING before we treat it as orphaned by a
@@ -68,21 +69,6 @@ export async function processPending(params?: {
     data: { aiStatus: 'FAILED' },
   });
 
-<<<<<<< Updated upstream
-  const pending = await prisma.video.findMany({
-    where: {
-      status: { in: ['READY', 'PROCESSING'] },
-      ...(params?.userId ? { userId: params.userId } : {}),
-      OR: [
-        { aiStatus: 'PENDING' },
-        // Reclaim rows orphaned in RUNNING by a killed run. processVideo will
-        // re-stamp aiStartedAt, so a still-live run is never double-claimed.
-        { aiStatus: 'RUNNING', aiStartedAt: { lt: staleBefore } },
-        // Legacy rows stuck RUNNING from before aiStartedAt existed (null) —
-        // they predate this deploy, so they're safe to reclaim outright.
-        { aiStatus: 'RUNNING', aiStartedAt: null },
-      ],
-=======
   // Same claim predicate for videos and images: still PENDING, or stranded in
   // RUNNING past the stale window — but only while under the attempt cap, so a
   // repeatedly-crashing item drops out instead of looping.
@@ -98,7 +84,6 @@ export async function processPending(params?: {
       status: { in: ['READY', 'PROCESSING'] },
       ...scope,
       ...aiClaim,
->>>>>>> Stashed changes
     },
     orderBy: { createdAt: 'asc' },
     take: limit,
@@ -109,8 +94,6 @@ export async function processPending(params?: {
   for (const { id } of pending) {
     results.push(await processVideo(id));
   }
-<<<<<<< Updated upstream
-=======
 
   // Drain images with the remaining budget so photos get metadata too.
   const remaining = limit - results.length;
@@ -129,11 +112,10 @@ export async function processPending(params?: {
       results.push(await processImage(id));
     }
   }
->>>>>>> Stashed changes
   return results;
 }
 
-/** Process every still-PENDING video in a specific upload session. */
+/** Process every still-PENDING video and image in a specific upload session. */
 export async function processUploadSession(uploadSessionId: string): Promise<ProcessResult[]> {
   const pending = await prisma.video.findMany({
     where: { uploadSessionId, aiStatus: 'PENDING' },
@@ -144,6 +126,15 @@ export async function processUploadSession(uploadSessionId: string): Promise<Pro
   const results: ProcessResult[] = [];
   for (const { id } of pending) {
     results.push(await processVideo(id));
+  }
+
+  const pendingImages = await prisma.image.findMany({
+    where: { uploadSessionId, aiStatus: 'PENDING' },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  for (const { id } of pendingImages) {
+    results.push(await processImage(id));
   }
   return results;
 }

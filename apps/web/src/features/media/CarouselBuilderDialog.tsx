@@ -50,8 +50,8 @@ export function CarouselBuilderDialog({
 
   // Initialize the working list once detail arrives (children only — slide 1 is
   // the parent's own file, rendered separately and never in this array). Memoized
-  // so it's a stable reference (it feeds the excludeIds useMemo below).
-  const current: Slide[] = useMemo(
+  // so downstream memos (excludeIds) don't see a new array every render.
+  const current = useMemo<Slide[]>(
     () =>
       slides ??
       (detail.data?.carouselChildren.map((c) => ({ id: c.id, cdnUrl: c.cdnUrl })) ?? []),

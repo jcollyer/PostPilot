@@ -38,7 +38,7 @@ export interface ProcessResult {
  * (folderId === null). Walks up parentId with a small depth cap so a corrupt
  * self-referential cycle can never loop forever.
  */
-async function resolveFolderPath(folderId: string | null): Promise<string[]> {
+export async function resolveFolderPath(folderId: string | null): Promise<string[]> {
   const names: string[] = [];
   let currentId = folderId;
   const MAX_DEPTH = 20;
