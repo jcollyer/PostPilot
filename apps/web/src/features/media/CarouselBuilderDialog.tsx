@@ -49,10 +49,14 @@ export function CarouselBuilderDialog({
   const [pickerOpen, setPickerOpen] = useState(false);
 
   // Initialize the working list once detail arrives (children only — slide 1 is
-  // the parent's own file, rendered separately and never in this array).
-  const current: Slide[] =
-    slides ??
-    (detail.data?.carouselChildren.map((c) => ({ id: c.id, cdnUrl: c.cdnUrl })) ?? []);
+  // the parent's own file, rendered separately and never in this array). Memoized
+  // so downstream memos (excludeIds) don't see a new array every render.
+  const current = useMemo<Slide[]>(
+    () =>
+      slides ??
+      (detail.data?.carouselChildren.map((c) => ({ id: c.id, cdnUrl: c.cdnUrl })) ?? []),
+    [slides, detail.data],
+  );
 
   const setItems = trpc.media.setCarouselItems.useMutation({
     onSuccess: () => {
