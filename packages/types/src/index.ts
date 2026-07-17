@@ -4,3 +4,4 @@ export * from './media';
 export * from './folder';
 export * from './queue';
 export * from './tiktok';
+export * from './youtube';

@@ -156,8 +156,12 @@ function buildInput(task: TaskWithRelations, accessToken: string): PublishInput 
             brandedContent: meta.tiktokBrandedContent,
           }
         : null,
-    // YouTube "Made for Kids" self-declaration from the video's YouTube tab.
+    // YouTube options from the video's YouTube tab.
     madeForKids: task.platform === Platform.YOUTUBE ? (meta?.youtubeMadeForKids ?? false) : false,
+    categoryId: task.platform === Platform.YOUTUBE ? (meta?.youtubeCategoryId ?? '22') : undefined,
+    containsSyntheticMedia:
+      task.platform === Platform.YOUTUBE ? (meta?.youtubeContainsSyntheticMedia ?? false) : false,
+    license: task.platform === Platform.YOUTUBE ? (meta?.youtubeLicense ?? 'youtube') : undefined,
   };
 }
 

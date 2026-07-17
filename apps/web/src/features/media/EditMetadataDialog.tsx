@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
-import { Check, ImagePlus, Info, Loader2, Sparkles, TriangleAlert, UserRound, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  ImagePlus,
+  Info,
+  Loader2,
+  Sparkles,
+  TriangleAlert,
+  UserRound,
+  X,
+} from 'lucide-react';
 
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
@@ -14,9 +24,16 @@ import {
   TIKTOK_PRIVACY_LEVELS,
   tiktokConsentSegments,
   tiktokContentLabel,
+  YOUTUBE_CATEGORIES,
+  YOUTUBE_LICENSES,
+  YOUTUBE_LICENSE_LABELS,
+  DEFAULT_YOUTUBE_CATEGORY_ID,
+  DEFAULT_YOUTUBE_LICENSE,
   type Platform,
   type TikTokPostOptions,
   type TikTokPrivacyLevel,
+  type YouTubeCategoryId,
+  type YouTubeLicense,
 } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
@@ -39,10 +56,12 @@ import {
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc/client';
 import {
+  PLATFORM_ORDER,
   PlatformChips,
   selectedFromTargets,
   targetsFromSelected,
   useConnectedPlatforms,
+  usePlatformAccountLabels,
   usePlatformAvatarUrls,
   useTikTokAccount,
 } from './PlatformTargets';
@@ -65,14 +84,15 @@ export function EditMetadataDialog({
   const [title, setTitle] = useState(video.title ?? '');
   const [caption, setCaption] = useState(video.caption ?? '');
   const [hashtags, setHashtags] = useState<string[]>(video.hashtags ?? []);
-  const [categoryId, setCategoryId] = useState(video.categoryId ?? '');
   const [coverUrl, setCoverUrl] = useState(video.coverImageUrl ?? null);
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState<string | null>(null);
+  const [fallbackOpen, setFallbackOpen] = useState(false);
 
   const { connected } = useConnectedPlatforms();
   const { avatarUrl: tiktokAvatarUrl } = useTikTokAccount();
   const avatarUrls = usePlatformAvatarUrls();
+  const accountLabels = usePlatformAccountLabels();
   const [targetSel, setTargetSel] = useState(() => selectedFromTargets(video.targetPlatforms));
   const setTargetPlatforms = trpc.media.setTargetPlatforms.useMutation({ onSuccess: onSaved });
   const onToggleTargets = (next: Set<Platform>) => {
@@ -80,7 +100,6 @@ export function EditMetadataDialog({
     setTargetPlatforms.mutate({ videoId: video.id, platforms: targetsFromSelected(next) });
   };
 
-  const categories = trpc.media.listCategories.useQuery();
   const detail = trpc.media.get.useQuery({ videoId: video.id }, { enabled: open });
   const updateMetadata = trpc.media.updateMetadata.useMutation();
   const initCoverUpload = trpc.media.initCoverUpload.useMutation();
@@ -98,7 +117,6 @@ export function EditMetadataDialog({
       title: title.trim() || null,
       caption: caption.trim() || null,
       hashtags,
-      categoryId: categoryId || null,
     });
     onSaved();
     onOpenChange(false);
@@ -141,68 +159,12 @@ export function EditMetadataDialog({
         <SheetHeader className="border-b p-6 pr-12">
           <SheetTitle>Edit details</SheetTitle>
           <SheetDescription>
-            Base title, caption, and hashtags. Per-platform variants come from the AI pipeline and
-            can be tuned per platform later.
+            What actually publishes is the per-platform data below. Fallback details are used only
+            when a platform has no variant of its own.
           </SheetDescription>
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-6">
-          <div className="space-y-1.5">
-            <Label htmlFor="video-title">Title</Label>
-            <Input
-              id="video-title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Give this video a title"
-              maxLength={150}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="video-caption">Caption</Label>
-            <textarea
-              id="video-caption"
-              value={caption}
-              onChange={(e) => setCaption(e.target.value)}
-              placeholder="Write a caption…"
-              rows={4}
-              className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="video-hashtags">Hashtags</Label>
-            <HashtagInput
-              id="video-hashtags"
-              value={hashtags}
-              onChange={setHashtags}
-              placeholder="travel drone sunset"
-            />
-            <p className="text-muted-foreground text-xs">
-              Press Enter or comma to turn text into a tag.
-            </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="video-category">Category</Label>
-            <Select
-              value={categoryId || 'none'}
-              onValueChange={(v) => setCategoryId(v === 'none' ? '' : v)}
-            >
-              <SelectTrigger id="video-category">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No category</SelectItem>
-                {categories.data?.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-1.5">
             <Label>Post to</Label>
             <PlatformChips
@@ -216,6 +178,12 @@ export function EditMetadataDialog({
               Choose which platforms this video publishes to. Unconnected platforms are marked —
               they’ll post once connected.
             </p>
+            <TargetAccountList
+              selected={targetSel}
+              connected={connected}
+              avatarUrls={avatarUrls}
+              accountLabels={accountLabels}
+            />
           </div>
 
           <div className="space-y-1.5">
@@ -329,6 +297,70 @@ export function EditMetadataDialog({
               ) : null}
             </div>
           ) : null}
+
+          {/* Fallback details — the base title/caption/hashtags. These publish
+            only when a platform has no variant of its own, so they're collapsed
+            by default to keep the focus on the per-platform data above. */}
+          <div className="rounded-md border">
+            <button
+              type="button"
+              onClick={() => setFallbackOpen((v) => !v)}
+              aria-expanded={fallbackOpen}
+              className="hover:bg-accent/50 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left"
+            >
+              <span>
+                <span className="text-sm font-medium">Fallback details</span>
+                <span className="text-muted-foreground block text-xs">
+                  Used only when a platform has no variant of its own.
+                </span>
+              </span>
+              <ChevronDown
+                className={`text-muted-foreground h-4 w-4 shrink-0 transition-transform ${
+                  fallbackOpen ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
+
+            {fallbackOpen ? (
+              <div className="space-y-4 border-t p-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="video-title">Title</Label>
+                  <Input
+                    id="video-title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Give this video a title"
+                    maxLength={150}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="video-caption">Caption</Label>
+                  <textarea
+                    id="video-caption"
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    placeholder="Write a caption…"
+                    rows={4}
+                    className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="video-hashtags">Hashtags</Label>
+                  <HashtagInput
+                    id="video-hashtags"
+                    value={hashtags}
+                    onChange={setHashtags}
+                    placeholder="travel drone sunset"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Press Enter or comma to turn text into a tag.
+                  </p>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
         <SheetFooter className="border-t p-6">
@@ -356,8 +388,11 @@ interface PlatformMetaRow {
   hashtags: string[];
   aiGenerated: boolean;
   edited: boolean;
-  /** YouTube-only COPPA "Made for Kids" flag; false for other platforms. */
+  /** YouTube-only fields; defaults apply for other platforms. */
   madeForKids: boolean;
+  categoryId: string;
+  containsSyntheticMedia: boolean;
+  license: string;
 }
 
 function PlatformMetaEditor({
@@ -395,6 +430,9 @@ function PlatformMetaEditor({
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState<string[]>([]);
   const [madeForKids, setMadeForKids] = useState(false);
+  const [categoryId, setCategoryId] = useState<YouTubeCategoryId>(DEFAULT_YOUTUBE_CATEGORY_ID);
+  const [containsSyntheticMedia, setContainsSyntheticMedia] = useState(false);
+  const [license, setLicense] = useState<YouTubeLicense>(DEFAULT_YOUTUBE_LICENSE);
 
   // Reload the fields whenever the selected platform (or its data) changes.
   useEffect(() => {
@@ -402,10 +440,23 @@ function PlatformMetaEditor({
     setCaption(current?.caption ?? '');
     setHashtags(current?.hashtags ?? []);
     setMadeForKids(current?.madeForKids ?? false);
-  }, [platform, current?.title, current?.caption, current?.hashtags, current?.madeForKids]);
+    setCategoryId((current?.categoryId as YouTubeCategoryId) ?? DEFAULT_YOUTUBE_CATEGORY_ID);
+    setContainsSyntheticMedia(current?.containsSyntheticMedia ?? false);
+    setLicense((current?.license as YouTubeLicense) ?? DEFAULT_YOUTUBE_LICENSE);
+  }, [
+    platform,
+    current?.title,
+    current?.caption,
+    current?.hashtags,
+    current?.madeForKids,
+    current?.categoryId,
+    current?.containsSyntheticMedia,
+    current?.license,
+  ]);
 
   const setPlatformMeta = trpc.media.setPlatformMeta.useMutation({ onSuccess: onSaved });
 
+  const isYouTube = platform === 'YOUTUBE';
   const save = () =>
     setPlatformMeta.mutate({
       videoId,
@@ -413,8 +464,11 @@ function PlatformMetaEditor({
       title: title.trim() || null,
       caption: caption.trim() || null,
       hashtags,
-      // Only the YouTube tab carries the COPPA "Made for Kids" flag.
-      madeForKids: platform === 'YOUTUBE' ? madeForKids : undefined,
+      // Only the YouTube tab carries these YouTube-specific fields.
+      madeForKids: isYouTube ? madeForKids : undefined,
+      categoryId: isYouTube ? categoryId : undefined,
+      containsSyntheticMedia: isYouTube ? containsSyntheticMedia : undefined,
+      license: isYouTube ? license : undefined,
     });
 
   return (
@@ -462,14 +516,56 @@ function PlatformMetaEditor({
         onChange={setHashtags}
         placeholder="Add hashtags — Enter or comma to add"
       />
-      {platform === 'YOUTUBE' ? (
-        <div className="border-t pt-2">
+      {isYouTube ? (
+        <div className="space-y-3 border-t pt-3">
+          <div className="space-y-1">
+            <Label className="text-xs">YouTube category</Label>
+            <Select
+              value={categoryId}
+              onValueChange={(v) => setCategoryId(v as YouTubeCategoryId)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {YOUTUBE_CATEGORIES.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <CheckRow
             label="Made for Kids"
             description="Turn on if this video is directed to children. This sets the video's audience on YouTube as required by COPPA. Leave off if it isn't made for kids."
             checked={madeForKids}
             onChange={setMadeForKids}
           />
+
+          <CheckRow
+            label="Altered or synthetic content"
+            description="Turn on if this video contains realistic altered or AI-generated content that could be mistaken for real. YouTube shows a disclosure when required."
+            checked={containsSyntheticMedia}
+            onChange={setContainsSyntheticMedia}
+          />
+
+          <div className="space-y-1">
+            <Label className="text-xs">License</Label>
+            <Select value={license} onValueChange={(v) => setLicense(v as YouTubeLicense)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {YOUTUBE_LICENSES.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {YOUTUBE_LICENSE_LABELS[l]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       ) : null}
       <div className="flex justify-end">
@@ -583,6 +679,69 @@ export function HashtagInput({
         placeholder={value.length === 0 ? placeholder : ''}
         className="placeholder:text-muted-foreground min-w-[6rem] flex-1 bg-transparent outline-none"
       />
+    </div>
+  );
+}
+
+/**
+ * Under the "Post to" chips: for each platform this video actually targets and
+ * that's connected, show the account's circle avatar + @username so the user can
+ * confirm which account each post lands on.
+ */
+function TargetAccountList({
+  selected,
+  connected,
+  avatarUrls,
+  accountLabels,
+}: {
+  selected: Set<Platform>;
+  connected: Set<Platform>;
+  avatarUrls: Record<Platform, string | null>;
+  accountLabels: Record<Platform, string | null>;
+}) {
+  const rows = PLATFORM_ORDER.filter((p) => selected.has(p) && connected.has(p));
+  if (rows.length === 0) return null;
+  return (
+    <div className="space-y-1.5 pt-1">
+      {rows.map((p) => {
+        const username = accountLabels[p];
+        return (
+          <div key={p} className="flex items-center gap-2">
+            <AccountAvatar url={avatarUrls[p]} name={username ?? PLATFORM_LABELS[p]} />
+            <span className="text-sm font-medium">{PLATFORM_LABELS[p]}</span>
+            {username ? (
+              <span className="text-muted-foreground truncate text-xs">
+                {username.startsWith('@') ? username : `@${username}`}
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Small circle avatar with a letter-tile fallback. */
+function AccountAvatar({ url, name }: { url: string | null; name: string }) {
+  const [broken, setBroken] = useState(false);
+  if (url && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        aria-hidden="true"
+        onError={() => setBroken(true)}
+        className="h-6 w-6 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div
+      aria-hidden="true"
+      className="bg-muted text-muted-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold uppercase"
+    >
+      {name.charAt(0)}
     </div>
   );
 }

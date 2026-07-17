@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { mediaStatusSchema, platformSchema } from './domain';
+import { YOUTUBE_CATEGORY_IDS, YOUTUBE_LICENSES } from './youtube';
 
 /**
  * Shared validation for the Media Library. The web/mobile clients and the API
@@ -235,9 +236,12 @@ export const setPlatformMetaSchema = z.object({
   title: z.string().trim().max(150).nullish(),
   caption: z.string().trim().max(5000).nullish(),
   hashtags: z.array(z.string().trim().min(1).max(100)).max(60).optional(),
-  // YouTube-only: COPPA "Made for Kids" self-declaration. Ignored for other
-  // platforms. Omitted (undefined) means "leave unchanged".
-  madeForKids: z.boolean().optional(),
+  // YouTube-only options. Ignored for other platforms; each is omitted
+  // (undefined) to mean "leave unchanged".
+  madeForKids: z.boolean().optional(), // COPPA self-declaration
+  categoryId: z.enum(YOUTUBE_CATEGORY_IDS).optional(), // snippet.categoryId
+  containsSyntheticMedia: z.boolean().optional(), // altered/AI content disclosure
+  license: z.enum(YOUTUBE_LICENSES).optional(), // youtube | creativeCommon
 });
 export type SetPlatformMetaInput = z.infer<typeof setPlatformMetaSchema>;
 

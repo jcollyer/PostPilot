@@ -35,6 +35,12 @@ export interface PublishInput {
    * to false when unset.
    */
   madeForKids?: boolean;
+  /** YouTube-only: snippet.categoryId. Defaults to "22" when unset. */
+  categoryId?: string;
+  /** YouTube-only: status.containsSyntheticMedia (altered/AI disclosure). */
+  containsSyntheticMedia?: boolean;
+  /** YouTube-only: status.license ("youtube" | "creativeCommon"). */
+  license?: string;
 }
 
 /** TikTok Direct Post options resolved from the video's TikTok platform-meta row. */
