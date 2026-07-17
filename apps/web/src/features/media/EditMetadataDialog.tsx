@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type KeyboardEvent,
+} from 'react';
 import {
   Check,
   ChevronDown,
@@ -102,6 +111,9 @@ export function EditMetadataDialog({
 
   const detail = trpc.media.get.useQuery({ videoId: video.id }, { enabled: open });
   const updateMetadata = trpc.media.updateMetadata.useMutation();
+  // Lets the footer "Save" also persist unsaved edits in the active per-platform
+  // tab, so per-platform captions aren't silently dropped on save.
+  const platformMetaRef = useRef<PlatformMetaEditorHandle>(null);
   const initCoverUpload = trpc.media.initCoverUpload.useMutation();
   const confirmCoverUpload = trpc.media.confirmCoverUpload.useMutation();
   const selectThumbnail = trpc.media.selectThumbnail.useMutation({
@@ -112,6 +124,10 @@ export function EditMetadataDialog({
   });
 
   const save = async () => {
+    // Persist any unsaved edits in the active per-platform tab first, then the
+    // fallback title/caption/hashtags. Without this, per-platform edits made
+    // before hitting "Save" would be lost.
+    await platformMetaRef.current?.flush();
     await updateMetadata.mutateAsync({
       videoId: video.id,
       title: title.trim() || null,
@@ -171,8 +187,9 @@ export function EditMetadataDialog({
               selected={targetSel}
               connected={connected}
               onChange={onToggleTargets}
-              tiktokAvatarUrl={tiktokAvatarUrl}
+              tiktokAvatarUrl={tiktokAvatarUrl ?? avatarUrls.TIKTOK}
               instagramAvatarUrl={avatarUrls.INSTAGRAM}
+              youtubeAvatarUrl={avatarUrls.YOUTUBE}
             />
             <p className="text-muted-foreground text-xs">
               Choose which platforms this video publishes to. Unconnected platforms are marked —
@@ -269,6 +286,7 @@ export function EditMetadataDialog({
                   re-generate.
                 </p>
                 <PlatformMetaEditor
+                  ref={platformMetaRef}
                   videoId={video.id}
                   meta={detail.data.platformMeta}
                   selected={targetSel}
@@ -395,19 +413,21 @@ interface PlatformMetaRow {
   license: string;
 }
 
-function PlatformMetaEditor({
-  videoId,
-  meta,
-  selected,
-  connected,
-  onSaved,
-}: {
-  videoId: string;
-  meta: PlatformMetaRow[];
-  selected: Set<Platform>;
-  connected: Set<Platform>;
-  onSaved: () => void;
-}) {
+interface PlatformMetaEditorHandle {
+  /** Persist the active tab's edits if they differ from what's saved. */
+  flush: () => Promise<void>;
+}
+
+const PlatformMetaEditor = forwardRef<
+  PlatformMetaEditorHandle,
+  {
+    videoId: string;
+    meta: PlatformMetaRow[];
+    selected: Set<Platform>;
+    connected: Set<Platform>;
+    onSaved: () => void;
+  }
+>(function PlatformMetaEditor({ videoId, meta, selected, connected, onSaved }, ref) {
   // Only platforms this video posts to have an editable tab; default to the
   // first platform that's both selected and connected (falling back to the
   // first selected platform).
@@ -457,8 +477,24 @@ function PlatformMetaEditor({
   const setPlatformMeta = trpc.media.setPlatformMeta.useMutation({ onSuccess: onSaved });
 
   const isYouTube = platform === 'YOUTUBE';
-  const save = () =>
-    setPlatformMeta.mutate({
+
+  // Whether the active tab's fields differ from what's saved for it. Used so the
+  // footer "Save" only writes (and marks the row edited) when something changed.
+  const hashtagsChanged =
+    hashtags.length !== (current?.hashtags?.length ?? 0) ||
+    hashtags.some((h, i) => h !== current?.hashtags?.[i]);
+  const dirty =
+    (title.trim() || '') !== (current?.title ?? '') ||
+    (caption.trim() || '') !== (current?.caption ?? '') ||
+    hashtagsChanged ||
+    (isYouTube &&
+      (madeForKids !== (current?.madeForKids ?? false) ||
+        categoryId !== ((current?.categoryId as YouTubeCategoryId) ?? DEFAULT_YOUTUBE_CATEGORY_ID) ||
+        containsSyntheticMedia !== (current?.containsSyntheticMedia ?? false) ||
+        license !== ((current?.license as YouTubeLicense) ?? DEFAULT_YOUTUBE_LICENSE)));
+
+  const saveAsync = () =>
+    setPlatformMeta.mutateAsync({
       videoId,
       platform,
       title: title.trim() || null,
@@ -470,6 +506,17 @@ function PlatformMetaEditor({
       containsSyntheticMedia: isYouTube ? containsSyntheticMedia : undefined,
       license: isYouTube ? license : undefined,
     });
+  const save = () => {
+    void saveAsync();
+  };
+
+  // Exposed to the parent so the footer "Save" flushes unsaved edits in the
+  // active tab. No-op when nothing changed, so untouched tabs aren't marked edited.
+  useImperativeHandle(ref, () => ({
+    flush: async () => {
+      if (dirty) await saveAsync();
+    },
+  }));
 
   return (
     <div className="space-y-2 rounded-md border p-3">
@@ -576,7 +623,7 @@ function PlatformMetaEditor({
       </div>
     </div>
   );
-}
+});
 
 /**
  * Tag-style hashtag editor. Text types normally; pressing Enter or typing a
@@ -818,11 +865,23 @@ function TikTokRequirementsEditor({
   const creatorInfo = trpc.connections.tiktokCreatorInfo.useQuery(undefined, {
     enabled: connected,
   });
+  // Persistent account identity from the stored connection. Unlike the live
+  // creator_info call above, this survives when TikTok's API is unavailable, so
+  // the username/avatar still render instead of the generic fallback.
+  const connectionsOverview = trpc.connections.overview.useQuery(undefined, {
+    enabled: connected,
+  });
+  const tiktokConnection =
+    connectionsOverview.data?.find(
+      (e) => e.platform === 'TIKTOK' && e.connection?.status === 'ACTIVE',
+    )?.connection ?? null;
+
   const ci = creatorInfo.data;
   const live = ci?.available ? ci.info : null;
-  const creatorNickname = live?.creatorNickname ?? null;
-  const creatorUsername = live?.creatorUsername ?? null;
-  const creatorAvatarUrl = live?.creatorAvatarUrl ?? null;
+  // Prefer live values, fall back to the stored connection identity.
+  const creatorNickname = live?.creatorNickname ?? tiktokConnection?.displayName ?? null;
+  const creatorUsername = live?.creatorUsername ?? tiktokConnection?.username ?? null;
+  const creatorAvatarUrl = live?.creatorAvatarUrl ?? tiktokConnection?.avatarUrl ?? null;
 
   const knownLevels = TIKTOK_PRIVACY_LEVELS as readonly string[];
   const liveOptions = (live?.privacyLevelOptions ?? []).filter((o) =>
@@ -905,14 +964,14 @@ function TikTokRequirementsEditor({
             <p className="text-muted-foreground text-[11px] uppercase tracking-wide">
               Posting to TikTok as
             </p>
-            {creatorNickname ? (
+            {creatorNickname || creatorUsername ? (
               <p className="truncate text-sm font-semibold leading-tight">
-                {creatorNickname}
-                {creatorUsername ? (
+                {creatorNickname ?? `@${creatorUsername}`}
+                {creatorNickname && creatorUsername ? (
                   <span className="text-muted-foreground ml-1 font-normal">@{creatorUsername}</span>
                 ) : null}
               </p>
-            ) : creatorInfo.isLoading ? (
+            ) : creatorInfo.isLoading || connectionsOverview.isLoading ? (
               <p className="text-muted-foreground flex items-center gap-1.5 text-sm leading-tight">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading account…
               </p>

@@ -1652,8 +1652,8 @@ function PreviewDialog({
   return (
     <Dialog open={Boolean(video)} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="truncate">
+        <DialogHeader className="min-w-0">
+          <DialogTitle className="truncate pr-8">
             {video?.title ?? video?.originalFilename ?? 'Preview'}
           </DialogTitle>
         </DialogHeader>
