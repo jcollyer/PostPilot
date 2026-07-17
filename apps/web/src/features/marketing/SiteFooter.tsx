@@ -21,6 +21,22 @@ export function SiteFooter() {
           <Link href="/data-deletion" className="hover:text-foreground">
             Data deletion
           </Link>
+          <a
+            href="https://www.youtube.com/t/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground"
+          >
+            YouTube Terms
+          </a>
+          <a
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-foreground"
+          >
+            Google Privacy
+          </a>
           <Link href="/signin" className="hover:text-foreground">
             Sign in
           </Link>

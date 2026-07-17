@@ -235,6 +235,9 @@ export const setPlatformMetaSchema = z.object({
   title: z.string().trim().max(150).nullish(),
   caption: z.string().trim().max(5000).nullish(),
   hashtags: z.array(z.string().trim().min(1).max(100)).max(60).optional(),
+  // YouTube-only: COPPA "Made for Kids" self-declaration. Ignored for other
+  // platforms. Omitted (undefined) means "leave unchanged".
+  madeForKids: z.boolean().optional(),
 });
 export type SetPlatformMetaInput = z.infer<typeof setPlatformMetaSchema>;
 
