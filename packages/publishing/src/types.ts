@@ -29,6 +29,12 @@ export interface PublishInput {
   hashtags: string[];
   /** TikTok-only posting options the creator set in the editor (null elsewhere). */
   tiktok?: TikTokPublishOptions | null;
+  /**
+   * YouTube-only: COPPA "Made for Kids" self-declaration set on the video's
+   * YouTube tab. Maps to videos.insert status.selfDeclaredMadeForKids. Defaults
+   * to false when unset.
+   */
+  madeForKids?: boolean;
 }
 
 /** TikTok Direct Post options resolved from the video's TikTok platform-meta row. */

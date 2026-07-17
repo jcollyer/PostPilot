@@ -100,6 +100,37 @@ export function ConnectionsView({ connected, error }: ConnectionsViewProps) {
           )}
         </CardContent>
       </Card>
+
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        By connecting an account, you agree to that platform&apos;s terms. PostPilot uses YouTube API
+        Services; by connecting YouTube you agree to the{' '}
+        <a
+          href="https://www.youtube.com/t/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-foreground underline"
+        >
+          YouTube Terms of Service
+        </a>
+        , and Google&apos;s handling of your data is described in the{' '}
+        <a
+          href="https://policies.google.com/privacy"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-foreground underline"
+        >
+          Google Privacy Policy
+        </a>
+        . See also our{' '}
+        <Link href="/privacy" className="hover:text-foreground underline">
+          Privacy Policy
+        </Link>{' '}
+        and{' '}
+        <Link href="/terms" className="hover:text-foreground underline">
+          Terms
+        </Link>
+        .
+      </p>
     </div>
   );
 }

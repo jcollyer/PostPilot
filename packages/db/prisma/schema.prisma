@@ -529,6 +529,12 @@ model VideoPlatformMeta {
   tiktokBrandOrganic   Boolean @default(false) // "Your brand" → Brand Organic
   tiktokBrandedContent Boolean @default(false) // "Branded content" → Paid partnership
 
+  // ---- YouTube options (YouTube platform rows only) ----
+  // COPPA "Made for Kids" self-declaration. Off by default; the user opts in per
+  // video on the YouTube tab. Threaded to videos.insert's
+  // status.selfDeclaredMadeForKids at publish time.
+  youtubeMadeForKids Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

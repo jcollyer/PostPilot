@@ -41,7 +41,11 @@ export const youtubePublishAdapter: PublishAdapter = {
       .slice(0, 5000);
     const metadata = {
       snippet: { title, description, tags: input.hashtags.slice(0, 30), categoryId: '22' },
-      status: { privacyStatus: YOUTUBE_DEFAULT_PRIVACY, selfDeclaredMadeForKids: false },
+      status: {
+        privacyStatus: YOUTUBE_DEFAULT_PRIVACY,
+        // COPPA self-declaration set by the creator on the YouTube tab.
+        selfDeclaredMadeForKids: input.madeForKids ?? false,
+      },
     };
 
     // 1. Initiate the resumable session; the upload URL comes back in Location.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Layers, Loader2 } from 'lucide-react';
+import { Instagram, Layers, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,6 +23,11 @@ import {
 } from '@/components/ui/select';
 import { trpc } from '@/lib/trpc/client';
 import { HashtagInput } from './EditMetadataDialog';
+import {
+  useConnectedPlatforms,
+  usePlatformAccountLabels,
+  usePlatformAvatarUrls,
+} from './PlatformTargets';
 import type { ImageDto } from './types';
 
 /**
@@ -50,6 +55,14 @@ export function ImageEditDialog({
   const [categoryId, setCategoryId] = useState(image.categoryId ?? '');
 
   const isCarousel = image.mediaType === 'CAROUSEL';
+
+  // Images are Instagram-only, so surface which IG account this will post to.
+  const { connected } = useConnectedPlatforms();
+  const igConnected = connected.has('INSTAGRAM');
+  const igLabel = usePlatformAccountLabels().INSTAGRAM;
+  const igAvatar = usePlatformAvatarUrls().INSTAGRAM;
+  const igHandle = igLabel ? (igLabel.startsWith('@') ? igLabel : `@${igLabel}`) : null;
+
   const categories = trpc.media.listCategories.useQuery();
   const detail = trpc.media.getImage.useQuery({ imageId: image.id }, { enabled: open });
   const updateMetadata = trpc.media.updateImageMetadata.useMutation();
@@ -78,9 +91,31 @@ export function ImageEditDialog({
         <SheetHeader className="border-b p-6 pr-12">
           <SheetTitle>Edit details</SheetTitle>
           <SheetDescription>
-            Title, caption, and hashtags for this {isCarousel ? 'carousel' : 'photo'}. Photos post
-            to Instagram.
+            Title, caption, and hashtags for this {isCarousel ? 'carousel' : 'photo'}.
           </SheetDescription>
+          <div className="flex items-center gap-2 pt-1">
+            <span className="text-muted-foreground text-xs">Posting to</span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 py-0.5 pl-0.5 pr-2 text-xs font-medium">
+              {igConnected && igAvatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={igAvatar}
+                  alt=""
+                  className="h-5 w-5 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 via-red-500 to-amber-400 text-white">
+                  <Instagram className="h-3 w-3" />
+                </span>
+              )}
+              <span>Instagram</span>
+              {igConnected && igHandle ? (
+                <span className="text-muted-foreground font-normal">· {igHandle}</span>
+              ) : !igConnected ? (
+                <span className="text-muted-foreground font-normal">· not connected yet</span>
+              ) : null}
+            </span>
+          </div>
         </SheetHeader>
 
         <div className="flex-1 space-y-4 overflow-y-auto p-6">
@@ -102,22 +137,31 @@ export function ImageEditDialog({
               ) : null}
             </div>
             {isCarousel && slides.length > 1 ? (
-              <div className="flex gap-1.5 overflow-x-auto pb-1">
-                {slides.map((url, i) => (
+              <div className="grid grid-cols-4 gap-1.5">
+                {slides.slice(1).map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={`${url}-${i}`}
                     src={url}
-                    alt={`Slide ${i + 1}`}
-                    className="h-14 w-14 shrink-0 rounded border object-cover"
+                    alt={`Slide ${i + 2}`}
+                    className="aspect-square w-full rounded border object-cover"
                   />
                 ))}
+                <button
+                  type="button"
+                  onClick={onMakeCarousel}
+                  className="text-muted-foreground hover:border-foreground/30 hover:bg-muted hover:text-foreground flex aspect-square w-full flex-col items-center justify-center gap-1 rounded border border-dashed text-xs font-medium transition"
+                >
+                  <Layers className="h-4 w-4" />
+                  Edit
+                </button>
               </div>
-            ) : null}
-            <Button variant="outline" className="w-full" onClick={onMakeCarousel}>
-              <Layers className="mr-2 h-4 w-4" />
-              {isCarousel ? 'Edit carousel' : 'Make carousel'}
-            </Button>
+            ) : (
+              <Button variant="outline" className="w-full" onClick={onMakeCarousel}>
+                <Layers className="mr-2 h-4 w-4" />
+                {isCarousel ? 'Edit carousel' : 'Make carousel'}
+              </Button>
+            )}
           </div>
 
           <div className="space-y-1.5">

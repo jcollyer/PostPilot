@@ -356,6 +356,8 @@ interface PlatformMetaRow {
   hashtags: string[];
   aiGenerated: boolean;
   edited: boolean;
+  /** YouTube-only COPPA "Made for Kids" flag; false for other platforms. */
+  madeForKids: boolean;
 }
 
 function PlatformMetaEditor({
@@ -392,13 +394,15 @@ function PlatformMetaEditor({
   const [title, setTitle] = useState('');
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState<string[]>([]);
+  const [madeForKids, setMadeForKids] = useState(false);
 
   // Reload the fields whenever the selected platform (or its data) changes.
   useEffect(() => {
     setTitle(current?.title ?? '');
     setCaption(current?.caption ?? '');
     setHashtags(current?.hashtags ?? []);
-  }, [platform, current?.title, current?.caption, current?.hashtags]);
+    setMadeForKids(current?.madeForKids ?? false);
+  }, [platform, current?.title, current?.caption, current?.hashtags, current?.madeForKids]);
 
   const setPlatformMeta = trpc.media.setPlatformMeta.useMutation({ onSuccess: onSaved });
 
@@ -409,6 +413,8 @@ function PlatformMetaEditor({
       title: title.trim() || null,
       caption: caption.trim() || null,
       hashtags,
+      // Only the YouTube tab carries the COPPA "Made for Kids" flag.
+      madeForKids: platform === 'YOUTUBE' ? madeForKids : undefined,
     });
 
   return (
@@ -456,6 +462,16 @@ function PlatformMetaEditor({
         onChange={setHashtags}
         placeholder="Add hashtags — Enter or comma to add"
       />
+      {platform === 'YOUTUBE' ? (
+        <div className="border-t pt-2">
+          <CheckRow
+            label="Made for Kids"
+            description="Turn on if this video is directed to children. This sets the video's audience on YouTube as required by COPPA. Leave off if it isn't made for kids."
+            checked={madeForKids}
+            onChange={setMadeForKids}
+          />
+        </div>
+      ) : null}
       <div className="flex justify-end">
         <Button size="sm" variant="outline" onClick={save} disabled={setPlatformMeta.isPending}>
           {setPlatformMeta.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
