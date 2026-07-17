@@ -40,11 +40,19 @@ export const youtubePublishAdapter: PublishAdapter = {
       .join('\n\n')
       .slice(0, 5000);
     const metadata = {
-      snippet: { title, description, tags: input.hashtags.slice(0, 30), categoryId: '22' },
+      snippet: {
+        title,
+        description,
+        tags: input.hashtags.slice(0, 30),
+        categoryId: input.categoryId ?? '22',
+      },
       status: {
         privacyStatus: YOUTUBE_DEFAULT_PRIVACY,
         // COPPA self-declaration set by the creator on the YouTube tab.
         selfDeclaredMadeForKids: input.madeForKids ?? false,
+        // Altered/AI content disclosure and license, also from the YouTube tab.
+        containsSyntheticMedia: input.containsSyntheticMedia ?? false,
+        license: input.license ?? 'youtube',
       },
     };
 

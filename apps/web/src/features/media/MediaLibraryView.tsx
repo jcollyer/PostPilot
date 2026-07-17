@@ -21,7 +21,6 @@ import {
   Share2,
   Sparkles,
   Square,
-  Tag,
   Trash2,
   TriangleAlert,
   Upload,
@@ -103,7 +102,6 @@ export function MediaLibraryView() {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<MediaStatus | ''>('');
-  const [categoryId, setCategoryId] = useState('');
 
   // Folder navigation. null = the library root. While a search/filter is active
   // we show flat results across the whole library instead of a single folder.
@@ -122,7 +120,6 @@ export function MediaLibraryView() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  const categories = trpc.media.listCategories.useQuery();
   const { connected } = useConnectedPlatforms();
   const tiktokAccount = useTikTokAccount();
   const accountLabels = usePlatformAccountLabels();
@@ -198,7 +195,7 @@ export function MediaLibraryView() {
   });
 
   // Any active search/filter switches the view to flat, library-wide results.
-  const isSearching = search.length > 0 || Boolean(status) || Boolean(categoryId);
+  const isSearching = search.length > 0 || Boolean(status);
 
   // Browse mode — the current folder's direct contents (folders + its media).
   const browseQuery = trpc.folder.list.useInfiniteQuery(
@@ -212,7 +209,6 @@ export function MediaLibraryView() {
       limit: 24,
       search: search || undefined,
       status: status || undefined,
-      categoryId: categoryId || undefined,
     },
     { getNextPageParam: (last) => last.nextCursor, enabled: isSearching },
   );
@@ -389,7 +385,6 @@ export function MediaLibraryView() {
         limit: 24,
         search: search || undefined,
         status: status || undefined,
-        categoryId: categoryId || undefined,
       },
       (data) =>
         data
@@ -477,12 +472,6 @@ export function MediaLibraryView() {
       aiSummary.refetch();
     },
   });
-  const setCategoryMany = trpc.media.setCategoryMany.useMutation({
-    onSuccess: () => {
-      clearSelection();
-      refresh();
-    },
-  });
   // Bulk-set the TikTok audience ("who can view") for the selection. Keeps the
   // selection so the user can immediately queue the now-unblocked videos; the
   // refresh re-evaluates the "needs TikTok details" gate.
@@ -517,7 +506,6 @@ export function MediaLibraryView() {
 
   const bulkBusy =
     removeMany.isPending ||
-    setCategoryMany.isPending ||
     setTargetsMany.isPending ||
     setTiktokPrivacyMany.isPending ||
     addToQueue.isPending ||
@@ -540,7 +528,7 @@ export function MediaLibraryView() {
     );
   };
 
-  const hasFilters = Boolean(search || status || categoryId);
+  const hasFilters = Boolean(search || status);
 
   return (
     <div className="mx-auto flex max-w-screen-2xl gap-6">
@@ -711,22 +699,6 @@ export function MediaLibraryView() {
               ))}
             </SelectContent>
           </Select>
-          <Select
-            value={categoryId || 'all'}
-            onValueChange={(v) => setCategoryId(v === 'all' ? '' : v)}
-          >
-            <SelectTrigger className="w-auto min-w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              {categories.data?.map((c) => (
-                <SelectItem key={c.id} value={c.id}>
-                  {c.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           {videos.length > 0 && !selectionActive ? (
             <Button variant="outline" onClick={toggleSelectAll}>
               <ListChecks className="mr-2 h-4 w-4" />
@@ -790,43 +762,6 @@ export function MediaLibraryView() {
                   Stop generating metadata
                 </Button>
               ) : null}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="sm" variant="outline" disabled={bulkBusy}>
-                    <Tag className="mr-2 h-4 w-4" />
-                    Set category
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="max-h-72 overflow-y-auto">
-                  {categories.data?.length ? (
-                    categories.data.map((c) => (
-                      <DropdownMenuItem
-                        key={c.id}
-                        className="cursor-pointer"
-                        onClick={() =>
-                          setCategoryMany.mutate({ videoIds: [...selectedIds], categoryId: c.id })
-                        }
-                      >
-                        <span
-                          className="mr-2 h-3 w-3 rounded-full"
-                          style={{ backgroundColor: c.color ?? 'rgb(148 163 184)' }}
-                        />
-                        {c.name}
-                      </DropdownMenuItem>
-                    ))
-                  ) : (
-                    <DropdownMenuItem disabled>No categories yet</DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem
-                    className="text-muted-foreground cursor-pointer"
-                    onClick={() =>
-                      setCategoryMany.mutate({ videoIds: [...selectedIds], categoryId: null })
-                    }
-                  >
-                    <X className="mr-2 h-4 w-4" /> Remove category
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
               <Button size="sm" variant="outline" onClick={openPlatformsDialog} disabled={bulkBusy}>
                 <Share2 className="mr-2 h-4 w-4" />
                 Set platforms
@@ -1663,19 +1598,6 @@ function VideoCard({
           </span>
           <span className="text-muted-foreground text-[11px]">{formatBytes(video.fileSize)}</span>
         </div>
-
-        {video.category ? (
-          <span
-            className="inline-block max-w-full truncate rounded px-1.5 py-0.5 text-[10px] font-medium"
-            style={
-              video.category.color
-                ? { backgroundColor: `${video.category.color}20`, color: video.category.color }
-                : { backgroundColor: 'rgb(241 245 249)', color: 'rgb(51 65 85)' }
-            }
-          >
-            {video.category.name}
-          </span>
-        ) : null}
 
         <div className="space-y-1 border-t pt-2">
           <p className="text-muted-foreground text-[10px] font-medium uppercase tracking-wide">

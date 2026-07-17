@@ -534,6 +534,12 @@ model VideoPlatformMeta {
   // video on the YouTube tab. Threaded to videos.insert's
   // status.selfDeclaredMadeForKids at publish time.
   youtubeMadeForKids Boolean @default(false)
+  // snippet.categoryId — defaults to "22" (People & Blogs).
+  youtubeCategoryId String @default("22")
+  // status.containsSyntheticMedia — altered/AI content disclosure. Off by default.
+  youtubeContainsSyntheticMedia Boolean @default(false)
+  // status.license — "youtube" (Standard) or "creativeCommon".
+  youtubeLicense String @default("youtube")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

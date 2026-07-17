@@ -901,6 +901,9 @@ export const mediaRouter = router({
         aiGenerated: m.aiGenerated,
         edited: m.edited,
         madeForKids: m.youtubeMadeForKids,
+        categoryId: m.youtubeCategoryId,
+        containsSyntheticMedia: m.youtubeContainsSyntheticMedia,
+        license: m.youtubeLicense,
       })),
       thumbnails: video.thumbnailCandidates.map((t) => ({
         id: t.id,
@@ -1176,9 +1179,14 @@ export const mediaRouter = router({
         caption: input.caption ?? null,
         hashtags: input.hashtags ?? [],
         edited: true,
-        // YouTube-only "Made for Kids" flag; only written when the client sends
-        // it (i.e. from the YouTube tab). Omitted → column left unchanged.
+        // YouTube-only fields; each is only written when the client sends it
+        // (i.e. from the YouTube tab). Omitted → column left unchanged.
         ...(input.madeForKids !== undefined ? { youtubeMadeForKids: input.madeForKids } : {}),
+        ...(input.categoryId !== undefined ? { youtubeCategoryId: input.categoryId } : {}),
+        ...(input.containsSyntheticMedia !== undefined
+          ? { youtubeContainsSyntheticMedia: input.containsSyntheticMedia }
+          : {}),
+        ...(input.license !== undefined ? { youtubeLicense: input.license } : {}),
       };
       await ctx.prisma.videoPlatformMeta.upsert({
         where: { videoId_platform: { videoId: input.videoId, platform: input.platform } },

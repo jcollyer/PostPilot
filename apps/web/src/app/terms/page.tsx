@@ -180,9 +180,9 @@ export default function TermsPage() {
             <div className="space-y-3">
               <h2 className="text-xl font-semibold tracking-tight">Governing law</h2>
               <p>
-                These Terms are governed by the laws of the State of [STATE], without regard to its
+                These Terms are governed by the laws of the State of California, without regard to its
                 conflict-of-laws rules. Any dispute will be resolved in the state or federal courts
-                located in [COUNTY/STATE], and you consent to their jurisdiction.
+                located in Sacramento/California, and you consent to their jurisdiction.
               </p>
             </div>
 
