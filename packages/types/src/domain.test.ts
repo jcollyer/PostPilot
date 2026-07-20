@@ -5,6 +5,7 @@ import {
   timeOfDaySchema,
   scheduleRuleSchema,
   PLATFORM_LABELS,
+  parsePostedPosts,
 } from './domain';
 
 describe('platformSchema', () => {
@@ -57,5 +58,27 @@ describe('scheduleRuleSchema', () => {
 
   it('rejects weekday numbers outside 0..6', () => {
     expect(scheduleRuleSchema.safeParse({ daysOfWeek: [7], times: ['09:00'] }).success).toBe(false);
+  });
+});
+
+describe('parsePostedPosts', () => {
+  it('returns [] for non-array / nullish input', () => {
+    expect(parsePostedPosts(null)).toEqual([]);
+    expect(parsePostedPosts(undefined)).toEqual([]);
+    expect(parsePostedPosts({})).toEqual([]);
+    expect(parsePostedPosts('nope')).toEqual([]);
+  });
+
+  it('keeps valid entries and drops malformed ones', () => {
+    const parsed = parsePostedPosts([
+      { platform: 'INSTAGRAM', postedAt: '2026-07-20T10:00:00.000Z', postUrl: 'https://ig/p/1' },
+      { platform: 'TIKTOK', postedAt: '2026-07-21T10:00:00.000Z', postUrl: null },
+      { platform: 'NOT_A_PLATFORM', postedAt: 'x', postUrl: null }, // dropped: bad platform
+      { platform: 'YOUTUBE' }, // dropped: missing fields
+    ]);
+    expect(parsed).toEqual([
+      { platform: 'INSTAGRAM', postedAt: '2026-07-20T10:00:00.000Z', postUrl: 'https://ig/p/1' },
+      { platform: 'TIKTOK', postedAt: '2026-07-21T10:00:00.000Z', postUrl: null },
+    ]);
   });
 });

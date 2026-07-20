@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   Check,
+  CheckCircle2,
+  ExternalLink,
   Film,
   FolderInput,
   FolderPlus,
@@ -32,11 +34,13 @@ import {
   ACCEPTED_VIDEO_MIME_TYPES,
   DEFAULT_TIKTOK_OPTIONS,
   mediaStatusSchema,
+  PLATFORM_LABELS,
   TIKTOK_PRIVACY_LABELS,
   TIKTOK_PRIVACY_LEVELS,
   tiktokConsentSegments,
   type MediaStatus,
   type Platform,
+  type PostedPost,
   type TikTokPrivacyLevel,
 } from '@postpilot/types';
 
@@ -1335,6 +1339,76 @@ const STATUS_BADGE: Record<MediaStatus, { label: string; className: string }> = 
   FAILED: { label: 'Failed', className: 'bg-red-100 text-red-800' },
 };
 
+/** Short, human date for a posted timestamp, e.g. "Jul 20, 2026". */
+function formatPostedDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ''
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/** Hover text summarizing where + when a media item was posted. */
+function postedSummary(posts: PostedPost[]): string {
+  if (posts.length === 0) return 'Posted';
+  return `Posted to ${posts
+    .map((p) => {
+      const when = formatPostedDate(p.postedAt);
+      return when ? `${PLATFORM_LABELS[p.platform]} · ${when}` : PLATFORM_LABELS[p.platform];
+    })
+    .join('; ')}`;
+}
+
+/**
+ * At-a-glance "Posted" badge for the media grid overlay. Renders nothing until
+ * the item has been published at least once (`postedAt` set). The tooltip lists
+ * every platform + date; live post links live in the card's actions menu.
+ */
+function PostedBadge({
+  postedAt,
+  postedPosts,
+}: {
+  postedAt: Date | string | null;
+  postedPosts: PostedPost[];
+}) {
+  if (!postedAt) return null;
+  return (
+    <span
+      title={postedSummary(postedPosts)}
+      className="flex items-center gap-0.5 rounded bg-sky-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+    >
+      <CheckCircle2 className="h-3 w-3" /> Posted
+    </span>
+  );
+}
+
+/**
+ * Dropdown-menu entries linking out to each platform's live post. Only the
+ * platforms that returned a URL get a link; the rest are shown as a disabled,
+ * date-labeled row so "where + when" is still visible.
+ */
+function PostedLinksMenuItems({ postedPosts }: { postedPosts: PostedPost[] }) {
+  if (postedPosts.length === 0) return null;
+  return (
+    <>
+      {postedPosts.map((p) => {
+        const when = formatPostedDate(p.postedAt);
+        const label = `${PLATFORM_LABELS[p.platform]}${when ? ` · ${when}` : ''}`;
+        return p.postUrl ? (
+          <DropdownMenuItem key={p.platform} asChild className="cursor-pointer">
+            <a href={p.postUrl} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4 shrink-0" /> View on {label}
+            </a>
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem key={p.platform} disabled className="opacity-70">
+            <CheckCircle2 className="mr-2 h-4 w-4 shrink-0 text-sky-600" /> Posted to {label}
+          </DropdownMenuItem>
+        );
+      })}
+    </>
+  );
+}
+
 function VideoCard({
   video,
   selected,
@@ -1452,6 +1526,7 @@ function VideoCard({
               <ListChecks className="h-3 w-3" /> Queued
             </span>
           ) : null}
+          <PostedBadge postedAt={video.postedAt} postedPosts={video.postedPosts} />
           {needsTiktokInput ? (
             <span
               title="Needs TikTok details before queueing"
@@ -1581,6 +1656,7 @@ function VideoCard({
                   <Play className="mr-2 h-4 w-4" /> Preview
                 </DropdownMenuItem>
               ) : null}
+              <PostedLinksMenuItems postedPosts={video.postedPosts} />
               <DropdownMenuItem
                 onClick={onDelete}
                 disabled={deleting}
@@ -1760,6 +1836,7 @@ function ImageCard({
                 <ListChecks className="h-3 w-3" /> Queued
               </span>
             ) : null}
+            <PostedBadge postedAt={image.postedAt} postedPosts={image.postedPosts} />
             {aiBusy ? (
               <span
                 title="AI is processing this photo"
@@ -1845,6 +1922,7 @@ function ImageCard({
                   <ImageIcon className="mr-2 h-4 w-4" /> View
                 </DropdownMenuItem>
               ) : null}
+              <PostedLinksMenuItems postedPosts={image.postedPosts} />
               <DropdownMenuItem
                 onClick={onDelete}
                 disabled={deleting}
