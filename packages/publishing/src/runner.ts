@@ -1,4 +1,4 @@
-import { Platform, prisma, type PrismaClient } from '@postpilot/db';
+import { Platform, Prisma, prisma, type PrismaClient } from '@postpilot/db';
 import { getFreshAccessToken, markNeedsReconnect } from '@postpilot/connectors';
 import { getObjectBuffer } from '@postpilot/storage';
 
@@ -87,6 +87,10 @@ export async function processTask(taskId: string): Promise<PublishRunResult> {
     result = await handleError(task, err);
   }
   await rollupItemStatus(task.queueItemId);
+  // On a successful publish, record it on the underlying media so the Media
+  // Library can show a "Posted" badge + per-platform post links. Done here so it
+  // covers both the scheduled path (publishDueTasks) and "Publish now".
+  if (result.outcome === 'published') await syncMediaPosted(task.queueItemId);
   return result;
 }
 
@@ -358,5 +362,98 @@ async function rollupItemStatus(queueItemId: string): Promise<void> {
   const next = allTerminal ? 'COMPLETED' : anyActive ? 'PUBLISHING' : item.status;
   if (next !== item.status) {
     await prisma.queueItem.update({ where: { id: queueItemId }, data: { status: next } });
+  }
+}
+
+/** One platform's recorded publish, as stored in Video/Image.postedPosts (JSON). */
+type PostedPost = { platform: Platform; postedAt: string; postUrl: string | null };
+
+/** Read the media's existing postedPosts JSON into a clean, typed array. */
+function readPostedPosts(value: unknown): PostedPost[] {
+  if (!Array.isArray(value)) return [];
+  const out: PostedPost[] = [];
+  for (const entry of value) {
+    if (
+      entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { platform?: unknown }).platform === 'string' &&
+      typeof (entry as { postedAt?: unknown }).postedAt === 'string'
+    ) {
+      const e = entry as { platform: Platform; postedAt: string; postUrl?: unknown };
+      out.push({ platform: e.platform, postedAt: e.postedAt, postUrl: typeof e.postUrl === 'string' ? e.postUrl : null });
+    }
+  }
+  return out;
+}
+
+/**
+ * Denormalize an item's successful publishes onto its underlying Video/Image so
+ * the Media Library can badge it "Posted" and link out to each live post without
+ * joining through the queue.
+ *
+ * Merges by platform (the latest successful post wins) into the media's existing
+ * `postedPosts`, so history survives even after the queue item is removed and the
+ * media is later re-queued and posted again. `postedAt` is the first-ever post
+ * time and is only set once.
+ */
+async function syncMediaPosted(queueItemId: string): Promise<void> {
+  const item = await prisma.queueItem.findUnique({
+    where: { id: queueItemId },
+    select: {
+      videoId: true,
+      imageId: true,
+      publishTasks: {
+        where: { status: 'PUBLISHED' },
+        select: { platform: true, publishedAt: true, platformPostUrl: true },
+      },
+    },
+  });
+  if (!item) return;
+
+  const published = item.publishTasks.filter(
+    (t): t is typeof t & { publishedAt: Date } => t.publishedAt != null,
+  );
+  if (published.length === 0) return;
+
+  const mediaId = item.videoId ?? item.imageId;
+  if (!mediaId) return;
+  const isVideo = Boolean(item.videoId);
+
+  const existing = isVideo
+    ? await prisma.video.findUnique({
+        where: { id: mediaId },
+        select: { postedAt: true, postedPosts: true },
+      })
+    : await prisma.image.findUnique({
+        where: { id: mediaId },
+        select: { postedAt: true, postedPosts: true },
+      });
+  if (!existing) return;
+
+  // Merge: start from the stored history, overwrite each platform with its
+  // latest successful post.
+  const byPlatform = new Map<Platform, PostedPost>();
+  for (const p of readPostedPosts(existing.postedPosts)) byPlatform.set(p.platform, p);
+  for (const t of published) {
+    byPlatform.set(t.platform, {
+      platform: t.platform,
+      postedAt: t.publishedAt.toISOString(),
+      postUrl: t.platformPostUrl ?? null,
+    });
+  }
+  const merged = [...byPlatform.values()];
+
+  // First-ever post time: keep what's there, else the earliest of this batch.
+  const earliestThisBatch = published.reduce<Date>(
+    (min, t) => (t.publishedAt < min ? t.publishedAt : min),
+    published[0]!.publishedAt,
+  );
+  const postedAt = existing.postedAt ?? earliestThisBatch;
+
+  const data = { postedAt, postedPosts: merged as unknown as Prisma.InputJsonValue };
+  if (isVideo) {
+    await prisma.video.update({ where: { id: mediaId }, data });
+  } else {
+    await prisma.image.update({ where: { id: mediaId }, data });
   }
 }

@@ -17,6 +17,7 @@ import {
   initUploadSchema,
   listImagesInFolderSchema,
   listVideosSchema,
+  parsePostedPosts,
   regenerateMetadataSchema,
   selectThumbnailSchema,
   setCarouselItemsSchema,
@@ -207,6 +208,10 @@ export function toVideoDto(v: VideoRecord, tiktokConnected = false) {
     folderId: v.folderId,
     uploadSessionId: v.uploadSessionId,
     isDuplicate: v.isDuplicate,
+    // First time this video was successfully published anywhere (null = never
+    // posted) + the latest post per platform, for the "Posted" badge and links.
+    postedAt: v.postedAt,
+    postedPosts: parsePostedPosts(v.postedPosts),
     // True when this video already has a slot in the user's queue.
     inQueue: v._count.queueItems > 0,
     // True when the user must supply TikTok details before this can be queued
@@ -293,6 +298,9 @@ export function toImageDto(img: ImageRecord) {
     folderId: img.folderId,
     uploadSessionId: img.uploadSessionId,
     isDuplicate: img.isDuplicate,
+    // Publish history — same shape as videos (see toVideoDto).
+    postedAt: img.postedAt,
+    postedPosts: parsePostedPosts(img.postedPosts),
     inQueue: img._count.queueItems > 0,
     // Carousel shape: total slide count (1 for a plain photo) + the child file
     // urls, in order, for the stacked-preview visual and the builder.

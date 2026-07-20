@@ -468,6 +468,17 @@ model Video {
   isDuplicate Boolean                      @default(false)
   duplicateOfId String?
 
+  // Publish history (denormalized). `postedAt` is the first time this video was
+  // successfully published to any platform (null = never posted); it drives the
+  // "Posted" badge in the Media Library. `postedPosts` is a per-platform record
+  // of the latest successful post — an array of { platform, postedAt, postUrl }
+  // (see PostedPost in @postpilot/types). These are written by the publishing
+  // runner on every PUBLISHED task (scheduled or "Publish now") and persist even
+  // if the queue item is later removed, so the history isn't lost when a posted
+  // video is re-queued.
+  postedAt    DateTime?
+  postedPosts Json?
+
   uploadSessionId String?
 
   createdAt DateTime @default(now())
@@ -612,6 +623,12 @@ model Image {
   embedding     Unsupported("vector(1536)")?
   isDuplicate   Boolean                      @default(false)
   duplicateOfId String?
+
+  // Publish history (denormalized) — same shape and semantics as Video's
+  // postedAt/postedPosts. Written by the publishing runner on each PUBLISHED
+  // task; powers the "Posted" badge and per-platform post links on /media.
+  postedAt    DateTime?
+  postedPosts Json?
 
   uploadSessionId String?
 

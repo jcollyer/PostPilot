@@ -22,6 +22,32 @@ export const PLATFORM_LABELS: Record<Platform, string> = {
   YOUTUBE: 'YouTube Shorts',
 };
 
+/**
+ * One platform's most-recent successful publish of a media item, denormalized
+ * onto the Video/Image row (see `postedPosts` in schema.prisma). Powers the
+ * "Posted" badge and per-platform post links in the Media Library without having
+ * to join back through the queue. `postedAt` is an ISO timestamp string (the DTO
+ * layer serializes the DateTime); `postUrl` is the live post link when the
+ * platform returned one, else null.
+ */
+export const postedPostSchema = z.object({
+  platform: platformSchema,
+  postedAt: z.string(),
+  postUrl: z.string().nullable(),
+});
+export type PostedPost = z.infer<typeof postedPostSchema>;
+
+/** Parse an unknown (JSON) value into a clean PostedPost[] — drops bad entries. */
+export function parsePostedPosts(value: unknown): PostedPost[] {
+  if (!Array.isArray(value)) return [];
+  const out: PostedPost[] = [];
+  for (const entry of value) {
+    const parsed = postedPostSchema.safeParse(entry);
+    if (parsed.success) out.push(parsed.data);
+  }
+  return out;
+}
+
 export const connectionStatusSchema = z.enum([
   'ACTIVE',
   'NEEDS_RECONNECT',
