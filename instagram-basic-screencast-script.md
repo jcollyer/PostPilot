@@ -1,73 +1,67 @@
-# Screencast script — `instagram_business_basic`
+# Screencast script (v2) — `instagram_business_basic`
 
-Goal (Meta's two requirements):
-1. Show how an Instagram professional account connects to the app.
-2. Show the connected account's profile info (username, profile pic, or other) from the previous step.
+## Why v1 was rejected
 
-Target length: **60–90 seconds.** One continuous take, no cuts. English UI. Add the on-screen captions listed below (Meta reviewers rely on them).
+Meta: "the submitted screencast fails to demonstrate the end-to-end experience." In practice this means the **Meta login flow and the permission-granting (Instagram consent) screen were not clearly shown**, and there were **no captions** explaining the UI. v2 fixes all three:
+1. Show the complete login flow (start logged OUT).
+2. Show the user granting the permission on **Instagram's consent screen** (start with Instagram DISCONNECTED).
+3. Overlay an English caption at every step.
 
----
+## Recording settings
 
-## Pre-flight checklist (before you hit record)
+- Record the **production** site, English UI, 1080p, large cursor, **no audio**.
+- Add the **on-screen captions** below in your editor (iMovie, CapCut, ScreenPal, etc.). Captions are required — the reviewer specifically cited their absence.
+- One continuous take, ~60–90 seconds.
 
-- [ ] Recording the **production** site (not localhost/ngrok) — the URL bar must show your real domain.
-- [ ] Signed in to PostPilot as your **reviewer test account**.
-- [ ] The Instagram **professional** test account (@thedronalist) is logged out of / ready to authorize, with a profile picture set.
-- [ ] Instagram is currently **disconnected** in PostPilot, so you can show the full connect flow from scratch. (Disconnect it first if needed.)
-- [ ] Screen recorder set to 1080p, cursor visible, system notifications silenced.
-- [ ] Have the caption text below ready to overlay (or narrate calmly if you prefer voice).
+## Pre-flight
 
----
-
-## Scene 1 — Establish the live app  (0:00–0:08)
-
-- **On screen:** PostPilot dashboard, signed in. URL bar clearly visible.
-- **Action:** Slowly move the cursor to the address bar so the production domain is unmistakable.
-- **Caption:** "PostPilot — live web app. Signed in as a creator."
-
-## Scene 2 — Go to Connections  (0:08–0:18)
-
-- **On screen:** Navigate to **Settings → Connections**.
-- **Action:** Click into Settings, then Connections. Let the Platforms card render with Instagram Reels showing "Not connected."
-- **Caption:** "Settings → Connections. Instagram is not connected yet."
-
-## Scene 3 — Start the Instagram connection  (0:18–0:26)
-
-- **On screen:** The **"Continue with Instagram"** button (with the Instagram glyph) on the Instagram Reels row.
-- **Action:** Hover the button for a beat, then click it.
-- **Caption:** "The creator clicks 'Continue with Instagram' to connect their professional account."
-
-## Scene 4 — Instagram login + consent  (0:26–0:45)
-
-- **On screen:** Instagram's own OAuth authorization window.
-- **Action:** Log in with the professional test account, then let the **permissions/consent screen** fully display. Do **not** cut this — reviewers must see the requested permissions. Click **Allow**.
-- **Caption:** "Instagram's consent screen. The user grants access, including instagram_business_basic."
-- **Note:** Don't linger on the typed password; move to the consent screen promptly.
-
-## Scene 5 — Redirect back + success  (0:45–0:55)
-
-- **On screen:** Redirect back to PostPilot's Connections page; the green "Connected Instagram Reels." confirmation appears.
-- **Action:** Let the page settle on the connected state.
-- **Caption:** "Back in PostPilot — the account is now connected."
-
-## Scene 6 — Show the profile info (the key requirement)  (0:55–1:15)
-
-- **On screen:** The connected Instagram Reels row: the **real profile picture (avatar)**, the **@username** in bold, and the **"Connected ✓"** badge.
-- **Action:** Move the cursor to the avatar, then to the `@username`. Pause here for ~5 seconds so it's clearly readable.
-- **Caption:** "Profile info read via instagram_business_basic: the account's profile picture and username (@thedronalist) are displayed."
-
-## Scene 7 — Close  (1:15–1:25, optional)
-
-- **On screen:** Same connected row.
-- **Action:** Hold for 2–3 seconds, then stop recording.
-- **Caption:** "PostPilot uses this only to confirm the correct account and operate the user's own posting queue."
+- [ ] Logged **out** of PostPilot.
+- [ ] Instagram **disconnected** in PostPilot (so the connect + consent happens on camera).
+- [ ] Reviewer app test account ready (email + password).
+- [ ] Instagram **professional** test account ready to authorize (has a profile picture).
 
 ---
 
-## Tips to avoid a rejection
+## Shot list with caption overlays
 
-- Keep the **consent screen** in the recording — the most common `_basic` rejection is not showing it.
-- Make sure the **username and profile picture are clearly visible and readable** in Scene 6; don't rush past it.
-- Everything must happen on the **live production app** the reviewer can also reach with your test credentials.
-- No jump cuts — a single continuous flow from button click → consent → connected profile is what reviewers want to see.
-- English captions on every scene so the reviewer can follow without audio.
+**Shot 1 — Logged-out app (0:00–0:08)**
+- Screen: PostPilot `/signin` page, URL bar visible.
+- Caption to overlay: **"PostPilot — web app. Logging in with our own email/password (no Facebook Login)."**
+
+**Shot 2 — Sign in (0:08–0:15)**
+- Action: type the test email + password, click Sign in, land on dashboard.
+- Caption: **"Signed in to PostPilot."**
+
+**Shot 3 — Go to Connections (0:15–0:22)**
+- Action: Settings → Connections. Instagram Reels shows "Not connected."
+- Caption: **"Settings → Connections. Instagram is not connected yet."**
+
+**Shot 4 — Start the Instagram login (0:22–0:28)**
+- Action: hover, then click **"Continue with Instagram."**
+- Caption: **"Clicking 'Continue with Instagram' to start Instagram Login."**
+
+**Shot 5 — Instagram login + CONSENT screen (0:28–0:48)  ← the step that was missing**
+- Action: log in on Instagram, then let the **authorization/consent screen fully display** — the page listing the requested permissions. Hold on it for ~4–5 seconds. Click **Allow**.
+- Caption: **"Instagram's consent screen. The user grants access, including instagram_business_basic. Tapping Allow."**
+- Do NOT cut or speed through this screen.
+
+**Shot 6 — Back in app, connected (0:48–0:55)**
+- Action: redirect returns to PostPilot's Connections page; the "Connected" state appears.
+- Caption: **"Back in PostPilot — the Instagram professional account is now connected."**
+
+**Shot 7 — Show the profile info from the permission (0:55–1:15)**
+- Action: point the cursor at the **profile picture**, then the **@username** and "Connected ✓" badge. Hold ~5 seconds.
+- Caption: **"Profile info read via instagram_business_basic: the account's profile picture and @username are displayed."**
+
+**Shot 8 — Close (optional)**
+- Caption: **"PostPilot uses this only to confirm the correct account and run the user's own posting queue."**
+
+---
+
+## Checklist before you upload
+
+- [ ] Recording starts logged OUT and shows the PostPilot sign-in.
+- [ ] The **Instagram consent screen is clearly visible** and held for several seconds.
+- [ ] The connected **profile picture + @username** are clearly readable.
+- [ ] English captions appear on every shot.
+- [ ] No audio; production URL visible.

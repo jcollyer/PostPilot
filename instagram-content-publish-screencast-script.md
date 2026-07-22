@@ -1,74 +1,71 @@
-# Screencast script — `instagram_business_content_publish`
+# Screencast script (v2) — `instagram_business_content_publish`
 
-Meta's Screen Recordings guide requires three things, all in one recording:
-1. **Complete login flow** — from logged-out to logged-in.
-2. **Permission granting** — the Business Login for Instagram button + the consent screen where the permission is granted.
-3. **Data usage** — the user creating a post, publishing it, then viewing the published post live on the account.
+## Why v1 was rejected
 
-Target length: **90–120 seconds.** One continuous take, English UI, on-screen captions, no audio (reviewers don't listen). Record at 1080p with a large cursor.
+Meta: "the submitted screencast fails to demonstrate the end-to-end experience." The fix is the same as for the other permission — **show the complete login flow, the Instagram consent screen where the permission is granted, and add English captions** — plus clearly show the publish happening and the Reel going live.
 
----
+## Recording settings
 
-## Pre-flight checklist
+- Record the **production** site, English UI, 1080p, large cursor, **no audio**.
+- Add the **on-screen captions** below in your editor. Captions are required.
+- One continuous take, ~90–120 seconds.
 
-- [ ] Latest build **deployed** (Publish now button + Published section are live).
-- [ ] `IG_REDIRECT_URI` fix live so "Continue with Instagram" doesn't error.
-- [ ] Recording the **production** site (real domain in the URL bar), not localhost/ngrok.
-- [ ] **Logged out** of PostPilot before starting.
-- [ ] Reviewer test **app account** ready (email + password) — the same one in the description box.
-- [ ] Instagram **disconnected** in PostPilot so you can show the connect + consent step.
+## Pre-flight
+
+- [ ] Latest build deployed (Publish now + Published section live).
+- [ ] `IG_REDIRECT_URI` fix live so the connect step doesn't error.
+- [ ] Logged **out** of PostPilot.
+- [ ] Instagram **disconnected** in PostPilot.
+- [ ] Reviewer app test account ready (email + password).
 - [ ] Instagram **professional** test account ready to authorize.
-- [ ] At least one **READY video** in the Media library to publish (short is fine).
-- [ ] Notifications silenced, cursor enlarged, recorder at 1080p.
+- [ ] A short **READY video** in the Media library.
 
 ---
 
-## Scene 1 — Login flow (logged-out → logged-in)  (0:00–0:15)
+## Shot list with caption overlays
 
-- **On screen:** PostPilot **/signin** page. URL bar visible.
-- **Action:** Enter the reviewer test email + password, click Sign in, land on the dashboard.
-- **Caption:** "App login (no Facebook login). Signing in with test credentials."
+**Shot 1 — Logged-out app (0:00–0:08)**
+- Screen: PostPilot `/signin`, URL bar visible.
+- Caption: **"PostPilot — web app. Logging in with our own email/password (no Facebook Login)."**
 
-## Scene 2 — Connect Instagram + grant the permission  (0:15–0:40)
+**Shot 2 — Sign in (0:08–0:15)**
+- Action: enter test email + password → dashboard.
+- Caption: **"Signed in to PostPilot."**
 
-- **On screen:** Settings → Connections. Instagram Reels shows "Not connected."
-- **Action:** Click **"Continue with Instagram."** Log in on Instagram, then let the **consent screen** fully display — this is where `instagram_business_content_publish` is granted. Click Allow, return to PostPilot showing the account **Connected** with its avatar + @username.
-- **Caption:** "The user connects their Instagram professional account and grants instagram_business_content_publish on Instagram's consent screen."
-- **Note:** Do not cut the consent screen — reviewers must see the permission being granted.
+**Shot 3 — Connect Instagram (0:15–0:22)**
+- Action: Settings → Connections → click **"Continue with Instagram."**
+- Caption: **"Connecting the Instagram professional account via Instagram Login."**
 
-## Scene 3 — Create the post (the user's own content)  (0:40–1:00)
+**Shot 4 — Instagram login + CONSENT screen (0:22–0:45)  ← the step that was missing**
+- Action: log in on Instagram, let the **consent screen fully display** (it lists the permissions, including content publishing). Hold ~4–5 seconds. Click **Allow**, return to PostPilot showing the connected account.
+- Caption: **"Instagram's consent screen. The user grants access, including instagram_business_content_publish. Tapping Allow."**
+- Do NOT cut this screen.
 
-- **On screen:** Media library.
-- **Action:** Select a READY video, confirm/add a caption, and add it to the queue (choose Instagram as a destination if prompted). Open the Queue page and show the item sitting in the queue.
-- **Caption:** "The creator's own uploaded video + caption, added to the queue."
+**Shot 5 — Create the post (0:45–1:05)**
+- Action: Media library → select the READY video → confirm/add a caption → add to queue. Open the Queue page.
+- Caption: **"The creator's own uploaded video + caption, added to the queue."**
 
-## Scene 4 — Publish it (uses the permission)  (1:00–1:20)
+**Shot 6 — Publish it (1:05–1:25)**
+- Action: on the queue row, hover then click **"Publish now."** The row shows a **Publishing** spinner, then moves to the **Published** section with a green ✓ IG badge.
+- Caption: **"'Publish now' creates a media container and publishes the Reel via instagram_business_content_publish."**
 
-- **On screen:** Queue page. The item's row shows the **"Publish now"** button.
-- **Action:** Hover the **"Publish now"** button for a beat, then click it. The row shows a **Publishing** spinner (Reels process for a few seconds), then the item moves into the **Published** section with a green **✓ IG** badge.
-- **Caption:** "'Publish now' creates a media container and publishes the Reel via instagram_business_content_publish."
+**Shot 7 — View the live Reel (1:25–1:45)**
+- Action: in PostPilot, click the green **✓ IG** badge (it links to the post) OR switch to the Instagram professional account, and show the **published Reel live**, caption matching what you queued.
+- Caption: **"The Reel is now live on the user's own Instagram professional account."**
 
-## Scene 5 — View the published post on the account  (1:20–1:45)
-
-- **On screen:** First show the **Published** section's green **✓ IG** badge in PostPilot (click it — it links to the live post), then switch to the Instagram professional account.
-- **Action:** Show the **newly published Reel live** on the account, with the caption matching what you queued.
-- **Caption:** "The Reel is now live on the user's own Instagram professional account."
-
-## Scene 6 — Close  (optional, 1:45–1:50)
-
-- **Action:** Hold on the live Reel for 2–3 seconds, then stop.
-- **Caption:** "PostPilot only publishes the user's own content to the account they connected."
+**Shot 8 — Close (optional)**
+- Caption: **"PostPilot only publishes the user's own content to the account they connected."**
 
 ---
 
-## Tips to avoid a rejection
+## Checklist before you upload
 
-- Show the **whole flow in one take**: login → consent → create → Publish now → live Reel. Reviewers must be able to reproduce each step.
-- Keep the **consent screen** in-frame (Scene 2) and the **"Publish now"** click clearly visible (Scene 4).
-- Make the **live Reel** in Scene 5 unmistakably the same post you just published (matching caption).
-- Everything on the **live production app** with the test credentials from your description box.
-- English captions on every scene; no audio.
+- [ ] Recording starts logged OUT and shows the PostPilot sign-in.
+- [ ] The **Instagram consent screen is clearly visible** and held for several seconds.
+- [ ] The **"Publish now" click** is clearly shown.
+- [ ] The **published Reel is shown live** on the account (matching caption).
+- [ ] English captions on every shot; no audio; production URL visible.
 
-## If a Reel is still "Publishing" at Scene 5
+## If a Reel is still "Publishing" at Shot 7
 
-Instagram finalizes Reels asynchronously, so the post can take up to ~1 minute to go live. Either pause the recording briefly and resume once the Published ✓ badge appears / the Reel is live, or trim the wait in editing — just make sure the final cut shows the published Reel on the account.
+Reels finalize asynchronously (up to ~1 min). Pause the recording and resume once the ✓ badge / live Reel appears, or trim the wait in editing — the final cut must show the published Reel.

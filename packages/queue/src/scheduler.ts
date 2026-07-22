@@ -80,8 +80,28 @@ export async function recomputeSchedule(
   if (!queue) return { scheduledItems: 0, tasks: 0 };
 
   // 1. Clear the future plan so this recompute is authoritative.
+  //
+  // SCHEDULED/HELD tasks are the not-yet-run plan — always safe to drop and
+  // rebuild from scratch.
   await prisma.publishTask.deleteMany({
     where: { status: { in: ['SCHEDULED', 'HELD'] }, queueItem: { queueId } },
+  });
+  // Also drop FAILED tasks, but ONLY for items still in rotation (PENDING or
+  // SCHEDULED — i.e. the ones re-materialized below). Without this, a FAILED
+  // task (e.g. a rejected TikTok publish) survives the rebuild while its item —
+  // kept non-terminal by a sibling task on another platform — is reset to
+  // PENDING and given a *second* task for the same platform. That left two
+  // chips per platform on one item (a red FAILED chip alongside a fresh gray
+  // one). Deleting the stale FAILED task lets the fresh one re-attempt cleanly.
+  //
+  // Deliberately scoped: PROCESSING (in-flight) and PUBLISHED (history) tasks
+  // are never touched, and neither are tasks on COMPLETED/SKIPPED/CANCELED
+  // items, so genuine failure history on finished items is preserved.
+  await prisma.publishTask.deleteMany({
+    where: {
+      status: 'FAILED',
+      queueItem: { queueId, status: { in: ['PENDING', 'SCHEDULED'] } },
+    },
   });
   await prisma.queueItem.updateMany({
     where: { queueId, status: 'SCHEDULED' },
