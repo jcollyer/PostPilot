@@ -14,6 +14,18 @@ const nextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        // Permanent (301) redirect: www.post-pilot.app -> post-pilot.app,
+        // preserving the path/query so deep links keep working.
+        source: '/:path*',
+        has: [{ type: 'host', value: 'www.post-pilot.app' }],
+        destination: 'https://post-pilot.app/:path*',
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
