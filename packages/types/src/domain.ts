@@ -18,7 +18,7 @@ export type Platform = z.infer<typeof platformSchema>;
 /** Human-friendly labels for the supported platforms. */
 export const PLATFORM_LABELS: Record<Platform, string> = {
   TIKTOK: 'TikTok',
-  INSTAGRAM: 'Instagram Reels',
+  INSTAGRAM: 'Instagram',
   YOUTUBE: 'YouTube Shorts',
 };
 

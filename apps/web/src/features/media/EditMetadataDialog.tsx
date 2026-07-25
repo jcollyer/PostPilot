@@ -25,7 +25,6 @@ import {
 import {
   ACCEPTED_IMAGE_MIME_TYPES,
   DEFAULT_TIKTOK_OPTIONS,
-  evaluateTikTokRequirements,
   MAX_COVER_BYTES,
   PLATFORM_LABELS,
   platformSchema,
@@ -46,6 +45,7 @@ import {
 } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
+import { PlatformCornerBadge } from '@/components/PlatformGlyph';
 import {
   Sheet,
   SheetContent,
@@ -546,11 +546,16 @@ const PlatformMetaEditor = forwardRef<
         })}
       </div>
 
-      <Input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={`${PLATFORM_LABELS[platform]} title`}
-      />
+      {/* Only YouTube has a distinct title field. TikTok and Instagram
+          have a single caption, so the title input is hidden for them (the
+          stored title still serves as an empty-caption fallback at publish). */}
+      {isYouTube ? (
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={`${PLATFORM_LABELS[platform]} title`}
+        />
+      ) : null}
       <textarea
         value={caption}
         onChange={(e) => setCaption(e.target.value)}
@@ -749,18 +754,22 @@ function TargetAccountList({
   const rows = PLATFORM_ORDER.filter((p) => selected.has(p) && connected.has(p));
   if (rows.length === 0) return null;
   return (
-    <div className="space-y-1.5 pt-1">
+    <div className="space-y-2 pt-1">
       {rows.map((p) => {
         const username = accountLabels[p];
+        const handle = username
+          ? username.startsWith('@')
+            ? username
+            : `@${username}`
+          : null;
         return (
-          <div key={p} className="flex items-center gap-2">
-            <AccountAvatar url={avatarUrls[p]} name={username ?? PLATFORM_LABELS[p]} />
-            <span className="text-sm font-medium">{PLATFORM_LABELS[p]}</span>
-            {username ? (
-              <span className="text-muted-foreground truncate text-xs">
-                {username.startsWith('@') ? username : `@${username}`}
-              </span>
-            ) : null}
+          <div key={p} className="flex items-center gap-2.5">
+            {/* Avatar with a small platform-logo badge overlapping the corner. */}
+            <div className="relative shrink-0">
+              <AccountAvatar url={avatarUrls[p]} name={username ?? PLATFORM_LABELS[p]} />
+              <PlatformCornerBadge platform={p} />
+            </div>
+            <span className="text-sm font-medium">{handle ?? PLATFORM_LABELS[p]}</span>
           </div>
         );
       })}
@@ -768,7 +777,7 @@ function TargetAccountList({
   );
 }
 
-/** Small circle avatar with a letter-tile fallback. */
+/** Circle avatar with a letter-tile fallback. */
 function AccountAvatar({ url, name }: { url: string | null; name: string }) {
   const [broken, setBroken] = useState(false);
   if (url && !broken) {
@@ -779,14 +788,14 @@ function AccountAvatar({ url, name }: { url: string | null; name: string }) {
         alt=""
         aria-hidden="true"
         onError={() => setBroken(true)}
-        className="h-6 w-6 shrink-0 rounded-full object-cover"
+        className="h-10 w-10 shrink-0 rounded-full object-cover"
       />
     );
   }
   return (
     <div
       aria-hidden="true"
-      className="bg-muted text-muted-foreground flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold uppercase"
+      className="bg-muted text-muted-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold uppercase"
     >
       {name.charAt(0)}
     </div>
@@ -917,7 +926,6 @@ function TikTokRequirementsEditor({
     brandedContent: commercial && brandedContent,
   };
 
-  const reasons = evaluateTikTokRequirements(effective);
   const consentSegments = tiktokConsentSegments(effective);
   const contentLabel = tiktokContentLabel(effective);
   const commercialNeedsChoice = commercial && !brandOrganic && !brandedContent;
@@ -948,25 +956,28 @@ function TikTokRequirementsEditor({
       {/* 1A: clearly show which TikTok account this will post to. */}
       {connected ? (
         <div className="flex items-center gap-2.5 rounded-md border bg-muted/40 p-2.5">
-          {creatorAvatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={creatorAvatarUrl}
-              alt=""
-              className="h-9 w-9 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <span className="bg-muted text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-              <UserRound className="h-4 w-4" />
-            </span>
-          )}
+          {/* Avatar with a small TikTok-logo badge overlapping the corner. */}
+          <div className="relative shrink-0">
+            {creatorAvatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={creatorAvatarUrl}
+                alt=""
+                className="h-10 w-10 rounded-full object-cover"
+              />
+            ) : (
+              <span className="bg-muted text-muted-foreground flex h-10 w-10 items-center justify-center rounded-full">
+                <UserRound className="h-4 w-4" />
+              </span>
+            )}
+            <PlatformCornerBadge platform="TIKTOK" />
+          </div>
           <div className="min-w-0">
             <p className="text-muted-foreground text-[11px] uppercase tracking-wide">
               Posting to TikTok as
             </p>
             {creatorNickname || creatorUsername ? (
               <p className="truncate text-sm font-semibold leading-tight">
-                {creatorNickname ?? `@${creatorUsername}`}
                 {creatorNickname && creatorUsername ? (
                   <span className="text-muted-foreground ml-1 font-normal">@{creatorUsername}</span>
                 ) : null}
@@ -1104,21 +1115,29 @@ function TikTokRequirementsEditor({
       <div className="space-y-1.5 border-t pt-3">
         <CheckRow
           label="Disclose video content"
-          description="Turn on if this promotes goods or services in exchange for something of value."
+          description="Turn on to disclose that this video promotes goods or services in exchange for something of value. Your video could promote yourself, a third party, or both."
           checked={commercial}
           onChange={setCommercial}
         />
         {commercial ? (
           <div className="space-y-1.5 pl-6">
+            <div className="flex items-start gap-2 rounded-md bg-blue-50 p-2 text-xs text-blue-800">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-500" />
+              <span>
+                {contentLabel
+                  ? `Your video will be labeled “${contentLabel}”. This cannot be changed once your video is posted.`
+                  : 'Your video will be labeled once you select an option below. This cannot be changed once your video is posted.'}
+              </span>
+            </div>
             <CheckRow
               label="Your brand"
-              description="Promoting yourself or your own business (Brand Organic)."
+              description="You are promoting yourself or your own business. This video will be classified as Brand Organic."
               checked={brandOrganic}
               onChange={setBrandOrganic}
             />
             <CheckRow
               label="Branded content"
-              description="Promoting another brand or a third party (Paid partnership)."
+              description="You are promoting another brand or a third party. This video will be classified as Branded Content."
               checked={brandedContent}
               onChange={setBrandedContent}
             />
@@ -1128,28 +1147,9 @@ function TikTokRequirementsEditor({
                 You need to indicate if your content promotes yourself, a third party, or both.
               </p>
             ) : null}
-            {contentLabel ? (
-              <p className="text-muted-foreground text-xs">
-                Your video will be labeled as “{contentLabel}”.
-              </p>
-            ) : null}
           </div>
         ) : null}
       </div>
-
-      {/* Outstanding requirements that keep this video out of the queue. */}
-      {connected && reasons.length > 0 ? (
-        <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-800">
-          <p className="flex items-center gap-1.5 font-medium">
-            <TriangleAlert className="h-3.5 w-3.5" /> Needed before queueing
-          </p>
-          <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            {reasons.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
 
       <div className="flex items-center justify-between gap-3">
         <p className="text-muted-foreground text-xs">
