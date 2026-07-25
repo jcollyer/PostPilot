@@ -18,7 +18,7 @@ export function fmtDateTime(d: Date | string | null | undefined): string {
 
 export const PLATFORM_LABEL: Record<string, string> = {
   TIKTOK: 'TikTok',
-  INSTAGRAM: 'Instagram Reels',
+  INSTAGRAM: 'Instagram',
   YOUTUBE: 'YouTube Shorts',
 };
 

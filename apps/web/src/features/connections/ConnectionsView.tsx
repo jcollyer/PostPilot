@@ -10,6 +10,7 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PlatformCornerBadge, PlatformGlyph } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 interface ConnectionsViewProps {
@@ -154,10 +155,13 @@ function PlatformRow({
     <div className="flex items-center justify-between gap-3 rounded-md border p-4">
       <div className="flex min-w-0 items-center gap-3">
         {conn && (conn.username || conn.displayName) ? (
-          <ConnectionAvatar
-            avatarUrl={conn.avatarUrl}
-            name={conn.username ?? conn.displayName ?? '?'}
-          />
+          <div className="relative shrink-0">
+            <ConnectionAvatar
+              avatarUrl={conn.avatarUrl}
+              name={conn.username ?? conn.displayName ?? '?'}
+            />
+            <PlatformCornerBadge platform={entry.platform} />
+          </div>
         ) : null}
         <div className="min-w-0 space-y-1">
           <p className="font-medium leading-none">{label}</p>
@@ -287,52 +291,3 @@ function ConnectionAvatar({ avatarUrl, name }: { avatarUrl: string | null; name:
   );
 }
 
-/**
- * Platform glyphs for the connect buttons. All three inherit the button's text
- * color (currentColor) so they stay legible on the colored button. Marks are
- * kept undistorted per each platform's brand guidelines.
- */
-function PlatformGlyph({ platform, className }: { platform: Platform; className?: string }) {
-  switch (platform) {
-    case 'INSTAGRAM':
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          className={className}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="2" y="2" width="20" height="20" rx="5.5" />
-          <circle cx="12" cy="12" r="4.2" />
-          <circle cx="17.3" cy="6.7" r="1.1" fill="currentColor" stroke="none" />
-        </svg>
-      );
-    case 'TIKTOK':
-      return (
-        <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
-          <path d="M12.53.02C13.84 0 15.14.01 16.44 0c.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
-        </svg>
-      );
-    case 'YOUTUBE':
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          className={className}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <rect x="2" y="5.5" width="20" height="13" rx="4" />
-          <path d="M9.8 9.2 15.6 12 9.8 14.8z" fill="currentColor" stroke="none" />
-        </svg>
-      );
-    default:
-      return null;
-  }
-}

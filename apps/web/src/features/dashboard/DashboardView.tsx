@@ -17,6 +17,7 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PlatformCornerBadge } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 function fmtDate(d: Date | string | null | undefined): string {
@@ -154,7 +155,10 @@ export function DashboardView({ greeting }: { greeting: string }) {
               <div key={c.platform} className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   {conn && handle ? (
-                    <ConnAvatar avatarUrl={conn.avatarUrl} name={handle} />
+                    <div className="relative shrink-0">
+                      <ConnAvatar avatarUrl={conn.avatarUrl} name={handle} />
+                      <PlatformCornerBadge platform={c.platform as Platform} size="sm" />
+                    </div>
                   ) : null}
                   <div className="min-w-0">
                     <span className="block text-sm font-medium leading-none">
