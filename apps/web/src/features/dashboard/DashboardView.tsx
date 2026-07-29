@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -17,7 +16,7 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PlatformCornerBadge } from '@/components/PlatformGlyph';
+import { AccountPlatformMark } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 function fmtDate(d: Date | string | null | undefined): string {
@@ -147,7 +146,7 @@ export function DashboardView({ greeting }: { greeting: string }) {
             </Link>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-4">
           {data.connections.map((c) => {
             const conn = c.connection;
             const handle = conn?.username ?? conn?.displayName ?? null;
@@ -155,10 +154,12 @@ export function DashboardView({ greeting }: { greeting: string }) {
               <div key={c.platform} className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   {conn && handle ? (
-                    <div className="relative shrink-0">
-                      <ConnAvatar avatarUrl={conn.avatarUrl} name={handle} />
-                      <PlatformCornerBadge platform={c.platform as Platform} size="sm" />
-                    </div>
+                    <AccountPlatformMark
+                      platform={c.platform as Platform}
+                      avatarUrl={conn.avatarUrl}
+                      name={handle}
+                      size="sm"
+                    />
                   ) : null}
                   <div className="min-w-0">
                     <span className="block text-sm font-medium leading-none">
@@ -326,34 +327,6 @@ function Empty({ text }: { text: string }) {
  */
 function formatHandle(username: string): string {
   return username.startsWith('@') ? username : `@${username}`;
-}
-
-/**
- * Connected-account avatar: the platform profile picture when available,
- * falling back to a letter tile if it's missing or fails to load.
- */
-function ConnAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
-  const [broken, setBroken] = useState(false);
-  if (avatarUrl && !broken) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={avatarUrl}
-        alt=""
-        aria-hidden="true"
-        onError={() => setBroken(true)}
-        className="h-7 w-7 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  return (
-    <div
-      aria-hidden="true"
-      className="bg-muted text-muted-foreground flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold uppercase"
-    >
-      {name.replace(/^@/, '').charAt(0)}
-    </div>
-  );
 }
 
 function ConnHealth({ configured, status }: { configured: boolean; status: string | null }) {

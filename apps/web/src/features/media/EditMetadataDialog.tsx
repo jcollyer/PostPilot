@@ -18,7 +18,6 @@ import {
   Loader2,
   Sparkles,
   TriangleAlert,
-  UserRound,
   X,
 } from 'lucide-react';
 
@@ -45,7 +44,7 @@ import {
 } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
-import { PlatformCornerBadge } from '@/components/PlatformGlyph';
+import { AccountPlatformMark } from '@/components/PlatformGlyph';
 import {
   Sheet,
   SheetContent,
@@ -754,7 +753,7 @@ function TargetAccountList({
   const rows = PLATFORM_ORDER.filter((p) => selected.has(p) && connected.has(p));
   if (rows.length === 0) return null;
   return (
-    <div className="space-y-2 pt-1">
+    <div className="space-y-4 pt-1">
       {rows.map((p) => {
         const username = accountLabels[p];
         const handle = username
@@ -764,40 +763,15 @@ function TargetAccountList({
           : null;
         return (
           <div key={p} className="flex items-center gap-2.5">
-            {/* Avatar with a small platform-logo badge overlapping the corner. */}
-            <div className="relative shrink-0">
-              <AccountAvatar url={avatarUrls[p]} name={username ?? PLATFORM_LABELS[p]} />
-              <PlatformCornerBadge platform={p} />
-            </div>
+            <AccountPlatformMark
+              platform={p}
+              avatarUrl={avatarUrls[p]}
+              name={username ?? PLATFORM_LABELS[p]}
+            />
             <span className="text-sm font-medium">{handle ?? PLATFORM_LABELS[p]}</span>
           </div>
         );
       })}
-    </div>
-  );
-}
-
-/** Circle avatar with a letter-tile fallback. */
-function AccountAvatar({ url, name }: { url: string | null; name: string }) {
-  const [broken, setBroken] = useState(false);
-  if (url && !broken) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={url}
-        alt=""
-        aria-hidden="true"
-        onError={() => setBroken(true)}
-        className="h-10 w-10 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  return (
-    <div
-      aria-hidden="true"
-      className="bg-muted text-muted-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold uppercase"
-    >
-      {name.charAt(0)}
     </div>
   );
 }
@@ -956,22 +930,12 @@ function TikTokRequirementsEditor({
       {/* 1A: clearly show which TikTok account this will post to. */}
       {connected ? (
         <div className="flex items-center gap-2.5 rounded-md border bg-muted/40 p-2.5">
-          {/* Avatar with a small TikTok-logo badge overlapping the corner. */}
-          <div className="relative shrink-0">
-            {creatorAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={creatorAvatarUrl}
-                alt=""
-                className="h-10 w-10 rounded-full object-cover"
-              />
-            ) : (
-              <span className="bg-muted text-muted-foreground flex h-10 w-10 items-center justify-center rounded-full">
-                <UserRound className="h-4 w-4" />
-              </span>
-            )}
-            <PlatformCornerBadge platform="TIKTOK" />
-          </div>
+          {/* TikTok logo as the base with the creator's avatar in the corner. */}
+          <AccountPlatformMark
+            platform="TIKTOK"
+            avatarUrl={creatorAvatarUrl}
+            name={creatorNickname ?? creatorUsername ?? 'TikTok'}
+          />
           <div className="min-w-0">
             <p className="text-muted-foreground text-[11px] uppercase tracking-wide">
               Posting to TikTok as

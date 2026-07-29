@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, Check, Loader2, RefreshCw, Unplug } from 'lucide-react';
 
@@ -10,7 +9,7 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlatformCornerBadge, PlatformGlyph } from '@/components/PlatformGlyph';
+import { AccountPlatformMark, PlatformGlyph } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 interface ConnectionsViewProps {
@@ -155,13 +154,11 @@ function PlatformRow({
     <div className="flex items-center justify-between gap-3 rounded-md border p-4">
       <div className="flex min-w-0 items-center gap-3">
         {conn && (conn.username || conn.displayName) ? (
-          <div className="relative shrink-0">
-            <ConnectionAvatar
-              avatarUrl={conn.avatarUrl}
-              name={conn.username ?? conn.displayName ?? '?'}
-            />
-            <PlatformCornerBadge platform={entry.platform} />
-          </div>
+          <AccountPlatformMark
+            platform={entry.platform}
+            avatarUrl={conn.avatarUrl}
+            name={conn.username ?? conn.displayName ?? '?'}
+          />
         ) : null}
         <div className="min-w-0 space-y-1">
           <p className="font-medium leading-none">{label}</p>
@@ -205,9 +202,18 @@ function PlatformRow({
             disconnecting={disconnecting}
           />
         ) : (
-          <Button asChild size="sm">
+          // All connect buttons use a light background with the official,
+          // unmodified platform brand glyph at >= 20px, per each platform's
+          // branding guidelines. Labels use the full platform name (no
+          // abbreviations or variants).
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+            className="border-input bg-white text-foreground hover:bg-neutral-50"
+          >
             <a href={`/api/connections/${entry.platform.toLowerCase()}/start`}>
-              <PlatformGlyph platform={entry.platform} className="mr-1.5 h-4 w-4" />
+              <PlatformGlyph platform={entry.platform} className="mr-1.5 h-5 w-auto" />
               Continue with {CONNECT_BRAND[entry.platform] ?? label}
             </a>
           </Button>
@@ -263,31 +269,4 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-/**
- * Connected-account avatar: the real platform profile picture when available,
- * falling back to a letter tile if it's missing or fails to load.
- */
-function ConnectionAvatar({ avatarUrl, name }: { avatarUrl: string | null; name: string }) {
-  const [broken, setBroken] = useState(false);
-  if (avatarUrl && !broken) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={avatarUrl}
-        alt=""
-        aria-hidden="true"
-        onError={() => setBroken(true)}
-        className="h-9 w-9 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  return (
-    <div
-      aria-hidden="true"
-      className="bg-muted text-muted-foreground flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold uppercase"
-    >
-      {name.charAt(0)}
-    </div>
-  );
-}
 
