@@ -70,8 +70,8 @@ type YouTubeAccount = {
 
 const PLATFORM_SHORT: Record<Platform, string> = {
   TIKTOK: 'TikTok',
-  INSTAGRAM: 'IG',
-  YOUTUBE: 'YT',
+  INSTAGRAM: 'Instagram',
+  YOUTUBE: 'YouTube',
 };
 
 /** How many published items to show before the "Show more" toggle. */

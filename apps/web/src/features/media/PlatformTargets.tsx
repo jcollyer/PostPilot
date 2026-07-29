@@ -246,7 +246,8 @@ export function PlatformChips({
 }
 
 const SHORT_BADGE: Record<Platform, string> = {
-  INSTAGRAM: 'IG',
+  INSTAGRAM: 'Instagram',
   TIKTOK: 'TikTok',
-  YOUTUBE: 'YT',
+  // YouTube branding: never use an abbreviation/variant of "YouTube" (e.g. "YT").
+  YOUTUBE: 'YouTube',
 };

@@ -110,17 +110,44 @@ export default function PrivacyPage() {
               <h2 className="text-xl font-semibold tracking-tight">Data retention and deletion</h2>
               <p>
                 We retain your OAuth tokens and connected-account details only while your account is
-                connected, so we can publish on your behalf. Video files are stored temporarily to
-                enable publishing and are removed once they are no longer needed. Channel and recent
-                post metadata used to generate captions is processed transiently and is not retained
-                for any other purpose. When you disconnect a platform or delete your account, we revoke
-                the platform access and delete the associated tokens and account data. You can
-                disconnect a platform at any time in Settings, request deletion at{' '}
-                <a href="/data-deletion" className="text-foreground font-medium hover:underline">
-                  post-pilot.app/data-deletion
-                </a>
-                , or email us and we will delete your data.
+                connected, so we can publish on your behalf. Any cached channel information we store
+                for YouTube connections (such as your channel name and recent upload titles used to
+                generate captions) is refreshed at least every 7 days and deleted when it is no longer
+                needed. Video files are stored temporarily to enable publishing and are removed once
+                they are no longer needed.
               </p>
+              <p>
+                <strong>How to delete your data or revoke access.</strong> You can remove your data
+                and revoke PostPilot&rsquo;s access at any time in any of these ways:
+              </p>
+              <ul className="list-disc space-y-2 pl-6">
+                <li>
+                  <strong>In PostPilot:</strong> open Settings → Connections and click Disconnect on a
+                  platform, or delete your account. Either action immediately revokes the platform
+                  access and deletes the associated OAuth tokens and cached account data.
+                </li>
+                <li>
+                  <strong>Request full deletion:</strong> visit{' '}
+                  <a href="/data-deletion" className="text-foreground font-medium hover:underline">
+                    post-pilot.app/data-deletion
+                  </a>{' '}
+                  or email us, and we will delete all of your data.
+                </li>
+                <li>
+                  <strong>Revoke via Google:</strong> for your YouTube (Google) connection, you can
+                  also revoke PostPilot&rsquo;s access directly from your Google Account&rsquo;s
+                  security settings at{' '}
+                  <a
+                    href="https://myaccount.google.com/connections?filters=3,4&hl=en"
+                    className="text-foreground font-medium hover:underline"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    myaccount.google.com/connections
+                  </a>
+                  . Revoking there stops all further access to your Google data by PostPilot.
+                </li>
+              </ul>
             </div>
 
             <div className="space-y-3">
