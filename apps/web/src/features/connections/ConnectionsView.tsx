@@ -213,7 +213,13 @@ function PlatformRow({
             className="border-input bg-white text-foreground hover:bg-neutral-50"
           >
             <a href={`/api/connections/${entry.platform.toLowerCase()}/start`}>
-              <PlatformGlyph platform={entry.platform} className="mr-1.5 h-5 w-auto" />
+              {/* YouTube's mark fills ~19.92 of its 20-unit viewBox, so h-5 (20px)
+                  renders it just under the 20px minimum. Render YouTube at h-6
+                  (24px) so the actual icon height clears 20px with margin. */}
+              <PlatformGlyph
+                platform={entry.platform}
+                className={`mr-1.5 w-auto ${entry.platform === 'YOUTUBE' ? 'h-6' : 'h-5'}`}
+              />
               Continue with {CONNECT_BRAND[entry.platform] ?? label}
             </a>
           </Button>

@@ -34,6 +34,17 @@
     --input: 40 12% 90%;
     --ring: 64 86% 64%;
 
+    /* Product blue — the authenticated app's primary (#2563eb), identical to
+       `.app-theme` below. Single source of truth for every faux-app scene in the
+       feature bento (`--fb-accent`), so those match the real product
+       screenshots in the highlights carousel, which are genuinely blue.
+
+       The hero scene is a deliberate exception: it runs on the lime brand accent
+       instead, because it is the page's opening statement and reads as brand
+       rather than as a product screenshot. Keep it that way — the hero is the
+       one scene that is allowed to be lime. */
+    --pp-product: 221 83% 53%;
+
     --radius: 0.625rem;
   }
 
@@ -140,18 +151,17 @@
  * ------------------------------------------------------------------ */
 .pp-steps {
   --pp-panel: 40 16% 4%; /* near-black warm ink — same family as --foreground */
-  --pp-neon: 64 90% 66%; /* lime brand glow */
+  --pp-neon: var(--primary); /* exactly the brand lime, not a near-miss of it */
   background-color: hsl(var(--pp-panel));
   color: hsl(var(--pp-neon));
 }
 
-/* Shared neon glow — layered drop-shadows fake the halo of a lit gas tube. */
+/* A single close glow, not a halo. The lines should read as drawn in light,
+   which needs one tight shadow; the old three-layer stack read as signage. */
 .pp-neon-line,
 .pp-neon-arrow {
   color: hsl(var(--pp-neon));
-  filter: drop-shadow(0 0 1.5px hsl(var(--pp-neon) / 0.8))
-    drop-shadow(0 0 5px hsl(var(--pp-neon) / 0.5))
-    drop-shadow(0 0 11px hsl(var(--pp-neon) / 0.35));
+  filter: drop-shadow(0 0 3px hsl(var(--pp-neon) / 0.4));
 }
 
 /* Fade the divider lines into the black panel at the top and bottom. */
@@ -172,28 +182,21 @@
   );
 }
 
-/* Arrow carries a slightly softer outer glow than the lines. */
+/* Arrow sits a touch softer than the lines so the junction doesn't bloom. */
 .pp-neon-arrow {
-  filter: drop-shadow(0 0 1px hsl(var(--pp-neon) / 0.7))
-    drop-shadow(0 0 4px hsl(var(--pp-neon) / 0.4))
-    drop-shadow(0 0 9px hsl(var(--pp-neon) / 0.28));
+  filter: drop-shadow(0 0 2px hsl(var(--pp-neon) / 0.35));
 }
 
+/* The heading is white on near-black at display size — it has all the contrast
+   it needs. A glow here only softened the letterforms. */
 .pp-neon-text {
   color: #fff;
-  text-shadow:
-    0 0 6px hsl(var(--pp-neon) / 0.55),
-    0 0 20px hsl(var(--pp-neon) / 0.35);
 }
 
 .pp-neon-num {
   color: hsl(var(--pp-neon));
-  border-color: hsl(var(--pp-neon));
-  box-shadow:
-    0 0 6px hsl(var(--pp-neon) / 0.6),
-    0 0 16px hsl(var(--pp-neon) / 0.4),
-    inset 0 0 8px hsl(var(--pp-neon) / 0.35);
-  text-shadow: 0 0 8px hsl(var(--pp-neon) / 0.7);
+  border-color: hsl(var(--pp-neon) / 0.75);
+  box-shadow: 0 0 10px hsl(var(--pp-neon) / 0.22);
 }
 
 /* ------------------------------------------------------------------ *
@@ -208,12 +211,23 @@
 .pp-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  /* 2/1 rather than 16/9: the scene's lowest element (the playhead) bottoms out
+     at 49cqw, so the old 56.25cqw stage left ~90px of dead dot-grid under it. */
+  aspect-ratio: 2 / 1;
   overflow: hidden;
   background: hsl(var(--card));
   container-type: inline-size;
   --pp-loop: 13s;
+  /* Arrive mid-scene. Every element's delay is offset by this, so a visitor
+     lands on a populated interface (clips in, metadata resolving) instead of an
+     empty stage waiting for the first card to drop at 4.6% of the loop. */
+  --pp-start: 3.6s;
 }
+
+/* The delay rule that applies `--pp-start` lives at the END of this scene block,
+   after every `.pp-*` rule that uses the `animation` shorthand. The shorthand
+   resets animation-delay to 0s, so at equal specificity it would otherwise win
+   on source order and silently cancel the offset. Search `.pp-stage *`. */
 
 /* top bar (faux app chrome) */
 .pp-topbar {
@@ -328,7 +342,7 @@
   width: 1cqw;
   height: 1cqw;
   flex: none;
-  color: #3b9bf5;
+  color: hsl(var(--pp-product));
 }
 .pp-row .lbl {
   height: 0.7cqw;
@@ -455,34 +469,21 @@
 /* stacking + staggered timing (delay = persistent phase offset) */
 .pp-card.c {
   left: 10cqw;
-  top: 13cqw;
+  top: 8cqw;
   z-index: 1;
   background: hsl(var(--secondary));
-  animation-delay: 0s;
 }
 .pp-card.b {
   left: 13.6cqw;
-  top: 16.5cqw;
+  top: 11.5cqw;
   z-index: 2;
-  animation-delay: 0.12s;
+  --pp-stagger: 0.12s;
 }
 .pp-card.a {
   left: 17.2cqw;
-  top: 20cqw;
+  top: 15cqw;
   z-index: 3;
-  animation-delay: 0.24s;
-}
-.pp-card.c .pp-ring,
-.pp-card.c .pp-ring .fill {
-  animation-delay: 0s;
-}
-.pp-card.b .pp-ring,
-.pp-card.b .pp-ring .fill {
-  animation-delay: 0.12s;
-}
-.pp-card.a .pp-ring,
-.pp-card.a .pp-ring .fill {
-  animation-delay: 0.24s;
+  --pp-stagger: 0.24s;
 }
 /* front card fills more gradually than the rest */
 .pp-card.a .pp-ring .fill {
@@ -564,7 +565,7 @@
 .pp-handles {
   position: absolute;
   left: 17.2cqw;
-  top: 20cqw;
+  top: 15cqw;
   width: 20.625cqw;
   height: 12.875cqw;
   z-index: 4;
@@ -598,7 +599,7 @@
 .pp-toast {
   position: absolute;
   left: 10cqw;
-  top: 34cqw;
+  top: 29cqw;
   z-index: 5;
   display: inline-flex;
   align-items: center;
@@ -669,7 +670,7 @@
 .pp-meta {
   position: absolute;
   left: 45cqw;
-  top: 10cqw;
+  top: 6.5cqw;
   width: 27cqw;
   height: 22cqw;
   border-radius: 1.25cqw;
@@ -908,7 +909,7 @@
 }
 .pp-playhead {
   position: absolute;
-  top: 38cqw;
+  top: 33cqw;
   left: 10cqw;
   width: 0.28cqw;
   height: 11cqw;
@@ -1038,6 +1039,24 @@
   }
 }
 
+/* Phase offset for the whole scene — MUST stay after every `.pp-*` rule above,
+   because each of those sets the `animation` shorthand, which resets
+   animation-delay to 0s and would win here on source order at equal
+   specificity. `--pp-stagger` inherits, so a card sets its offset once and its
+   children (ring, fill) follow. Elements that need their own stagger from JSX
+   must fold the offset into the value themselves —
+   `animationDelay: 'calc(0.12s - var(--pp-start))'` — since an inline
+   animation-delay outranks this rule entirely.
+
+   `.pp-stage` is repeated deliberately to reach (0,3,0), which clears the
+   deepest shorthand rules in the scene (`.pp-meta .status .rdy`). Nothing here
+   sets the `animation` shorthand above that depth — `.pp-card.a .pp-ring .fill`
+   is (0,4,0) but only overrides animation-name/timing-function, so it does not
+   reset the delay. Add a class here if that ever changes. */
+.pp-stage.pp-stage.pp-stage * {
+  animation-delay: calc(var(--pp-stagger, 0s) - var(--pp-start));
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pp-content .pp-dots,
   .pp-card,
@@ -1120,7 +1139,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: 1cqw;
   container-type: inline-size;
-  --fb-accent: 221 83% 53%;
+  --fb-accent: var(--pp-product);
 }
 .fb-stage {
   --fb-loop: 8s;
@@ -1808,7 +1827,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: 1cqw;
   container-type: inline-size;
-  --fb-accent: 221 83% 53%;
+  --fb-accent: var(--pp-product);
   --fw-loop: 9s;
 }
 .fw-spark {
@@ -2088,7 +2107,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: 0.7cqw;
   container-type: inline-size;
-  --fb-accent: 221 83% 53%;
+  --fb-accent: var(--pp-product);
   --sq-loop: 7.5s;
 }
 .sq-scene {
@@ -2268,7 +2287,7 @@
   border: 1px solid hsl(var(--border));
   border-radius: 0.7cqw;
   container-type: inline-size;
-  --fb-accent: 221 83% 53%;
+  --fb-accent: var(--pp-product);
   --fe-loop: 8s;
 }
 .fe-bellwrap {

@@ -48,7 +48,13 @@ function FeatureBox({
       </div>
       {bleed ? (
         <div className="flex flex-1 flex-col justify-end pb-0">
-          <div className="w-[106%] translate-x-6 translate-y-10">{children}</div>
+          {/* Inset from the left, flush to the right, bleeding off the bottom.
+              The width is reduced by exactly the x-offset so the right edge
+              lands on the box edge — the previous 106% overshoot cropped button
+              labels mid-word ("Upload vide…"), which read as a layout bug
+              rather than as a deliberate crop. The stages are container-query
+              sized, so a narrower box scales the scene instead of clipping it. */}
+          <div className="w-[calc(100%-1.5rem)] translate-x-6 translate-y-10">{children}</div>
         </div>
       ) : (
         <div className="pp-fullbleed flex flex-1 flex-col justify-end">{children}</div>
