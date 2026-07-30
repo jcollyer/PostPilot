@@ -195,42 +195,42 @@ export function HeroAnimation() {
           <span className="fld" style={{ left: '6.2cqw', top: '2cqw', width: '15cqw' }} />
           <span
             className="fld"
-            style={{ left: '1.4cqw', top: '8cqw', width: '22.5cqw', animationDelay: '0.12s' }}
+            style={{ left: '1.4cqw', top: '8cqw', width: '22.5cqw', animationDelay: 'calc(0.12s - var(--pp-start))' }}
           />
           <span
             className="fld"
-            style={{ left: '1.4cqw', top: '10.4cqw', width: '19cqw', animationDelay: '0.24s' }}
+            style={{ left: '1.4cqw', top: '10.4cqw', width: '19cqw', animationDelay: 'calc(0.24s - var(--pp-start))' }}
           />
           <span
             className="fld"
-            style={{ left: '1.4cqw', top: '12.8cqw', width: '14.5cqw', animationDelay: '0.36s' }}
+            style={{ left: '1.4cqw', top: '12.8cqw', width: '14.5cqw', animationDelay: 'calc(0.36s - var(--pp-start))' }}
           />
 
           {/* hashtag chips pop in */}
           <span className="chip" style={{ left: '1.4cqw', top: '15.8cqw', width: '3.6cqw' }} />
           <span
             className="chip"
-            style={{ left: '5.5cqw', top: '15.8cqw', width: '4.6cqw', animationDelay: '0.08s' }}
+            style={{ left: '5.5cqw', top: '15.8cqw', width: '4.6cqw', animationDelay: 'calc(0.08s - var(--pp-start))' }}
           />
           <span
             className="chip"
-            style={{ left: '10.6cqw', top: '15.8cqw', width: '3.2cqw', animationDelay: '0.16s' }}
+            style={{ left: '10.6cqw', top: '15.8cqw', width: '3.2cqw', animationDelay: 'calc(0.16s - var(--pp-start))' }}
           />
           <span
             className="chip"
-            style={{ left: '14.3cqw', top: '15.8cqw', width: '4.6cqw', animationDelay: '0.24s' }}
+            style={{ left: '14.3cqw', top: '15.8cqw', width: '4.6cqw', animationDelay: 'calc(0.24s - var(--pp-start))' }}
           />
           <span
             className="chip"
-            style={{ left: '1.4cqw', top: '18.3cqw', width: '4.2cqw', animationDelay: '0.32s' }}
+            style={{ left: '1.4cqw', top: '18.3cqw', width: '4.2cqw', animationDelay: 'calc(0.32s - var(--pp-start))' }}
           />
           <span
             className="chip"
-            style={{ left: '6.1cqw', top: '18.3cqw', width: '3cqw', animationDelay: '0.4s' }}
+            style={{ left: '6.1cqw', top: '18.3cqw', width: '3cqw', animationDelay: 'calc(0.4s - var(--pp-start))' }}
           />
           <span
             className="chip"
-            style={{ left: '9.6cqw', top: '18.3cqw', width: '4.8cqw', animationDelay: '0.48s' }}
+            style={{ left: '9.6cqw', top: '18.3cqw', width: '4.8cqw', animationDelay: 'calc(0.48s - var(--pp-start))' }}
           />
 
           <span className="scan" />
@@ -239,14 +239,14 @@ export function HeroAnimation() {
         {/* Act 3 — scheduled queue + posting to platforms */}
         <span className="pp-playhead" aria-hidden />
 
-        <div className="pp-qtile" style={{ left: '10cqw', top: '39cqw' }} aria-hidden>
+        <div className="pp-qtile" style={{ left: '10cqw', top: '34cqw' }} aria-hidden>
           <span className="qthumb" />
           <span className="qtime" />
           <span className="qdot" />
         </div>
         <div
           className="pp-qtile"
-          style={{ left: '20.5cqw', top: '39cqw', animationDelay: '0.12s' }}
+          style={{ left: '20.5cqw', top: '34cqw', animationDelay: 'calc(0.12s - var(--pp-start))' }}
           aria-hidden
         >
           <span className="qthumb" />
@@ -255,7 +255,7 @@ export function HeroAnimation() {
         </div>
         <div
           className="pp-qtile"
-          style={{ left: '31cqw', top: '39cqw', animationDelay: '0.24s' }}
+          style={{ left: '31cqw', top: '34cqw', animationDelay: 'calc(0.24s - var(--pp-start))' }}
           aria-hidden
         >
           <span className="qthumb" />
@@ -264,7 +264,7 @@ export function HeroAnimation() {
         </div>
         <div
           className="pp-qtile"
-          style={{ left: '41.5cqw', top: '39cqw', animationDelay: '0.36s' }}
+          style={{ left: '41.5cqw', top: '34cqw', animationDelay: 'calc(0.36s - var(--pp-start))' }}
           aria-hidden
         >
           <span className="qthumb" />
@@ -273,7 +273,7 @@ export function HeroAnimation() {
         </div>
 
         {/* platform icons light up as posts go out */}
-        <div className="pp-plat" style={{ left: '56cqw', top: '40.8cqw' }} aria-hidden>
+        <div className="pp-plat" style={{ left: '56cqw', top: '35.8cqw' }} aria-hidden>
           <svg viewBox="0 0 24 24" fill="currentColor">
             <path d="M13 4c.5 2 2 3.3 4 3.5v2.7c-1.5 0-2.9-.5-4-1.3v5.1a4.6 4.6 0 1 1-4.6-4.6c.3 0 .6 0 .9.1v2.8a1.9 1.9 0 1 0 1.3 1.8V4H13z" />
           </svg>
@@ -291,7 +291,7 @@ export function HeroAnimation() {
         </div>
         <div
           className="pp-plat"
-          style={{ left: '62.5cqw', top: '40.8cqw', animationDelay: '0.08s' }}
+          style={{ left: '62.5cqw', top: '35.8cqw', animationDelay: 'calc(0.08s - var(--pp-start))' }}
           aria-hidden
         >
           <svg viewBox="0 0 24 24" fill="none">
@@ -299,7 +299,7 @@ export function HeroAnimation() {
             <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
             <circle cx="17" cy="7" r="1.2" fill="currentColor" />
           </svg>
-          <span className="lit" style={{ animationDelay: '0.18s' }}>
+          <span className="lit" style={{ animationDelay: 'calc(0.18s - var(--pp-start))' }}>
             <svg viewBox="0 0 14 14" fill="none">
               <path
                 d="M3 7.5 L6 10.5 L11.5 4"
@@ -313,14 +313,14 @@ export function HeroAnimation() {
         </div>
         <div
           className="pp-plat"
-          style={{ left: '69cqw', top: '40.8cqw', animationDelay: '0.16s' }}
+          style={{ left: '69cqw', top: '35.8cqw', animationDelay: 'calc(0.16s - var(--pp-start))' }}
           aria-hidden
         >
           <svg viewBox="0 0 24 24" fill="none">
             <rect x="3" y="6.5" width="18" height="11" rx="3.5" stroke="currentColor" strokeWidth="1.8" />
             <path d="M11 9.5 L15 12 L11 14.5 Z" fill="currentColor" />
           </svg>
-          <span className="lit" style={{ animationDelay: '0.36s' }}>
+          <span className="lit" style={{ animationDelay: 'calc(0.36s - var(--pp-start))' }}>
             <svg viewBox="0 0 14 14" fill="none">
               <path
                 d="M3 7.5 L6 10.5 L11.5 4"

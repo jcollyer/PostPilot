@@ -47,7 +47,7 @@ function NeonDivider({ left }: { left: string }) {
           y2="100"
           vectorEffect="non-scaling-stroke"
           stroke="currentColor"
-          strokeWidth="2"
+          strokeWidth="1.25"
           strokeLinecap="round"
         />
       </svg>
@@ -55,7 +55,7 @@ function NeonDivider({ left }: { left: string }) {
       {/* Right-pointing arrow fused into the center of the line. Its fill matches
           the panel background so the line appears to flow into the outline. */}
       <svg
-        className="pp-neon-arrow absolute left-1/2 top-1/2 h-[3.75rem] w-24 -translate-x-1/2 -translate-y-1/2 lg:h-24 lg:w-36"
+        className="pp-neon-arrow absolute left-1/2 top-1/2 h-8 w-12 -translate-x-1/2 -translate-y-1/2 lg:h-11 lg:w-[4.25rem]"
         viewBox="0 0 96 64"
         fill="none"
       >
@@ -66,7 +66,7 @@ function NeonDivider({ left }: { left: string }) {
           <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
             <feFlood floodColor="#f4ff8f" floodOpacity="1" result="flood" />
             <feComposite in="flood" in2="SourceAlpha" operator="out" result="outside" />
-            <feGaussianBlur in="outside" stdDeviation="2.5" result="blur" />
+            <feGaussianBlur in="outside" stdDeviation="1.4" result="blur" />
             <feComposite in="blur" in2="SourceAlpha" operator="in" result="innerGlow" />
           </filter>
         </defs>
@@ -94,14 +94,14 @@ function NeonDivider({ left }: { left: string }) {
 
 export function ThreeSteps() {
   return (
-    <section className="pp-steps relative overflow-hidden pb-[5.25rem] sm:pb-[7.5rem]">
+    <section className="pp-steps relative overflow-hidden pb-16 sm:pb-24">
       {/* soft ambient glow behind everything */}
       <div
         className="pointer-events-none absolute left-1/2 top-1/2 -z-0 h-72 w-[48rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"
         aria-hidden
       />
 
-      <div className="mx-auto max-w-3xl px-6 pt-16 text-center sm:pt-20">
+      <div className="mx-auto max-w-3xl px-6 pt-20 text-center sm:pt-24">
         <h2 className="pp-neon-text text-3xl font-semibold tracking-tight sm:text-5xl">
           Live in three steps
         </h2>
@@ -118,7 +118,7 @@ export function ThreeSteps() {
           {STEPS.map((s) => (
             <div
               key={s.step}
-              className="flex flex-col items-center justify-center px-8 py-24 text-center sm:min-h-[26rem] sm:py-32"
+              className="flex flex-col items-center justify-center px-8 py-16 text-center sm:min-h-[20rem] sm:py-20"
             >
               <div className="pp-neon-num flex size-14 items-center justify-center rounded-full border-2 text-xl font-bold">
                 {s.step}

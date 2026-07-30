@@ -1,0 +1,536 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-29T14:05:00Z",
+  "title": "Design System: PostPilot Mobile",
+  "extensions": {
+    "colorMeta": {
+      "deep-slate-navy": {
+        "role": "primary",
+        "displayName": "Deep Slate Navy",
+        "canonical": "#2d3f63",
+        "dark": "#8fa5cf",
+        "tonalRamp": [
+          "#0d1220",
+          "#151d33",
+          "#1e2a47",
+          "#2d3f63",
+          "#40598b",
+          "#5f7ab0",
+          "#9aadd0",
+          "#dbe2ef"
+        ]
+      },
+      "navy-wash": {
+        "role": "primary",
+        "displayName": "Navy Wash",
+        "canonical": "#dbe2ef",
+        "dark": "#2a3245",
+        "tonalRamp": [
+          "#0d1220",
+          "#151d33",
+          "#1e2a47",
+          "#2d3f63",
+          "#40598b",
+          "#5f7ab0",
+          "#9aadd0",
+          "#dbe2ef"
+        ]
+      },
+      "ground": {
+        "role": "neutral",
+        "displayName": "Ground",
+        "canonical": "#f8fafc",
+        "dark": "#000000",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f8fafc"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#ffffff",
+        "dark": "#1c1c1e",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#e2e8f0",
+          "#ffffff"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#0f172a",
+        "dark": "#f8fafc",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f8fafc"
+        ]
+      },
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "#334155",
+        "dark": "#c7cdd6",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f8fafc"
+        ]
+      },
+      "ink-tertiary": {
+        "role": "neutral",
+        "displayName": "Ink Tertiary",
+        "canonical": "#64748b",
+        "dark": "#98a2b3",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f8fafc"
+        ]
+      },
+      "ink-quiet": {
+        "role": "neutral",
+        "displayName": "Ink Quiet",
+        "canonical": "#94a3b8",
+        "dark": "#6b7480",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f8fafc"
+        ]
+      },
+      "hairline": {
+        "role": "neutral",
+        "displayName": "Hairline",
+        "canonical": "#e2e8f0",
+        "dark": "#2f3336",
+        "tonalRamp": [
+          "#020617",
+          "#0f172a",
+          "#1e293b",
+          "#334155",
+          "#64748b",
+          "#94a3b8",
+          "#cbd5e1",
+          "#f8fafc"
+        ]
+      },
+      "signal-ok": {
+        "role": "tertiary",
+        "displayName": "Signal OK",
+        "canonical": "#047857",
+        "dark": "#34d399",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#065f46",
+          "#047857",
+          "#059669",
+          "#34d399",
+          "#a7f3d0",
+          "#ecfdf5"
+        ]
+      },
+      "signal-ok-ink": {
+        "role": "tertiary",
+        "displayName": "Signal OK Ink",
+        "canonical": "#065f46",
+        "dark": "#064e3b",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#065f46",
+          "#047857",
+          "#059669",
+          "#34d399",
+          "#a7f3d0",
+          "#ecfdf5"
+        ]
+      },
+      "signal-ok-surface": {
+        "role": "tertiary",
+        "displayName": "Signal OK Surface",
+        "canonical": "#d1fae5",
+        "dark": "#052e26",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#065f46",
+          "#047857",
+          "#059669",
+          "#34d399",
+          "#a7f3d0",
+          "#ecfdf5"
+        ]
+      },
+      "signal-ok-border": {
+        "role": "tertiary",
+        "displayName": "Signal OK Border",
+        "canonical": "#a7f3d0",
+        "dark": "#0b5843",
+        "tonalRamp": [
+          "#022c22",
+          "#064e3b",
+          "#065f46",
+          "#047857",
+          "#059669",
+          "#34d399",
+          "#a7f3d0",
+          "#ecfdf5"
+        ]
+      },
+      "signal-warn": {
+        "role": "tertiary",
+        "displayName": "Signal Warn",
+        "canonical": "#b45309",
+        "dark": "#fbbf24",
+        "tonalRamp": [
+          "#451a03",
+          "#78350f",
+          "#92400e",
+          "#b45309",
+          "#d97706",
+          "#fbbf24",
+          "#fde68a",
+          "#fffbeb"
+        ]
+      },
+      "signal-warn-ink": {
+        "role": "tertiary",
+        "displayName": "Signal Warn Ink",
+        "canonical": "#92400e",
+        "dark": "#78350f",
+        "tonalRamp": [
+          "#451a03",
+          "#78350f",
+          "#92400e",
+          "#b45309",
+          "#d97706",
+          "#fbbf24",
+          "#fde68a",
+          "#fffbeb"
+        ]
+      },
+      "signal-warn-surface": {
+        "role": "tertiary",
+        "displayName": "Signal Warn Surface",
+        "canonical": "#fef3c7",
+        "dark": "#3a2606",
+        "tonalRamp": [
+          "#451a03",
+          "#78350f",
+          "#92400e",
+          "#b45309",
+          "#d97706",
+          "#fbbf24",
+          "#fde68a",
+          "#fffbeb"
+        ]
+      },
+      "signal-critical": {
+        "role": "tertiary",
+        "displayName": "Signal Critical",
+        "canonical": "#b91c1c",
+        "dark": "#f87171",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#991b1b",
+          "#b91c1c",
+          "#dc2626",
+          "#f87171",
+          "#fecaca",
+          "#fef2f2"
+        ]
+      },
+      "signal-critical-surface": {
+        "role": "tertiary",
+        "displayName": "Signal Critical Surface",
+        "canonical": "#fef2f2",
+        "dark": "#3f1414",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#991b1b",
+          "#b91c1c",
+          "#dc2626",
+          "#f87171",
+          "#fecaca",
+          "#fef2f2"
+        ]
+      },
+      "signal-critical-border": {
+        "role": "tertiary",
+        "displayName": "Signal Critical Border",
+        "canonical": "#fecaca",
+        "dark": "#5f1f1f",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#991b1b",
+          "#b91c1c",
+          "#dc2626",
+          "#f87171",
+          "#fecaca",
+          "#fef2f2"
+        ]
+      },
+      "destructive": {
+        "role": "tertiary",
+        "displayName": "Destructive",
+        "canonical": "#ef4444",
+        "dark": "#f87171",
+        "tonalRamp": [
+          "#450a0a",
+          "#7f1d1d",
+          "#991b1b",
+          "#b91c1c",
+          "#ef4444",
+          "#f87171",
+          "#fecaca",
+          "#fef2f2"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The sign-in screen's welcome line only. The single loudest moment in the app. Maps to iOS Title1.",
+        "iosTextStyle": "Title1"
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The dashboard greeting. One per screen, at the top. Maps to iOS Title2.",
+        "iosTextStyle": "Title2"
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Stat values in the queue-health grid — the numbers the screen exists to deliver. Maps to iOS Title3.",
+        "iosTextStyle": "Title3"
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Input text and the sign-in subtitle. The reading size. Maps to iOS Callout.",
+        "iosTextStyle": "Callout"
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Card section headings, field labels, row titles, button text. Maps to iOS Subheadline.",
+        "iosTextStyle": "Subheadline"
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Stat labels, hints, empty-state lines, the footer. Maps to iOS Caption1.",
+        "iosTextStyle": "Caption1"
+      },
+      "eyebrow": {
+        "displayName": "Eyebrow",
+        "purpose": "Card kickers such as NEXT SCHEDULED POST. The only uppercase in the system. Maps to iOS Caption1.",
+        "iosTextStyle": "Caption1"
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "press-opacity",
+        "value": "opacity: 0.8",
+        "purpose": "The only press feedback in the system. Applied to every Pressable; surfaces never move, scale, or lift."
+      },
+      {
+        "name": "disabled-opacity",
+        "value": "opacity: 0.5",
+        "purpose": "Disabled state for buttons and controls."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single filled action per screen — Sign in, Save changes. Flat navy, centered label, no icon.",
+      "html": "<button class=\"ds-btn-primary\">Save changes</button>",
+      "css": ".ds-btn-primary { display: flex; align-items: center; justify-content: center; width: 100%; background: #2d3f63; color: #ffffff; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; font-weight: 600; line-height: 20px; padding: 12px 16px; border: none; border-radius: 8px; min-height: 44px; cursor: pointer; } .ds-btn-primary:active { opacity: 0.8; } .ds-btn-primary:focus-visible { outline: 2px solid #2d3f63; outline-offset: 2px; } .ds-btn-primary:disabled { opacity: 0.5; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "The standard secondary action — Sign out, Cancel. White fill with the system hairline.",
+      "html": "<button class=\"ds-btn-outline\">Sign out</button>",
+      "css": ".ds-btn-outline { display: flex; align-items: center; justify-content: center; width: 100%; background: #ffffff; color: #0f172a; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; font-weight: 600; line-height: 20px; padding: 12px 16px; border: 1px solid #e2e8f0; border-radius: 8px; min-height: 44px; cursor: pointer; } .ds-btn-outline:active { opacity: 0.8; } .ds-btn-outline:focus-visible { outline: 2px solid #2d3f63; outline-offset: 2px; } .ds-btn-outline:disabled { opacity: 0.5; }"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Account deletion only. Brighter than Signal Critical because it carries white text.",
+      "html": "<button class=\"ds-btn-destructive\">Delete permanently</button>",
+      "css": ".ds-btn-destructive { display: flex; align-items: center; justify-content: center; width: 100%; background: #ef4444; color: #ffffff; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; font-weight: 600; line-height: 20px; padding: 12px 16px; border: none; border-radius: 8px; min-height: 44px; cursor: pointer; } .ds-btn-destructive:active { opacity: 0.8; } .ds-btn-destructive:focus-visible { outline: 2px solid #b91c1c; outline-offset: 2px; } .ds-btn-destructive:disabled { opacity: 0.5; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Label above, 8px input below, optional hint or error under it. The focus ring shown here is the documented target — the app currently ships no focus treatment at all.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-field-name\">Name</label><input class=\"ds-field-input\" id=\"ds-field-name\" type=\"text\" placeholder=\"Your name\" /><span class=\"ds-field-hint\">Shown on your account.</span></div>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 6px; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; } .ds-field-label { font-size: 14px; font-weight: 500; line-height: 20px; color: #334155; } .ds-field-input { background: #ffffff; color: #0f172a; font-size: 16px; line-height: 24px; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; } .ds-field-input::placeholder { color: #94a3b8; } .ds-field-input:focus-visible { outline: none; border-color: #2d3f63; box-shadow: 0 0 0 3px rgba(45, 63, 99, 0.15); } .ds-field-hint { font-size: 12px; line-height: 16px; color: #64748b; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "The structural atom. One card answers exactly one question. Flat white on the ground, bounded by a hairline — no shadow, ever.",
+      "html": "<div class=\"ds-card\"><span class=\"ds-card-eyebrow\">Next scheduled post</span><p class=\"ds-card-title\">Sunset over Shibuya</p><p class=\"ds-card-sub\">TikTok &middot; Mon, Jun 23, 9:00 AM</p></div>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; } .ds-card-eyebrow { display: block; font-size: 12px; font-weight: 500; line-height: 16px; letter-spacing: 0.025em; text-transform: uppercase; color: #64748b; margin-bottom: 4px; } .ds-card-title { margin: 0; font-size: 14px; font-weight: 500; line-height: 20px; color: #0f172a; } .ds-card-sub { margin: 0; font-size: 12px; line-height: 16px; color: #64748b; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill-ok",
+      "description": "The signature component. Carries the queue's own state in the dashboard header — often the only thing the creator opened the app to check.",
+      "html": "<span class=\"ds-pill-ok\">Active</span> <span class=\"ds-pill-warn\">Paused</span>",
+      "css": ".ds-pill-ok, .ds-pill-warn { display: inline-block; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 12px; font-weight: 500; line-height: 16px; padding: 4px 10px; border-radius: 9999px; } .ds-pill-ok { background: #d1fae5; color: #065f46; } .ds-pill-warn { background: #fef3c7; color: #92400e; }"
+    },
+    {
+      "name": "Connection Row",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Platform name against a tone-colored status word. Status is text only — no dot, badge, or icon carries the meaning. Tone always comes from connectionLabel, never from a literal at the call site.",
+      "html": "<div class=\"ds-conn\"><div class=\"ds-conn-row\"><span class=\"ds-conn-name\">TikTok</span><span class=\"ds-conn-ok\">Connected</span></div><div class=\"ds-conn-row\"><span class=\"ds-conn-name\">Instagram</span><span class=\"ds-conn-bad\">Reconnect needed</span></div><div class=\"ds-conn-row\"><span class=\"ds-conn-name\">YouTube Shorts</span><span class=\"ds-conn-muted\">Not connected</span></div></div>",
+      "css": ".ds-conn { display: flex; flex-direction: column; gap: 8px; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; } .ds-conn-row { display: flex; align-items: center; justify-content: space-between; } .ds-conn-name { font-size: 14px; line-height: 20px; color: #334155; } .ds-conn-ok, .ds-conn-bad, .ds-conn-warn, .ds-conn-muted { font-size: 12px; font-weight: 500; line-height: 16px; } .ds-conn-ok { color: #047857; } .ds-conn-bad { color: #b91c1c; } .ds-conn-warn { color: #b45309; } .ds-conn-muted { color: #94a3b8; }"
+    },
+    {
+      "name": "Header Avatar",
+      "kind": "nav",
+      "refersTo": "avatar",
+      "description": "The only navigation affordance to Settings. 32pt circle of Navy Wash carrying navy initials — currently below the 44pt touch minimum, mitigated by hitSlop.",
+      "html": "<button class=\"ds-avatar\" aria-label=\"Open settings\">JC</button>",
+      "css": ".ds-avatar { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; border-radius: 9999px; background: #dbe2ef; color: #2d3f63; font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 12px; font-weight: 700; cursor: pointer; overflow: hidden; } .ds-avatar:active { opacity: 0.8; } .ds-avatar:focus-visible { outline: 2px solid #2d3f63; outline-offset: 2px; }"
+    },
+    {
+      "name": "Inline Banner",
+      "kind": "custom",
+      "refersTo": "card",
+      "description": "Sign-in notices. A 50-level tinted surface with a 200-level border and tinted text. Errors use the critical ramp, confirmations the OK ramp.",
+      "html": "<div class=\"ds-banner-error\">Invalid email or password.</div><div class=\"ds-banner-ok\">Account created. Check your email to verify it, then sign in.</div>",
+      "css": ".ds-banner-error, .ds-banner-ok { font-family: -apple-system, 'SF Pro Text', system-ui, sans-serif; font-size: 14px; line-height: 20px; padding: 12px; border-radius: 8px; border-width: 1px; border-style: solid; margin-bottom: 16px; } .ds-banner-error { background: #fef2f2; border-color: #fecaca; color: #b91c1c; } .ds-banner-ok { background: #d1fae5; border-color: #a7f3d0; color: #065f46; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Flight Deck",
+    "overview": "PostPilot's promise is that the creator walks away. The web app is where work happens; this app is the panel they glance at from a coffee shop to confirm the machine is still flying, and the place they land when something needs a hand. A flight deck earns trust by being legible at arm's length, by never decorating a gauge, and by staying silent until it has something real to say. Every decision here answers to that.\n\nThe system is quiet and factual. Components state; they never sell. White cards sit on a cool slate ground, separated by hairline rules rather than shadows. Type does the ranking work — six sizes of one system face, no display font, no ornament. The navy appears on interactive elements and essentially nowhere else, so the eye learns that navy means you can touch this. Color is otherwise rationed to status: green, amber, and red exist only to report the state of a connection or a queue, never to brighten a layout.\n\nThe current implementation is honest about its scope but thin on identity: it leans on default Tailwind slate utilities rather than its own token layer, ships no icons, no motion, no dark appearance, and no accessibility metadata. This file records what is genuinely built and commits the invariants — flat depth, rationed color, dark as a first-class appearance — that future work must hold.",
+    "keyCharacteristics": [
+      "Glanceable first: the answer to \"is it still running?\" resolves in under two seconds",
+      "Flat by construction — hairline borders and tonal grounds, never shadows",
+      "One tint (Deep Slate Navy) reserved for interaction; status color reserved for status",
+      "System typeface only; hierarchy carried by size and weight, not by family",
+      "Two appearances, light and dark, treated as equals"
+    ],
+    "rules": [
+      {
+        "name": "The One Tint Rule",
+        "body": "Deep Slate Navy marks interaction and brand, nothing else. If a navy element cannot be tapped and is not the app mark, it is wrong. Decoration is not the tint's job.",
+        "section": "colors"
+      },
+      {
+        "name": "The Status-Only Saturation Rule",
+        "body": "Green, amber, and red report machine state — a connection, a queue, an error. They never appear as accent, illustration, or emphasis. A screen with no problems shows no saturated color at all, and that absence is the \"everything is fine\" signal.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two Appearances Rule",
+        "body": "Light and dark are equals, not a default and a concession. No component may hardcode a hex value; every color resolves through a semantic role that has both a light and a dark answer. Raw hex inside a screen or component is a defect, not a shortcut.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dynamic Type Rule",
+        "body": "The fixed sizes in this system are the current implementation and are a platform defect on iOS. Every one must resolve to a system text style so it follows the reader's size setting: Display to Title1, Headline to Title2, Title to Title3, Body to Callout, Label to Subheadline, Caption and Eyebrow to Caption1. Nothing below 11pt, ever. A hardcoded fontSize in a screen is a bug.",
+        "section": "typography"
+      },
+      {
+        "name": "The Two-Weight Rule",
+        "body": "Within any single card, use at most two weights. The eyebrow-plus-title pattern is the ceiling of contrast a card needs; a third weight makes the panel look busy rather than instrumented.",
+        "section": "typography"
+      },
+      {
+        "name": "The Card-Per-Question Rule",
+        "body": "Each card answers exactly one question the creator might have — how much is left, what is next, what went out last, what is connected. Never merge two questions into one card to save vertical space; the scroll is cheap and the scan is not.",
+        "section": "layout"
+      },
+      {
+        "name": "The Drawn-Not-Lifted Rule",
+        "body": "Depth comes from tonal contrast plus a hairline. Surfaces are flat at rest and flat on press — the only press feedback is opacity. Never add a shadow to a card, button, input, or list row to suggest hierarchy; if two things need separating, change the ground or draw the rule.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Temporary-Layer Exception",
+        "body": "The one place shadow is permitted is a genuinely transient layer the platform itself elevates — a sheet, popover, action sheet, or alert. There, use the system material and the platform's own shadow, never a hand-rolled one. Shadow means \"this is temporary and will dismiss,\" which is precisely why permanent surfaces may not borrow it.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Radius-Means-Scale Rule",
+        "body": "Radius reports the size of the thing, not its importance. A control is 8px whether it is primary or ghost; a container is 12px whether it holds a stat grid or a single sentence. Never raise a radius to make something feel friendlier.",
+        "section": "shapes"
+      },
+      {
+        "name": "The Tone-Comes-From-Data Rule",
+        "body": "Connection and queue states are colored by the tone value that connectionLabel returns, never by a literal chosen at the call site. Adding a state means extending that function, so a status can never be styled two different ways in two different places.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do route every color through a semantic role that has a light and a dark answer. Prefer iOS semantic colors (label, secondaryLabel, systemBackground, separator) where one fits the role.",
+      "Do keep Deep Slate Navy (#2d3f63) for interaction and brand only, and let a problem-free screen show no saturated color at all.",
+      "Do draw depth with the Ground/Surface tonal step plus a 1px Hairline (#e2e8f0) — the flat model is the identity.",
+      "Do map every type size to a system text style so Dynamic Type works; 11pt is the absolute floor.",
+      "Do give every tappable control a 44x44pt target and an accessibility role and label. There are currently zero in the app.",
+      "Do derive status colors from the tone value returned by connectionLabel, so a state can never be styled inconsistently.",
+      "Do use platform controls and SF Symbols when icons and controls are introduced — the app has neither today, so there is no legacy to preserve.",
+      "Do give inputs a visible focus treatment; the absence of one is a gap, not a style."
+    ],
+    "donts": [
+      "Don't add a shadow to any permanent surface. Cards, buttons, inputs, and rows are flat at rest and flat on press. Shadow is reserved for platform-elevated temporary layers.",
+      "Don't hardcode a hex value in a screen or component. The settings delete-confirmation block (raw #fef2f2, #fecaca, #dc2626, #ef4444 inline styles) is the anti-pattern to remove, not to copy.",
+      "Don't reach for raw Tailwind palette utilities (text-slate-500, bg-emerald-100) instead of the token layer. This is the incumbent system's central defect: tailwind.config.js declares muted and mutedForeground that nothing uses, while screens paint from default slate classes the config does not own.",
+      "Don't let this become the generic Tailwind admin panel — interchangeable slate-and-white rounded cards with no point of view. That is the nearest failure mode, because it is close to where the app sits today.",
+      "Don't ship a ported website: web-shaped full-width buttons where a native control belongs, custom navigation instead of the system stack, hover-dependent affordances, or fixed type that ignores the reader's size setting.",
+      "Don't introduce charts, graphs, KPI tiles, or a calendar. The product forbids the features; the design forbids the look.",
+      "Don't style status with a literal color at the call site, and don't let status meaning live in color alone — pair it with the word, as the connection rows already do.",
+      "Don't raise a radius or add a weight to make something feel friendlier. Radius reports scale; hierarchy comes from size and position."
+    ]
+  }
+}

@@ -45,11 +45,7 @@ export function LandingPage() {
                 rest.
               </p>
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <Button
-                  asChild
-                  size="lg"
-                  className="border-border/60 border bg-[#e4dcc4] text-[#2b2926] shadow-none hover:bg-[#d9cda6]"
-                >
+                <Button asChild size="lg">
                   <Link href="/signin?mode=signup">
                     Get started free
                     <ArrowRight className="h-4 w-4" />
@@ -75,7 +71,7 @@ export function LandingPage() {
         <ThreeSteps />
 
         {/* Features */}
-        <section className="mx-auto max-w-7xl px-6 py-16 sm:py-20">
+        <section className="mx-auto max-w-7xl px-6 py-20 sm:py-28">
           <div className="max-w-4xl">
             <h2 className="text-foreground text-2xl font-normal leading-[1.05] tracking-tight sm:text-4xl">
               Everything you need to post consistently
@@ -89,12 +85,12 @@ export function LandingPage() {
         </section>
 
         {/* More features — full-bleed carousel */}
-        <section className="overflow-x-clip py-16 sm:py-20">
+        <section className="overflow-x-clip py-20 sm:py-28">
           <FeatureHighlights />
         </section>
 
         {/* CTA */}
-        <section className="mx-auto max-w-7xl px-6 py-20">
+        <section className="mx-auto max-w-7xl px-6 py-20 sm:py-28">
           <div className="bg-foreground text-background relative overflow-hidden rounded-2xl px-8 py-14 text-center">
             <div
               className="bg-primary/20 pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl"
