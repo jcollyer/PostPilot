@@ -213,12 +213,21 @@ function PlatformRow({
             className="border-input bg-white text-foreground hover:bg-neutral-50"
           >
             <a href={`/api/connections/${entry.platform.toLowerCase()}/start`}>
-              {/* YouTube's mark fills ~19.92 of its 20-unit viewBox, so h-5 (20px)
-                  renders it just under the 20px minimum. Render YouTube at h-6
-                  (24px) so the actual icon height clears 20px with margin. */}
+              {/* Per-platform sizing so the visible marks look balanced:
+                  - YouTube fills ~19.92 of its 20-unit viewBox, so h-5 renders it
+                    just under the 20px minimum; h-6 (24px) clears 20px with margin.
+                  - Instagram's gradient square is inset (~83% of its box), so it
+                    reads small at h-5; h-6 brings its visible size up to match.
+                  - TikTok fills its box, so h-5 already matches. */}
               <PlatformGlyph
                 platform={entry.platform}
-                className={`mr-1.5 w-auto ${entry.platform === 'YOUTUBE' ? 'h-6' : 'h-5'}`}
+                className={`mr-1.5 w-auto ${
+                  entry.platform === 'INSTAGRAM'
+                    ? 'h-7'
+                    : entry.platform === 'YOUTUBE'
+                      ? 'h-6'
+                      : 'h-5'
+                }`}
               />
               Continue with {CONNECT_BRAND[entry.platform] ?? label}
             </a>
