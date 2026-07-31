@@ -44,7 +44,7 @@ import {
 } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
-import { AccountPlatformMark } from '@/components/PlatformGlyph';
+import { AccountAvatar, PlatformLogo } from '@/components/PlatformGlyph';
 import {
   Sheet,
   SheetContent,
@@ -763,12 +763,11 @@ function TargetAccountList({
           : null;
         return (
           <div key={p} className="flex items-center gap-2.5">
-            <AccountPlatformMark
-              platform={p}
-              avatarUrl={avatarUrls[p]}
-              name={username ?? PLATFORM_LABELS[p]}
-            />
-            <span className="text-sm font-medium">{handle ?? PLATFORM_LABELS[p]}</span>
+            <PlatformLogo platform={p} />
+            <span className="flex items-center gap-1.5 text-sm font-medium">
+              <AccountAvatar url={avatarUrls[p]} name={username ?? PLATFORM_LABELS[p]} />
+              {handle ?? PLATFORM_LABELS[p]}
+            </span>
           </div>
         );
       })}
@@ -930,20 +929,24 @@ function TikTokRequirementsEditor({
       {/* 1A: clearly show which TikTok account this will post to. */}
       {connected ? (
         <div className="flex items-center gap-2.5 rounded-md border bg-muted/40 p-2.5">
-          {/* TikTok logo as the base with the creator's avatar in the corner. */}
-          <AccountPlatformMark
-            platform="TIKTOK"
-            avatarUrl={creatorAvatarUrl}
-            name={creatorNickname ?? creatorUsername ?? 'TikTok'}
-          />
+          {/* TikTok logo stands alone (never covered); the creator's avatar sits
+              next to the account name. */}
+          <PlatformLogo platform="TIKTOK" />
           <div className="min-w-0">
             <p className="text-muted-foreground text-[11px] uppercase tracking-wide">
               Posting to TikTok as
             </p>
             {creatorNickname || creatorUsername ? (
-              <p className="truncate text-sm font-semibold leading-tight">
+              <p className="flex items-center gap-1.5 truncate text-sm font-semibold leading-tight">
+                <AccountAvatar
+                  url={creatorAvatarUrl}
+                  name={creatorNickname ?? creatorUsername ?? 'TikTok'}
+                />
+                {creatorNickname ?? ''}
                 {creatorNickname && creatorUsername ? (
-                  <span className="text-muted-foreground ml-1 font-normal">@{creatorUsername}</span>
+                  <span className="text-muted-foreground font-normal">@{creatorUsername}</span>
+                ) : creatorUsername ? (
+                  <span className="font-normal">@{creatorUsername}</span>
                 ) : null}
               </p>
             ) : creatorInfo.isLoading || connectionsOverview.isLoading ? (

@@ -16,7 +16,7 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AccountPlatformMark } from '@/components/PlatformGlyph';
+import { AccountAvatar, PlatformLogo } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 function fmtDate(d: Date | string | null | undefined): string {
@@ -154,19 +154,15 @@ export function DashboardView({ greeting }: { greeting: string }) {
               <div key={c.platform} className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                   {conn && handle ? (
-                    <AccountPlatformMark
-                      platform={c.platform as Platform}
-                      avatarUrl={conn.avatarUrl}
-                      name={handle}
-                      size="sm"
-                    />
+                    <PlatformLogo platform={c.platform as Platform} size="sm" />
                   ) : null}
                   <div className="min-w-0">
                     <span className="block text-sm font-medium leading-none">
                       {PLATFORM_LABELS[c.platform as Platform]}
                     </span>
                     {handle ? (
-                      <span className="text-muted-foreground block truncate text-xs">
+                      <span className="text-muted-foreground flex items-center gap-1.5 truncate text-xs">
+                        <AccountAvatar url={conn?.avatarUrl ?? null} name={handle} />
                         {conn?.username ? formatHandle(conn.username) : handle}
                       </span>
                     ) : null}

@@ -69,54 +69,24 @@ export const PLATFORM_BRAND_TEXT: Record<Platform, string> = {
   YOUTUBE: 'text-[#FF0000]',
 };
 
-/**
- * A small brand-colored platform glyph in a white circle, positioned to overlap
- * the bottom-right corner of an account avatar. Drop inside a `relative` parent.
- */
-export function PlatformCornerBadge({
-  platform,
-  size = 'md',
-}: {
-  platform: Platform;
-  size?: 'sm' | 'md';
-}) {
-  // YouTube's branding guidelines require its icon be at least 20px tall, so all
-  // platform corner badges render their glyph at >= 20px (20px "sm", 24px "md")
-  // for a consistent, compliant look. Width is auto so the wider YouTube mark
-  // keeps its correct aspect ratio.
-  const glyph = size === 'sm' ? 'h-5 w-auto' : 'h-6 w-auto';
-  return (
-    <span
-      aria-hidden="true"
-      className="absolute -bottom-1 -right-1 inline-flex items-center justify-center rounded-md bg-white p-0.5 ring-2 ring-white"
-    >
-      <PlatformGlyph platform={platform} className={`${glyph} ${PLATFORM_BRAND_TEXT[platform]}`} />
-    </span>
-  );
-}
 
 /**
- * A connected-account mark that leads with the platform logo and overlays the
- * user's avatar as a small circle in the lower-right corner — the inverse of the
- * old "avatar with a tiny platform badge" treatment. Used on the dashboard, the
- * connections page, and the editor's "Post to" list.
+ * A standalone platform logo, sized so the three marks look visually balanced.
+ * The logo is rendered on its own and must never be covered or overlapped, per
+ * YouTube's branding guidelines (the logo must be fully and clearly visible).
+ * Pair it with `AccountAvatar` placed next to the username — never on top of the
+ * logo.
  */
-export function AccountPlatformMark({
+export function PlatformLogo({
   platform,
-  avatarUrl,
-  name,
   size = 'md',
 }: {
   platform: Platform;
-  avatarUrl: string | null;
-  name: string;
   size?: 'sm' | 'md';
 }) {
-  const [broken, setBroken] = useState(false);
   // YouTube's mark is a solid filled block, so it reads larger than the TikTok
-  // note / Instagram square at the same height. Render it a notch smaller so the
-  // three look visually balanced — while staying at or above YouTube's 20px
-  // minimum (24px "sm", 28px "md").
+  // note / Instagram square at the same height — render it a notch smaller for
+  // balance, while staying at or above YouTube's 20px minimum.
   const logo =
     platform === 'YOUTUBE'
       ? size === 'sm'
@@ -125,28 +95,42 @@ export function AccountPlatformMark({
       : size === 'sm'
         ? 'h-7 w-auto'
         : 'h-9 w-auto';
-  const avatar = size === 'sm' ? 'h-4 w-4' : 'h-5 w-5';
+  return <PlatformGlyph platform={platform} className={`shrink-0 ${logo}`} />;
+}
+
+/**
+ * A small circular account avatar with a letter-tile fallback. Rendered beside
+ * the username — kept separate from the platform logo so the logo is never
+ * covered.
+ */
+export function AccountAvatar({
+  url,
+  name,
+  className = 'h-4 w-4',
+}: {
+  url: string | null;
+  name: string;
+  className?: string;
+}) {
+  const [broken, setBroken] = useState(false);
   return (
-    <span className="relative inline-flex shrink-0 items-center justify-center">
-      <PlatformGlyph platform={platform} className={logo} />
-      <span
-        aria-hidden="true"
-        className={`absolute -bottom-1 -right-1 overflow-hidden rounded-full bg-white ring-2 ring-white ${avatar}`}
-      >
-        {avatarUrl && !broken ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={avatarUrl}
-            alt=""
-            onError={() => setBroken(true)}
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          <span className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[8px] font-semibold uppercase">
-            {name.charAt(0)}
-          </span>
-        )}
-      </span>
+    <span
+      aria-hidden="true"
+      className={`inline-flex shrink-0 overflow-hidden rounded-full bg-muted ${className}`}
+    >
+      {url && !broken ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt=""
+          onError={() => setBroken(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span className="text-muted-foreground flex h-full w-full items-center justify-center text-[8px] font-semibold uppercase">
+          {name.replace(/^@/, '').charAt(0)}
+        </span>
+      )}
     </span>
   );
 }

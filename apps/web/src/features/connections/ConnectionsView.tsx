@@ -9,7 +9,7 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { AccountPlatformMark, PlatformGlyph } from '@/components/PlatformGlyph';
+import { AccountAvatar, PlatformGlyph, PlatformLogo } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 interface ConnectionsViewProps {
@@ -154,18 +154,18 @@ function PlatformRow({
     <div className="flex items-center justify-between gap-3 rounded-md border p-4">
       <div className="flex min-w-0 items-center gap-3">
         {conn && (conn.username || conn.displayName) ? (
-          <AccountPlatformMark
-            platform={entry.platform}
-            avatarUrl={conn.avatarUrl}
-            name={conn.username ?? conn.displayName ?? '?'}
-          />
+          <PlatformLogo platform={entry.platform} />
         ) : null}
         <div className="min-w-0 space-y-1">
           <p className="font-medium leading-none">{label}</p>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <StatusBadge status={status} />
             {conn?.username || conn?.displayName ? (
-              <span className="text-foreground truncate text-sm font-medium">
+              <span className="text-foreground inline-flex items-center gap-1.5 truncate text-sm font-medium">
+                <AccountAvatar
+                  url={conn.avatarUrl}
+                  name={conn.username ?? conn.displayName ?? '?'}
+                />
                 {conn.username ? formatHandle(conn.username) : conn.displayName}
               </span>
             ) : null}
