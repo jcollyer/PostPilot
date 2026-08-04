@@ -32,7 +32,17 @@ function timeAgo(date: Date): string {
 
 export function NotificationsBell() {
   const utils = trpc.useUtils();
-  const unread = trpc.notifications.unreadCount.useQuery(undefined, { refetchInterval: 30_000 });
+  // Every open tab used to hit the database every 30s, forever — which on its
+  // own was enough to stop the Neon compute from ever scaling to zero (it needs
+  // 5 consecutive idle minutes). A left-open tab overnight was billing compute
+  // for nothing. Poll every 5 minutes, and only while the tab is actually
+  // visible; `refetchIntervalInBackground` stays false (the default) so a
+  // backgrounded tab goes quiet entirely. Refetching on focus covers the gap
+  // when the user comes back.
+  const unread = trpc.notifications.unreadCount.useQuery(undefined, {
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
+  });
   const list = trpc.notifications.list.useQuery({ limit: 15 });
 
   const markRead = trpc.notifications.markRead.useMutation({

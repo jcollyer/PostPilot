@@ -17,6 +17,14 @@ export interface PublishRunResult {
   platform: Platform;
   outcome: 'published' | 'processing' | 'retry' | 'failed' | 'held' | 'skipped';
   detail?: string;
+  /**
+   * When this task next wants attention, for the `processing` and `retry`
+   * outcomes (null for terminal ones). The `publish-task` Trigger.dev task uses
+   * this to re-arm itself at exactly the right moment, which is what lets the
+   * safety-net cron run every 30 minutes instead of every minute — and so lets
+   * the Neon compute actually scale to zero between posts.
+   */
+  nextAttemptAt?: Date | null;
 }
 
 type TaskWithRelations = NonNullable<Awaited<ReturnType<typeof loadTask>>>;
@@ -52,7 +60,14 @@ function loadTask(client: PrismaClient, taskId: string) {
  * and PROCESSING tasks ready for another status poll. Sequential to respect
  * platform rate limits. Pure orchestration over the `Publish(Video)` adapters.
  */
-export async function publishDueTasks(opts?: { limit?: number }): Promise<PublishRunResult[]> {
+/**
+ * IDs of every task that wants attention right now. Split out from
+ * `publishDueTasks` so the safety-net cron can hand each one to the
+ * `publish-task` Trigger.dev task (which re-arms its own follow-up polls)
+ * instead of draining them inline and leaving in-flight posts stranded until
+ * the next cron tick.
+ */
+export async function findDueTaskIds(opts?: { limit?: number }): Promise<string[]> {
   const now = new Date();
   const dueFilter = { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] };
 
@@ -67,6 +82,12 @@ export async function publishDueTasks(opts?: { limit?: number }): Promise<Publis
     take: opts?.limit ?? 25,
     select: { id: true },
   });
+  return tasks.map((t) => t.id);
+}
+
+export async function publishDueTasks(opts?: { limit?: number }): Promise<PublishRunResult[]> {
+  const ids = await findDueTaskIds(opts);
+  const tasks = ids.map((id) => ({ id }));
 
   const results: PublishRunResult[] = [];
   for (const { id } of tasks) {
@@ -204,17 +225,18 @@ async function startPublish(task: TaskWithRelations): Promise<PublishRunResult> 
   }
 
   // PROCESSING — poll later. Reset attemptCount to count polls.
+  const nextAttemptAt = new Date(Date.now() + POLL_INTERVAL_MS);
   await prisma.publishTask.update({
     where: { id: task.id },
     data: {
       status: 'PROCESSING',
       externalContainerId: res.externalContainerId ?? null,
       attemptCount: 0,
-      nextAttemptAt: new Date(Date.now() + POLL_INTERVAL_MS),
+      nextAttemptAt,
       lastError: null,
     },
   });
-  return { taskId: task.id, platform: task.platform, outcome: 'processing' };
+  return { taskId: task.id, platform: task.platform, outcome: 'processing', nextAttemptAt };
 }
 
 async function pollTask(task: TaskWithRelations): Promise<PublishRunResult> {
@@ -255,11 +277,12 @@ async function pollTask(task: TaskWithRelations): Promise<PublishRunResult> {
       reject: false,
     });
   }
+  const nextAttemptAt = new Date(Date.now() + POLL_INTERVAL_MS);
   await prisma.publishTask.update({
     where: { id: task.id },
-    data: { attemptCount: polls, nextAttemptAt: new Date(Date.now() + POLL_INTERVAL_MS) },
+    data: { attemptCount: polls, nextAttemptAt },
   });
-  return { taskId: task.id, platform: task.platform, outcome: 'processing' };
+  return { taskId: task.id, platform: task.platform, outcome: 'processing', nextAttemptAt };
 }
 
 /** Map a thrown PublishError onto the right task transition. */
@@ -277,29 +300,43 @@ async function handleError(task: TaskWithRelations, err: unknown): Promise<Publi
     if (attempts >= MAX_PUBLISH_ATTEMPTS) {
       return failTask(task, err.message, { reject: false });
     }
+    const nextAttemptAt = new Date(Date.now() + backoffMs(attempts));
     await prisma.publishTask.update({
       where: { id: task.id },
       data: {
         attemptCount: attempts,
-        nextAttemptAt: new Date(Date.now() + backoffMs(attempts)),
+        nextAttemptAt,
         lastError: err.message.slice(0, 1000),
       },
     });
-    return { taskId: task.id, platform: task.platform, outcome: 'retry', detail: err.message };
+    return {
+      taskId: task.id,
+      platform: task.platform,
+      outcome: 'retry',
+      detail: err.message,
+      nextAttemptAt,
+    };
   }
   // Unknown error → treat as a transient retry.
   const attempts = task.attemptCount + 1;
   const message = err instanceof Error ? err.message : String(err);
   if (attempts >= MAX_PUBLISH_ATTEMPTS) return failTask(task, message, { reject: false });
+  const nextAttemptAt = new Date(Date.now() + backoffMs(attempts));
   await prisma.publishTask.update({
     where: { id: task.id },
     data: {
       attemptCount: attempts,
-      nextAttemptAt: new Date(Date.now() + backoffMs(attempts)),
+      nextAttemptAt,
       lastError: message.slice(0, 1000),
     },
   });
-  return { taskId: task.id, platform: task.platform, outcome: 'retry', detail: message };
+  return {
+    taskId: task.id,
+    platform: task.platform,
+    outcome: 'retry',
+    detail: message,
+    nextAttemptAt,
+  };
 }
 
 async function holdTask(task: TaskWithRelations, detail: string): Promise<PublishRunResult> {

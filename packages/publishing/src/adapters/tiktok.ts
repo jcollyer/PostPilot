@@ -251,14 +251,16 @@ export const tiktokPublishAdapter: PublishAdapter = {
       context: 'tiktok status/fetch',
       platform: Platform.TIKTOK,
       classifyError: (s, body) => classifyTikTokError('tiktok status/fetch', s, body),
+      // TikTok sends the post ids as bare int64s; keep them as exact strings.
+      bigIntKeys: ['publicaly_available_post_id'],
       body: JSON.stringify({ publish_id: containerId }),
     });
     assertOk(res, 'tiktok status/fetch');
 
     const status = res.data.status;
     if (status === 'PUBLISH_COMPLETE') {
-      const postId = res.data.publicaly_available_post_id?.[0] ?? null;
-      return { state: 'PUBLISHED' as const, platformPostId: postId };
+      const postId = res.data.publicaly_available_post_id?.[0];
+      return { state: 'PUBLISHED' as const, platformPostId: postId != null ? String(postId) : null };
     }
     if (status === 'FAILED') {
       return { state: 'FAILED' as const, error: res.data.fail_reason ?? 'TikTok reported FAILED' };

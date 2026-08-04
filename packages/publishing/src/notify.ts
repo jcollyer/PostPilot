@@ -1,4 +1,5 @@
 import { type Platform, type PrismaClient, type NotificationType } from '@postpilot/db';
+import { tasks } from '@trigger.dev/sdk';
 
 import { PLATFORM_NAME } from './config';
 
@@ -36,6 +37,24 @@ export async function createNotification(
       dedupeKey: params.dedupeKey,
     },
   });
+
+  // Deliver now rather than waiting for the `notify-dispatch` sweep. That cron
+  // used to run every 2 minutes, which kept the Neon compute from ever reaching
+  // the 5 idle minutes it needs to scale to zero; it's now a 30-minute floor, so
+  // failure alerts need this nudge to stay timely. Best-effort by design.
+  try {
+    await tasks.trigger(
+      'notify-dispatch-now',
+      {},
+      {
+        idempotencyKey: ['notify-dispatch-now'],
+        idempotencyKeyTTL: '30s',
+        delay: '5s',
+      },
+    );
+  } catch {
+    // Swallow — the sweep will deliver this.
+  }
 }
 
 export function publishFailedNotification(platform: Platform) {
