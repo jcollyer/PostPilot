@@ -1,6 +1,46 @@
 import { type PrismaClient, Platform } from '@postpilot/db';
+import { tasks } from '@trigger.dev/sdk';
 
 import { generateSlots, type ScheduleRule, type Slot } from './slots';
+
+/**
+ * Arm the `publish-task` run for the moment this task is actually due, so we
+ * don't need a minute-by-minute cron discovering it. Neon scales its compute to
+ * zero after 5 minutes idle; a polling cron never let that happen, which is what
+ * made the CU-hour bill run away. Delayed triggers give the same publish
+ * latency with an idle database in between.
+ *
+ * Strictly best-effort: a missing TRIGGER_SECRET_KEY (local dev) or a transient
+ * trigger error must never fail queue scheduling. The `publish-due` sweep at
+ * :00/:30 is the reliable floor.
+ */
+const ARM_HORIZON_MS = 90 * 60_000;
+
+async function armPublish(taskId: string, at: Date) {
+  // Only arm what's due soon. `recomputeSchedule` clears and recreates future
+  // SCHEDULED tasks, and the queue-reschedule cron runs hourly — so arming a
+  // slot days out just leaves a delayed run pointed at a row that no longer
+  // exists, and every one of those strays wakes the Neon compute for a minimum
+  // 5-minute idle window to discover it has nothing to do. A 90-minute horizon
+  // overlaps the hourly reschedule comfortably: anything further out gets armed
+  // by a later pass, and the :00/:30 sweep backstops either way.
+  if (at.getTime() - Date.now() > ARM_HORIZON_MS) return;
+
+  try {
+    await tasks.trigger(
+      'publish-task',
+      { taskId },
+      {
+        delay: at,
+        // Rescheduling a queue can re-derive the same slot; collapse repeats.
+        idempotencyKey: ['publish-task', taskId, String(at.getTime())],
+        idempotencyKeyTTL: '24h',
+      },
+    );
+  } catch {
+    // Swallow — the publish-due sweep will pick this up.
+  }
+}
 
 /** Images/carousels are Instagram-only, so they carry an explicit IG target. */
 const IMAGE_TARGET_PLATFORMS: Platform[] = [Platform.INSTAGRAM];
@@ -171,7 +211,7 @@ export async function recomputeSchedule(
 
     for (const platform of chosen.platforms) {
       const connectionId = connected.get(platform) ?? null;
-      await prisma.publishTask.create({
+      const created = await prisma.publishTask.create({
         data: {
           queueItemId: chosen.id,
           platform,
@@ -179,7 +219,11 @@ export async function recomputeSchedule(
           status: connectionId ? 'SCHEDULED' : 'HELD',
           scheduledAt: slot.at,
         },
+        select: { id: true },
       });
+      // HELD tasks have no connection to publish through, so there's nothing to
+      // arm — they're resolved by a reconnect, which reschedules the queue.
+      if (connectionId) await armPublish(created.id, slot.at);
       tasks++;
     }
 

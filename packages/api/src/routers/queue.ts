@@ -22,6 +22,7 @@ import {
   smartArrangeQueue,
 } from '@postpilot/queue';
 import { processTask } from '@postpilot/publishing';
+import { tasks } from '@trigger.dev/sdk';
 
 import { protectedProcedure, router } from '../trpc';
 
@@ -480,6 +481,28 @@ export const queueRouter = router({
     for (const id of taskIds) {
       const r = await processTask(id);
       results.push({ platform: r.platform, outcome: r.outcome, detail: r.detail });
+
+      // A post the platform is still transcoding, or one that hit a recoverable
+      // error, needs a follow-up poll. The `publish-due` sweep only runs at
+      // :00/:30 now (so the Neon compute can actually idle), so arm the check
+      // for the exact moment the runner asked for. Best-effort: the sweep is
+      // still the floor if this trigger fails.
+      if (r.outcome === 'processing' || r.outcome === 'retry') {
+        const at = r.nextAttemptAt ?? new Date(Date.now() + 30_000);
+        try {
+          await tasks.trigger(
+            'publish-task',
+            { taskId: id },
+            {
+              delay: at,
+              idempotencyKey: ['publish-task', id, String(at.getTime())],
+              idempotencyKeyTTL: '1h',
+            },
+          );
+        } catch {
+          // Swallow — never fail a successful publish on a trigger hiccup.
+        }
+      }
     }
     return { success: true as const, results };
   }),

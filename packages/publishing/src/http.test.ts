@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { PublishError, errorFromStatus } from './http';
+import { PublishError, errorFromStatus, quoteBigIntKeys } from './http';
 
 describe('PublishError', () => {
   it('defaults to recoverable when no classification is given', () => {
@@ -74,5 +74,44 @@ describe('errorFromStatus', () => {
   it('threads the platform through when provided', () => {
     const err = errorFromStatus('ctx', 500, 'oops', 'YOUTUBE');
     expect(err.platform).toBe('YOUTUBE');
+  });
+});
+
+describe('quoteBigIntKeys', () => {
+  const key = 'publicaly_available_post_id';
+
+  it('keeps every digit of an int64 id that JSON.parse would round', () => {
+    const body = `{"data":{"${key}":[7669814400970442766]}}`;
+    // Left alone, the id comes back as a number, rounded past the 17th digit.
+    const raw = JSON.parse(body).data[key][0];
+    expect(typeof raw).toBe('number');
+    expect(String(raw)).not.toBe('7669814400970442766');
+
+    const parsed = JSON.parse(quoteBigIntKeys(body, [key]));
+    expect(parsed.data[key]).toEqual(['7669814400970442766']);
+  });
+
+  it('quotes a scalar value and every member of an array', () => {
+    expect(JSON.parse(quoteBigIntKeys(`{"a":123}`, ['a'])).a).toBe('123');
+    expect(JSON.parse(quoteBigIntKeys(`{"a":[123, 456]}`, ['a'])).a).toEqual(['123', '456']);
+  });
+
+  it('leaves values that are already strings untouched', () => {
+    expect(JSON.parse(quoteBigIntKeys(`{"a":["123"]}`, ['a'])).a).toEqual(['123']);
+    expect(JSON.parse(quoteBigIntKeys(`{"a":"123"}`, ['a'])).a).toBe('123');
+  });
+
+  it('leaves an empty array and a null value valid', () => {
+    expect(JSON.parse(quoteBigIntKeys(`{"a":[]}`, ['a'])).a).toEqual([]);
+    expect(JSON.parse(quoteBigIntKeys(`{"a":null}`, ['a'])).a).toBeNull();
+  });
+
+  it('only touches the declared keys', () => {
+    const body = `{"a":123,"b":456}`;
+    expect(JSON.parse(quoteBigIntKeys(body, ['a']))).toEqual({ a: '123', b: 456 });
+  });
+
+  it('tolerates whitespace around the colon', () => {
+    expect(JSON.parse(quoteBigIntKeys(`{"a" : 123}`, ['a'])).a).toBe('123');
   });
 });
