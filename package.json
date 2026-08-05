@@ -32,6 +32,7 @@
     "publish:due": "dotenv -e .env -- npm --workspace=@postpilot/publishing run publish:due",
     "publish:watch": "dotenv -e .env -- npm --workspace=@postpilot/publishing run publish:watch",
     "notify:dispatch": "dotenv -e .env -- npm --workspace=@postpilot/notifications run notify:dispatch",
+    "trigger:deploy": "npm --workspace=@postpilot/jobs run trigger:deploy",
     "notify:watch": "dotenv -e .env -- npm --workspace=@postpilot/notifications run notify:watch",
     "notify:queue-health": "dotenv -e .env -- npm --workspace=@postpilot/notifications run notify:queue-health",
     "ngrok": "ngrok http --url=jointly-topical-leech.ngrok-free.app 3000"
