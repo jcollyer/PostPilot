@@ -216,6 +216,11 @@ enum QueueItemStatus {
 enum PublishStatus {
   PENDING
   SCHEDULED
+  /// Claimed by a runner and actively uploading to the platform. Distinct from
+  /// PROCESSING (platform accepted it, now transcoding — poll for completion).
+  /// The claim is a lease: `nextAttemptAt` holds its expiry so a task orphaned
+  /// by a killed run is reclaimable instead of stuck here forever.
+  UPLOADING
   PROCESSING
   PUBLISHED
   FAILED

@@ -29,9 +29,18 @@ const VIDEO_LIST_URL = 'https://open.tiktokapis.com/v2/video/list/';
 const DEFAULT_SCOPES = ['user.info.basic', 'user.info.profile', 'video.publish', 'video.list'];
 const RECENT_POSTS_LIMIT = 10;
 
-/** Sandbox vs prod is selected by TIKTOK_ENV; clients have separate keys. */
+/**
+ * Sandbox vs prod is selected by TIKTOK_ENV; clients have separate keys.
+ *
+ * Defaults to **prod**. It used to default to sandbox, which meant any runtime
+ * missing the variable silently authenticated with the wrong client — a
+ * connection made by the web app (prod keys) would then be refreshed by the
+ * background worker using sandbox keys, and TikTok rejected every refresh. A
+ * wrong default is far more dangerous here than a missing one: sandbox is the
+ * deliberate, opt-in setting, so make callers ask for it.
+ */
 function credentials(): { clientKey?: string; clientSecret?: string } {
-  const prod = (process.env.TIKTOK_ENV ?? 'sandbox').toLowerCase() === 'prod';
+  const prod = (process.env.TIKTOK_ENV ?? 'prod').toLowerCase() === 'prod';
   return prod
     ? {
         clientKey: process.env.TIKTOK_CLIENT_KEY_PROD,

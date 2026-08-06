@@ -3,12 +3,19 @@ import { getFreshAccessToken, markNeedsReconnect } from '@postpilot/connectors';
 import { getObjectBuffer } from '@postpilot/storage';
 
 import { getPublishAdapter } from './adapters';
-import { backoffMs, MAX_POLLS, MAX_PUBLISH_ATTEMPTS, POLL_INTERVAL_MS } from './config';
+import {
+  backoffMs,
+  CLAIM_LEASE_MS,
+  MAX_POLLS,
+  MAX_PUBLISH_ATTEMPTS,
+  POLL_INTERVAL_MS,
+} from './config';
 import { PublishError } from './http';
 import {
   contentRejectedNotification,
   createNotification,
   publishFailedNotification,
+  reconnectRequiredNotification,
 } from './notify';
 import type { PublishInput } from './types';
 
@@ -67,22 +74,31 @@ function loadTask(client: PrismaClient, taskId: string) {
  * instead of draining them inline and leaving in-flight posts stranded until
  * the next cron tick.
  */
-export async function findDueTaskIds(opts?: { limit?: number }): Promise<string[]> {
+export async function findDueTasks(opts?: {
+  limit?: number;
+}): Promise<Array<{ id: string; scheduledAt: Date }>> {
   const now = new Date();
   const dueFilter = { OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] };
 
-  const tasks = await prisma.publishTask.findMany({
+  return prisma.publishTask.findMany({
     where: {
       OR: [
         { status: 'SCHEDULED', scheduledAt: { lte: now }, AND: [dueFilter] },
         { status: 'PROCESSING', AND: [dueFilter] },
+        // An UPLOADING task whose lease has lapsed was orphaned by a run that
+        // died mid-upload. Nothing else will ever pick it up, so the sweep has
+        // to — `claimTask` re-leases it before any work restarts.
+        { status: 'UPLOADING', nextAttemptAt: { lte: now } },
       ],
     },
     orderBy: { scheduledAt: 'asc' },
     take: opts?.limit ?? 25,
-    select: { id: true },
+    select: { id: true, scheduledAt: true },
   });
-  return tasks.map((t) => t.id);
+}
+
+export async function findDueTaskIds(opts?: { limit?: number }): Promise<string[]> {
+  return (await findDueTasks(opts)).map((t) => t.id);
 }
 
 export async function publishDueTasks(opts?: { limit?: number }): Promise<PublishRunResult[]> {
@@ -96,6 +112,35 @@ export async function publishDueTasks(opts?: { limit?: number }): Promise<Publis
   return results;
 }
 
+/**
+ * Take exclusive ownership of a task before publishing it.
+ *
+ * Two runs can legitimately target the same task at the same instant — the
+ * delayed run armed at its slot, the :00/:30 `publish-due` sweep landing on that
+ * same minute, and a "Publish now" from the UI are all separate entry points
+ * with separate idempotency keys. Nothing used to stand between them and
+ * `adapter.publish`, so each one uploaded the video: two runs, two posts, and on
+ * YouTube two videos in the channel.
+ *
+ * The claim is a single conditional UPDATE, so exactly one caller can win it —
+ * `count === 0` means somebody else got there first and this run must not
+ * publish. It doubles as the lease: `nextAttemptAt` carries the expiry, letting
+ * a claim abandoned by a killed run be taken again later rather than wedging the
+ * task in UPLOADING permanently.
+ */
+async function claimTask(task: TaskWithRelations): Promise<TaskWithRelations | null> {
+  const now = new Date();
+  const { count } = await prisma.publishTask.updateMany({
+    where: {
+      id: task.id,
+      OR: [{ status: 'SCHEDULED' }, { status: 'UPLOADING', nextAttemptAt: { lte: now } }],
+    },
+    data: { status: 'UPLOADING', nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS) },
+  });
+  if (count === 0) return null;
+  return { ...task, status: 'UPLOADING' };
+}
+
 /** Process a single task end to end, then roll up its queue item's status. */
 export async function processTask(taskId: string): Promise<PublishRunResult> {
   const task = await loadTask(prisma, taskId);
@@ -103,7 +148,21 @@ export async function processTask(taskId: string): Promise<PublishRunResult> {
 
   let result: PublishRunResult;
   try {
-    result = task.status === 'PROCESSING' ? await pollTask(task) : await startPublish(task);
+    if (task.status === 'PROCESSING') {
+      result = await pollTask(task);
+    } else {
+      const claimed = await claimTask(task);
+      // Losing the claim is a success, not an error: the task is in hand.
+      if (!claimed) {
+        return {
+          taskId,
+          platform: task.platform,
+          outcome: 'skipped',
+          detail: 'already claimed by another run',
+        };
+      }
+      result = await startPublish(claimed);
+    }
   } catch (err) {
     result = await handleError(task, err);
   }
@@ -131,10 +190,9 @@ function buildInput(task: TaskWithRelations, accessToken: string): PublishInput 
   // Image / carousel item (Instagram only). Slide 1 is the parent's own file;
   // the ordered children are the remaining slides.
   if (image) {
-    const slideUrls = [
-      image.cdnUrl,
-      ...image.carouselItems.map((ci) => ci.child.cdnUrl),
-    ].filter((u): u is string => Boolean(u));
+    const slideUrls = [image.cdnUrl, ...image.carouselItems.map((ci) => ci.child.cdnUrl)].filter(
+      (u): u is string => Boolean(u),
+    );
     const isCarousel = image.carouselItems.length > 0;
     return {
       mediaType: isCarousel ? 'CAROUSEL' : 'IMAGE',
@@ -198,8 +256,7 @@ async function startPublish(task: TaskWithRelations): Promise<PublishRunResult> 
   // TikTok + Instagram fetch the file from a public URL; YouTube uploads bytes.
   if (image) {
     // Every slide (parent + children) must have a public URL before we can post.
-    const missing =
-      !image.cdnUrl || image.carouselItems.some((ci) => !ci.child.cdnUrl);
+    const missing = !image.cdnUrl || image.carouselItems.some((ci) => !ci.child.cdnUrl);
     if (missing) {
       return failTask(task, 'a photo in this post has no public URL yet', { reject: true });
     }
@@ -304,6 +361,10 @@ async function handleError(task: TaskWithRelations, err: unknown): Promise<Publi
     await prisma.publishTask.update({
       where: { id: task.id },
       data: {
+        // Release the claim. A task waiting out a backoff isn't uploading, and
+        // leaving it UPLOADING would both show a misleading spinner and force
+        // the next attempt to wait for the lease to lapse instead of the backoff.
+        status: 'SCHEDULED',
         attemptCount: attempts,
         nextAttemptAt,
         lastError: err.message.slice(0, 1000),
@@ -325,6 +386,8 @@ async function handleError(task: TaskWithRelations, err: unknown): Promise<Publi
   await prisma.publishTask.update({
     where: { id: task.id },
     data: {
+      // Release the claim — see the recoverable branch above.
+      status: 'SCHEDULED',
       attemptCount: attempts,
       nextAttemptAt,
       lastError: message.slice(0, 1000),
@@ -339,11 +402,35 @@ async function handleError(task: TaskWithRelations, err: unknown): Promise<Publi
   };
 }
 
+/**
+ * Park a task because its connection can't publish right now.
+ *
+ * This raises a reconnect alert as well as setting the status. Holding used to
+ * be silent — the red chip in the queue was the only trace — so a connection
+ * that went bad between scheduling and publishing produced a post that simply
+ * didn't happen, with no email, no push, and nothing to notice unless the user
+ * happened to open the queue. `markNeedsReconnect` covers the case where the
+ * platform told us the token was dead; this covers every other way a hold
+ * happens, including a connection that was already flagged before we got here.
+ */
 async function holdTask(task: TaskWithRelations, detail: string): Promise<PublishRunResult> {
   await prisma.publishTask.update({
     where: { id: task.id },
     data: { status: 'HELD', lastError: detail.slice(0, 1000) },
   });
+
+  const userId = task.connection?.userId;
+  if (userId) {
+    await createNotification(prisma, {
+      userId,
+      ...reconnectRequiredNotification(task.platform),
+      platform: task.platform,
+      relatedVideoId: task.queueItem.videoId ?? undefined,
+      // One alert per platform, not one per held post: a dead connection holds
+      // every queued post for that platform at once.
+      dedupeKey: `hold:${task.platform}:${task.connectionId ?? 'none'}`,
+    });
+  }
   return { taskId: task.id, platform: task.platform, outcome: 'held', detail };
 }
 
@@ -417,7 +504,11 @@ function readPostedPosts(value: unknown): PostedPost[] {
       typeof (entry as { postedAt?: unknown }).postedAt === 'string'
     ) {
       const e = entry as { platform: Platform; postedAt: string; postUrl?: unknown };
-      out.push({ platform: e.platform, postedAt: e.postedAt, postUrl: typeof e.postUrl === 'string' ? e.postUrl : null });
+      out.push({
+        platform: e.platform,
+        postedAt: e.postedAt,
+        postUrl: typeof e.postUrl === 'string' ? e.postUrl : null,
+      });
     }
   }
   return out;

@@ -119,12 +119,37 @@ export async function recomputeSchedule(
   const queue = await prisma.queue.findUnique({ where: { id: queueId } });
   if (!queue) return { scheduledItems: 0, tasks: 0 };
 
+  const now = new Date();
+
+  // Work the runner already owns, which this recompute must not disturb:
+  //
+  //   - UPLOADING: claimed and actively pushing to the platform right now.
+  //   - past-due SCHEDULED: either about to be claimed, or waiting out a retry
+  //     backoff (`handleError` releases the claim back to SCHEDULED).
+  //
+  // Deleting either destroys the only record of an upload that may already have
+  // reached the platform — the item drops back to PENDING, gets re-slotted, and
+  // publishes a duplicate. So the recompute leaves these items entirely alone:
+  // tasks not dropped, status not reset, not re-slotted below. The runner owns
+  // them until they reach a terminal state, and the publish-due sweep picks up
+  // any whose run was lost.
+  const inFlight = await prisma.publishTask.findMany({
+    where: {
+      queueItem: { queueId },
+      OR: [{ status: 'UPLOADING' }, { status: 'SCHEDULED', scheduledAt: { lte: now } }],
+    },
+    select: { queueItemId: true },
+    distinct: ['queueItemId'],
+  });
+  const inFlightItemIds = inFlight.map((t) => t.queueItemId);
+  const settled = inFlightItemIds.length > 0 ? { id: { notIn: inFlightItemIds } } : {};
+
   // 1. Clear the future plan so this recompute is authoritative.
   //
-  // SCHEDULED/HELD tasks are the not-yet-run plan — always safe to drop and
-  // rebuild from scratch.
+  // SCHEDULED/HELD tasks that haven't been reached yet are the not-yet-run plan
+  // — safe to drop and rebuild from scratch.
   await prisma.publishTask.deleteMany({
-    where: { status: { in: ['SCHEDULED', 'HELD'] }, queueItem: { queueId } },
+    where: { status: { in: ['SCHEDULED', 'HELD'] }, queueItem: { queueId, ...settled } },
   });
   // Also drop FAILED tasks, but ONLY for items still in rotation (PENDING or
   // SCHEDULED — i.e. the ones re-materialized below). Without this, a FAILED
@@ -140,13 +165,35 @@ export async function recomputeSchedule(
   await prisma.publishTask.deleteMany({
     where: {
       status: 'FAILED',
-      queueItem: { queueId, status: { in: ['PENDING', 'SCHEDULED'] } },
+      queueItem: { queueId, status: { in: ['PENDING', 'SCHEDULED'] }, ...settled },
     },
   });
   await prisma.queueItem.updateMany({
-    where: { queueId, status: 'SCHEDULED' },
+    where: { queueId, status: 'SCHEDULED', ...settled },
     data: { status: 'PENDING', scheduledAt: null },
   });
+
+  // Settle items stranded mid-rollup. An item's status is rolled up only when
+  // one of its tasks is processed, so an item left PUBLISHING whose last
+  // non-terminal task was cleared by a recompute never gets a second look: it
+  // sits in the active queue indefinitely, showing a green "posted" chip that
+  // never moves to Completed. Finish the rollup here, where the plan is being
+  // rebuilt anyway. Items with no tasks at all are left alone — there is nothing
+  // to conclude from an empty set.
+  const maybeStranded = await prisma.queueItem.findMany({
+    where: { queueId, status: 'PUBLISHING' },
+    select: { id: true, publishTasks: { select: { status: true } } },
+  });
+  const isTerminal = (s: string) => s === 'PUBLISHED' || s === 'FAILED' || s === 'SKIPPED';
+  const strandedIds = maybeStranded
+    .filter((i) => i.publishTasks.length > 0 && i.publishTasks.every((t) => isTerminal(t.status)))
+    .map((i) => i.id);
+  if (strandedIds.length > 0) {
+    await prisma.queueItem.updateMany({
+      where: { id: { in: strandedIds } },
+      data: { status: 'COMPLETED' },
+    });
+  }
 
   if (queue.status === 'PAUSED') return { scheduledItems: 0, tasks: 0 };
 
@@ -159,7 +206,6 @@ export async function recomputeSchedule(
   const connected = await activeConnections(prisma, queue.userId);
   const connectedPlatforms = [...connected.keys()];
 
-  const now = new Date();
   const slots = generateSlots(schedules as ScheduleRule[], now).filter(
     (s) => resolvePlatforms(s, connectedPlatforms).length > 0,
   );
@@ -317,9 +363,7 @@ export async function getUpcoming(
       queueItemId: t.queueItemId,
       mediaId: (imageId ?? videoId)!,
       mediaType: isImage
-        ? ((image && image._count.carouselItems > 0 ? 'CAROUSEL' : 'IMAGE') as
-            | 'CAROUSEL'
-            | 'IMAGE')
+        ? ((image && image._count.carouselItems > 0 ? 'CAROUSEL' : 'IMAGE') as 'CAROUSEL' | 'IMAGE')
         : ('VIDEO' as const),
       title: isImage ? (image?.title ?? null) : (video?.title ?? null),
       thumbnailUrl: isImage

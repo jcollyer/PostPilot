@@ -1,0 +1,18 @@
+-- `UPLOADING` is the claim state for a publish task: a runner has taken the task
+-- and is actively pushing bytes/metadata to the platform.
+--
+-- It is deliberately distinct from `PROCESSING`, which means the platform has
+-- already accepted the upload and is transcoding it (poll for completion).
+-- Without a state in between, a task being uploaded right now was
+-- indistinguishable from one merely scheduled, which caused two real defects:
+--
+--   1. Nothing claimed the row, so two runners firing at the same instant (the
+--      delayed run armed at the slot, plus the :00/:30 publish-due sweep landing
+--      on the same minute) both ran the upload and posted the video twice.
+--   2. YouTube, whose entire resumable upload happens inside one publish call,
+--      showed a gray "scheduled" chip for the whole upload with no way to tell
+--      it apart from a task that had not started.
+--
+-- Postgres allows ADD VALUE inside a transaction from v12 on; the value is not
+-- referenced by this migration, only declared.
+ALTER TYPE "PublishStatus" ADD VALUE IF NOT EXISTS 'UPLOADING';

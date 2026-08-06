@@ -91,7 +91,9 @@ export function QueueView() {
   const queue = trpc.queue.get.useQuery(undefined, {
     refetchInterval: (q) =>
       q.state.data?.items.some(
-        (i) => i.status === 'PUBLISHING' || i.tasks.some((t) => t.status === 'PROCESSING'),
+        (i) =>
+          i.status === 'PUBLISHING' ||
+          i.tasks.some((t) => t.status === 'UPLOADING' || t.status === 'PROCESSING'),
       )
         ? 15000
         : false,
@@ -581,11 +583,7 @@ function PlatformAvatar({ url }: { url: string | null }) {
   if (!url) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt=""
-      className="-ml-0.5 h-3.5 w-3.5 shrink-0 rounded-full object-cover"
-    />
+    <img src={url} alt="" className="-ml-0.5 h-3.5 w-3.5 shrink-0 rounded-full object-cover" />
   );
 }
 
@@ -829,9 +827,18 @@ function TaskChip({
     );
   }
 
-  if (task.status === 'PROCESSING') {
+  // UPLOADING = we're pushing the file to the platform; PROCESSING = the platform
+  // has it and is transcoding. Both are "in flight" as far as the creator is
+  // concerned, so both spin. Before UPLOADING existed, a YouTube upload — which
+  // happens entirely inside one publish call — showed the gray "scheduled" chip
+  // for its whole duration, indistinguishable from a post that hadn't started.
+  if (task.status === 'UPLOADING' || task.status === 'PROCESSING') {
+    const title =
+      task.status === 'UPLOADING'
+        ? `Uploading to ${full}${at}…`
+        : `${full} is processing this post${at}…`;
     return (
-      <span className={`${base} bg-blue-100 text-blue-700`} title={`Publishing to ${full}${at}…`}>
+      <span className={`${base} bg-blue-100 text-blue-700`} title={title}>
         <Loader2 className="h-3 w-3 animate-spin" /> {avatar} {label}
       </span>
     );
