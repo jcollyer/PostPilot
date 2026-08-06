@@ -65,6 +65,15 @@ export function publishFailedNotification(platform: Platform) {
   };
 }
 
+export function reconnectRequiredNotification(platform: Platform) {
+  const name = PLATFORM_NAME[platform];
+  return {
+    type: 'RECONNECT_REQUIRED' as NotificationType,
+    title: `Reconnect ${name}`,
+    body: `A scheduled post is on hold because the ${name} connection can't publish right now. Reconnect ${name} to resume — your other platforms are unaffected, and nothing has been lost.`,
+  };
+}
+
 export function contentRejectedNotification(platform: Platform) {
   return {
     type: 'CONTENT_REJECTED' as NotificationType,

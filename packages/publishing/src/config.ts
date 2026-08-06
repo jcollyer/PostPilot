@@ -30,6 +30,18 @@ export const BACKOFF_MAX_MS = Number(process.env.PUBLISH_BACKOFF_MAX_MS ?? 6 * 6
 export const POLL_INTERVAL_MS = Number(process.env.PUBLISH_POLL_INTERVAL_MS ?? 60_000);
 export const MAX_POLLS = Number(process.env.PUBLISH_MAX_POLLS ?? 15);
 
+/**
+ * How long a runner's claim on a task is good for.
+ *
+ * Claiming is what stops two runs from publishing the same video twice, but a
+ * claim that never expires is worse than none: a run killed mid-upload (hitting
+ * `publish-task`'s 600s maxDuration, or lost to a deploy) would strand the task
+ * in UPLOADING forever. Comfortably longer than the longest possible run, so a
+ * live upload is never yanked out from under itself, and short enough that a
+ * genuinely dead claim recovers on its own within one sweep cycle.
+ */
+export const CLAIM_LEASE_MS = Number(process.env.PUBLISH_CLAIM_LEASE_MS ?? 15 * 60_000);
+
 /** Compute the next-attempt delay for a given (1-based) attempt number. */
 export function backoffMs(attempt: number): number {
   return Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1));
