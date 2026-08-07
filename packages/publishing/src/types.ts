@@ -1,3 +1,5 @@
+import type { Readable } from 'node:stream';
+
 import type { Platform } from '@postpilot/db';
 
 /** The kind of media a publish task carries. */
@@ -18,8 +20,15 @@ export interface PublishInput {
    * IMAGE has one entry; a CAROUSEL has 2–10. Empty for videos.
    */
   imageUrls: string[];
-  /** Lazily download the raw bytes (YouTube uploads the file directly). */
-  getBytes: () => Promise<Buffer>;
+  /**
+   * Lazily open a read stream over the raw file (YouTube uploads it directly;
+   * TikTok and Instagram pull from the CDN URL instead).
+   *
+   * A stream rather than a Buffer: buffering a whole video is what silently
+   * OOM-killed the upload worker, and the files here are big enough that it
+   * cannot be made safe by adding memory.
+   */
+  getStream: () => Promise<{ stream: Readable; contentLength: number | null }>;
   mimeType: string | null;
   fileSize: number | null;
   durationSec: number | null;

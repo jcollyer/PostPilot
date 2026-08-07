@@ -22,7 +22,7 @@ export {
 } from './keys';
 
 // Server-side object IO (worker / AI pipeline only)
-export { putObject, getObjectBuffer, downloadToFile } from './server-io';
+export { putObject, getObjectBuffer, getObjectStream, downloadToFile } from './server-io';
 
 // Presigned upload flows
 export {

@@ -40,7 +40,9 @@ vi.mock('@postpilot/connectors', () => ({
   markNeedsReconnect: async () => undefined,
 }));
 
-vi.mock('@postpilot/storage', () => ({ getObjectBuffer: async () => Buffer.from('') }));
+vi.mock('@postpilot/storage', () => ({
+  getObjectStream: async () => ({ stream: { destroy() {} }, contentLength: 1 }),
+}));
 
 vi.mock('./adapters', () => ({
   getPublishAdapter: () => ({ platform: 'YOUTUBE', publish, poll }),
@@ -121,6 +123,39 @@ describe('processTask — claiming', () => {
     // The claim doubles as a lease, so a killed run can be recovered from.
     expect(updateMany.mock.calls[0]![0].data.status).toBe('UPLOADING');
     expect(updateMany.mock.calls[0]![0].data.nextAttemptAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('counts a reclaimed lease as an attempt', async () => {
+    // The previous holder was killed mid-upload, so it never threw and never
+    // reached the retry ceiling. Reclaiming has to do the counting instead.
+    task = { ...scheduledTask(), status: 'UPLOADING', attemptCount: 1 };
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await processTask('task_1');
+
+    expect(updateMany.mock.calls[0]![0].data.attemptCount).toBe(2);
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not count a fresh claim as an attempt', async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await processTask('task_1');
+
+    expect(updateMany.mock.calls[0]![0].data.attemptCount).toBe(0);
+  });
+
+  it('stops uploading once reclaims hit the attempt ceiling', async () => {
+    // Left unbounded this loops forever, and every pass leaves the platform
+    // another half-finished upload — seven of them turned up on one channel.
+    task = { ...scheduledTask(), status: 'UPLOADING', attemptCount: 4 };
+    updateMany.mockResolvedValue({ count: 1 });
+
+    const result = await processTask('task_1');
+
+    expect(publish).not.toHaveBeenCalled();
+    expect(result.outcome).toBe('failed');
+    expect(update.mock.calls.at(-1)![0].data.status).toBe('FAILED');
   });
 
   it('releases the claim back to SCHEDULED when an attempt is retried', async () => {

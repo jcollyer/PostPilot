@@ -1,3 +1,5 @@
+import { Readable } from 'node:stream';
+
 import { Platform } from '@postpilot/db';
 
 import { YOUTUBE_DEFAULT_PRIVACY, YOUTUBE_UPLOAD_BASE } from '../config';
@@ -81,18 +83,46 @@ export const youtubePublishAdapter: PublishAdapter = {
       });
     }
 
-    // 2. Upload the bytes.
-    const bytes = await input.getBytes();
-    const uploadRes = await rawFetch(uploadUrl, {
-      method: 'PUT',
-      context: 'youtube upload',
-      platform: Platform.YOUTUBE,
-      headers: {
-        'Content-Type': input.mimeType ?? 'video/mp4',
-        'Content-Length': String(bytes.length),
-      },
-      body: bytes,
-    });
+    // 2. Upload the file, streamed straight from storage to YouTube.
+    //
+    // This used to read the whole video into a Buffer first. At the sizes this
+    // library actually holds — commonly 150–400 MB — that overran the worker's
+    // memory and the process was killed mid-upload. A killed run throws nothing,
+    // so the task recorded no error: YouTube kept the video record created by
+    // the init call above (stuck at "processing will begin shortly", never
+    // receiving its bytes) and the task was retried into a fresh init, leaving a
+    // new orphaned video on the channel every time. Streaming keeps memory flat
+    // regardless of file size.
+    const { stream, contentLength } = await input.getStream();
+    // A stream has no inherent length and YouTube requires one, so fall back to
+    // the object's own metadata when the DB doesn't have it.
+    const length = input.fileSize ?? contentLength;
+    if (length == null) {
+      stream.destroy();
+      throw new PublishError('youtube upload: file size unknown, cannot upload', {
+        recoverable: false,
+        platform: Platform.YOUTUBE,
+      });
+    }
+
+    let uploadRes: Response;
+    try {
+      uploadRes = await rawFetch(uploadUrl, {
+        method: 'PUT',
+        context: 'youtube upload',
+        platform: Platform.YOUTUBE,
+        headers: {
+          'Content-Type': input.mimeType ?? 'video/mp4',
+          'Content-Length': String(length),
+        },
+        body: Readable.toWeb(stream) as ReadableStream,
+        duplex: 'half',
+      });
+    } catch (err) {
+      // Don't leave the storage read dangling when the upload never completes.
+      stream.destroy();
+      throw err;
+    }
     const text = await uploadRes.text();
     if (!uploadRes.ok) throw classify('youtube upload', uploadRes.status, text);
 
