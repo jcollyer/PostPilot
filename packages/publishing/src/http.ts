@@ -58,7 +58,13 @@ export function errorFromStatus(
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT';
   headers?: Record<string, string>;
-  body?: string | Buffer | Uint8Array;
+  body?: string | Buffer | Uint8Array | ReadableStream;
+  /**
+   * Required by fetch whenever `body` is a stream — without it the request is
+   * rejected before a byte is sent. Streaming is how large media is uploaded
+   * without holding the whole file in memory.
+   */
+  duplex?: 'half';
   context: string;
   platform?: Platform;
   /**
@@ -114,7 +120,10 @@ export async function rawFetch(url: string, opts: RequestOptions): Promise<Respo
       // Node lib (server packages) and the DOM lib (when this package is pulled
       // into the web app's typecheck), which model `BodyInit` differently.
       body: opts.body as unknown as RequestInit['body'],
-    });
+      // `duplex` is part of the fetch spec but missing from the ambient
+      // RequestInit type, hence the cast.
+      ...(opts.duplex ? { duplex: opts.duplex } : {}),
+    } as RequestInit);
   } catch (err) {
     throw new PublishError(`${opts.context}: network error ${(err as Error)?.message ?? ''}`, {
       recoverable: true,

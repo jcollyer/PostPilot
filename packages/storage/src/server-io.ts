@@ -30,7 +30,35 @@ export async function putObject(params: {
   );
 }
 
-/** Fetch an object's full bytes into memory. */
+/**
+ * Open a read stream over an object without materializing it in memory.
+ *
+ * Prefer this over `getObjectBuffer` for anything that pipes an object straight
+ * somewhere else. `getObjectBuffer` collects every chunk and then concatenates
+ * them, so peak memory is roughly twice the file size — and this library's
+ * videos routinely run 150–400 MB (largest ~1 GB). On a small worker machine
+ * that overruns the memory limit and the process is killed outright: no
+ * exception to catch, no error to record, the run simply vanishes mid-upload.
+ *
+ * `contentLength` comes from the object metadata, for callers that must declare
+ * a length up front (an HTTP upload can't derive one from a stream).
+ */
+export async function getObjectStream(
+  key: string,
+): Promise<{ stream: Readable; contentLength: number | null }> {
+  const { bucket } = getStorageConfig();
+  const out = await getS3Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const body = out.Body as Readable | undefined;
+  if (!body) throw new Error(`Object ${key} has no body.`);
+  return { stream: body, contentLength: out.ContentLength ?? null };
+}
+
+/**
+ * Fetch an object's full bytes into memory.
+ *
+ * Only safe for objects known to be small (generated thumbnails, extracted
+ * audio). Use `getObjectStream` for source media.
+ */
 export async function getObjectBuffer(key: string): Promise<Buffer> {
   const { bucket } = getStorageConfig();
   const out = await getS3Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));

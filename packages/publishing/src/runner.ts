@@ -1,6 +1,6 @@
 import { Platform, Prisma, prisma, type PrismaClient } from '@postpilot/db';
 import { getFreshAccessToken, markNeedsReconnect } from '@postpilot/connectors';
-import { getObjectBuffer } from '@postpilot/storage';
+import { getObjectStream } from '@postpilot/storage';
 
 import { getPublishAdapter } from './adapters';
 import {
@@ -130,15 +130,27 @@ export async function publishDueTasks(opts?: { limit?: number }): Promise<Publis
  */
 async function claimTask(task: TaskWithRelations): Promise<TaskWithRelations | null> {
   const now = new Date();
+  // Taking over a lapsed lease means the previous holder died without reporting
+  // anything. Count it as an attempt: a run that is *killed* (out of memory, out
+  // of time) never throws, so `handleError` — and with it the retry ceiling —
+  // is never reached. Without counting here, such a task is reclaimed by every
+  // sweep forever, and each reclaim starts a fresh upload the platform keeps.
+  const reclaiming = task.status === 'UPLOADING';
+  const attemptCount = reclaiming ? task.attemptCount + 1 : task.attemptCount;
+
   const { count } = await prisma.publishTask.updateMany({
     where: {
       id: task.id,
       OR: [{ status: 'SCHEDULED' }, { status: 'UPLOADING', nextAttemptAt: { lte: now } }],
     },
-    data: { status: 'UPLOADING', nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS) },
+    data: {
+      status: 'UPLOADING',
+      attemptCount,
+      nextAttemptAt: new Date(now.getTime() + CLAIM_LEASE_MS),
+    },
   });
   if (count === 0) return null;
-  return { ...task, status: 'UPLOADING' };
+  return { ...task, status: 'UPLOADING', attemptCount };
 }
 
 /** Process a single task end to end, then roll up its queue item's status. */
@@ -161,7 +173,17 @@ export async function processTask(taskId: string): Promise<PublishRunResult> {
           detail: 'already claimed by another run',
         };
       }
-      result = await startPublish(claimed);
+      // Repeatedly reclaimed means every run so far has died mid-upload without
+      // reporting. Stop rather than start yet another attempt — each one can
+      // leave the platform holding a half-finished upload.
+      result =
+        claimed.attemptCount >= MAX_PUBLISH_ATTEMPTS
+          ? await failTask(
+              claimed,
+              'the upload was interrupted repeatedly before it could finish — check the platform for incomplete uploads before retrying',
+              { reject: false },
+            )
+          : await startPublish(claimed);
     }
   } catch (err) {
     result = await handleError(task, err);
@@ -200,7 +222,7 @@ function buildInput(task: TaskWithRelations, accessToken: string): PublishInput 
       externalAccountId: task.connection!.externalAccountId,
       videoUrl: '',
       imageUrls: slideUrls,
-      getBytes: () => getObjectBuffer(image.storageKey),
+      getStream: () => getObjectStream(image.storageKey),
       mimeType: image.mimeType,
       fileSize: image.fileSize != null ? Number(image.fileSize) : null,
       durationSec: null,
@@ -219,7 +241,7 @@ function buildInput(task: TaskWithRelations, accessToken: string): PublishInput 
     externalAccountId: task.connection!.externalAccountId,
     videoUrl: video.cdnUrl ?? '',
     imageUrls: [],
-    getBytes: () => getObjectBuffer(video.storageKey),
+    getStream: () => getObjectStream(video.storageKey),
     mimeType: video.mimeType,
     fileSize: video.fileSize != null ? Number(video.fileSize) : null,
     durationSec: video.durationSec,

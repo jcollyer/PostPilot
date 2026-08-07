@@ -20,8 +20,18 @@ import { processTask } from '@postpilot/publishing';
  */
 export const publishTaskRun = task({
   id: 'publish-task',
+  // Uploads stream rather than buffer, so memory no longer scales with file
+  // size — but the default preset is only 0.5 GB, and running a media upload
+  // that close to the limit is how this failed before: the process is killed
+  // outright, with no exception to catch and nothing recorded on the task.
+  // Headroom here is far cheaper than an orphaned upload on the channel.
+  machine: 'small-2x',
   // A single publish: upload/commit against one platform API. Bounded well below
   // the global 3600s so a hung platform call can't hold a run for an hour.
+  //
+  // Must stay under CLAIM_LEASE_MS (15m) in @postpilot/publishing: the lease is
+  // what lets a killed run's task be picked up again, so it has to outlive the
+  // longest run that could still be working.
   maxDuration: 600,
   run: async (payload: { taskId: string }) => {
     const result = await processTask(payload.taskId);
