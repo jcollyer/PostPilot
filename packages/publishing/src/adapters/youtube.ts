@@ -94,9 +94,11 @@ export const youtubePublishAdapter: PublishAdapter = {
     // new orphaned video on the channel every time. Streaming keeps memory flat
     // regardless of file size.
     const { stream, contentLength } = await input.getStream();
-    // A stream has no inherent length and YouTube requires one, so fall back to
-    // the object's own metadata when the DB doesn't have it.
-    const length = input.fileSize ?? contentLength;
+    // A stream has no inherent length and YouTube requires one. Take it from the
+    // stored object rather than the database row: the object is what's actually
+    // being sent, and a `Content-Length` that disagrees with the bytes leaves the
+    // request hanging until it times out. The DB value is only a fallback.
+    const length = contentLength ?? input.fileSize;
     if (length == null) {
       stream.destroy();
       throw new PublishError('youtube upload: file size unknown, cannot upload', {
