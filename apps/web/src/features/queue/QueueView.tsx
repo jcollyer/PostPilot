@@ -663,18 +663,26 @@ function SortableRow({
           ) : null}
         </div>
         <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-          <span>{item.scheduledAt ? formatSlot(item.scheduledAt) : 'Awaiting a slot'}</span>
+          <SlotLabel item={item} />
           {item.tasks.length > 0 ? (
-            item.tasks.map((t) => (
-              <TaskChip
-                key={t.id}
-                task={t}
+            <>
+              {item.tasks.map((t) => (
+                <TaskChip
+                  key={t.id}
+                  task={t}
+                  tiktok={tiktok}
+                  instagram={instagram}
+                  youtube={youtube}
+                  onRetry={() => onRetry(t.id)}
+                />
+              ))}
+              <AwaitingSlot
+                platforms={item.postsTo.filter((p) => !item.tasks.some((t) => t.platform === p))}
                 tiktok={tiktok}
                 instagram={instagram}
                 youtube={youtube}
-                onRetry={() => onRetry(t.id)}
               />
-            ))
+            </>
           ) : (
             <Destinations
               platforms={item.postsTo}
@@ -725,6 +733,34 @@ function SortableRow({
 }
 
 /**
+ * When this item goes out.
+ *
+ * Its platforms don't have to share a slot: a video targeting all three can take
+ * TikTok + YouTube from one schedule and Instagram from another, days apart. The
+ * item's own `scheduledAt` is the earliest of those, so naming it alone would
+ * imply a time most of the chips don't actually honor — hence the "+N more
+ * times" hint, with each chip's tooltip carrying its own.
+ */
+function SlotLabel({ item }: { item: QueueItem }) {
+  const extra = useMemo(() => {
+    const times = new Set(item.tasks.map((t) => new Date(t.scheduledAt).getTime()));
+    return Math.max(0, times.size - 1);
+  }, [item.tasks]);
+
+  if (!item.scheduledAt) return <span>Awaiting a slot</span>;
+  return (
+    <span>
+      {formatSlot(item.scheduledAt)}
+      {extra > 0 ? (
+        <span title="This item's platforms publish at different scheduled times">
+          {` · +${extra} more time${extra > 1 ? 's' : ''}`}
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+/**
  * Where this item will post, shown before publish tasks are materialized (i.e.
  * while it's still awaiting a slot). Once scheduled, the per-platform TaskChips
  * convey the same destinations with live status, so this is only the fallback.
@@ -767,6 +803,43 @@ function Destinations({
         );
       })}
     </span>
+  );
+}
+
+/**
+ * Destinations this item is headed for that don't have a publish task yet.
+ *
+ * Platforms are materialized slot by slot, so an item can hold its Instagram
+ * task while the TikTok/YouTube slot it needs is still past the scheduling
+ * horizon. Rendered as dashed placeholders next to the live chips, because a row
+ * showing one Instagram chip and nothing else is exactly what made the old
+ * "posted to Instagram only" bug invisible.
+ */
+function AwaitingSlot({
+  platforms,
+  tiktok,
+  instagram,
+  youtube,
+}: {
+  platforms: Platform[];
+  tiktok: TikTokAccount | null;
+  instagram: InstagramAccount | null;
+  youtube: YouTubeAccount | null;
+}) {
+  if (platforms.length === 0) return null;
+  return (
+    <>
+      {platforms.map((p) => (
+        <span
+          key={p}
+          className="inline-flex items-center gap-0.5 rounded border border-dashed border-slate-300 px-1 text-slate-500"
+          title={`${PLATFORM_LABELS[p]} — awaiting a slot in your schedule`}
+        >
+          <PlatformAvatar url={platformAvatarUrl(p, tiktok, instagram, youtube)} />
+          {PLATFORM_SHORT[p]}
+        </span>
+      ))}
+    </>
   );
 }
 
@@ -857,9 +930,13 @@ function TaskChip({
     );
   }
 
-  // SCHEDULED / PENDING
+  // SCHEDULED / PENDING. The time is per-task, not per-item — sibling platforms
+  // can be on a different schedule entirely — so the chip carries its own.
   return (
-    <span className={`${base} bg-slate-100 text-slate-600`} title={`Scheduled for ${full}${at}`}>
+    <span
+      className={`${base} bg-slate-100 text-slate-600`}
+      title={`Scheduled for ${full}${at} — ${formatSlot(task.scheduledAt)}`}
+    >
       {avatar} {label}
     </span>
   );

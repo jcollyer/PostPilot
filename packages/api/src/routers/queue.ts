@@ -137,19 +137,18 @@ export const queueRouter = router({
           // Where this item is intended to post: the media's explicit choice, or
           // all currently-connected platforms when left on the default. Shown on
           // the row even before publish tasks are materialized.
-          postsTo:
-            media.targetPlatforms.length > 0 ? media.targetPlatforms : connectedPlatforms,
+          postsTo: media.targetPlatforms.length > 0 ? media.targetPlatforms : connectedPlatforms,
           media,
           tasks: it.publishTasks.map((t) => ({
-          id: t.id,
-          platform: t.platform,
-          status: t.status,
-          scheduledAt: t.scheduledAt,
-          publishedAt: t.publishedAt,
-          postUrl: t.platformPostUrl,
-          lastError: t.lastError,
-          needsConnection: t.status === 'HELD' || !t.connectionId,
-        })),
+            id: t.id,
+            platform: t.platform,
+            status: t.status,
+            scheduledAt: t.scheduledAt,
+            publishedAt: t.publishedAt,
+            postUrl: t.platformPostUrl,
+            lastError: t.lastError,
+            needsConnection: t.status === 'HELD' || !t.connectionId,
+          })),
         };
       }),
     };
@@ -404,77 +403,76 @@ export const queueRouter = router({
       (t) => t.status === 'SCHEDULED' || t.status === 'HELD' || t.status === 'FAILED',
     );
 
-    let taskIds: string[];
-    if (publishable.length > 0) {
-      // Tasks already materialized (item has a slot) — mark them due now.
-      // Re-bind each task to the user's *current* ACTIVE connection for its
-      // platform: the connectionId snapshotted at schedule time can be stale
-      // after a reconnect (new/updated row), which otherwise makes the task
-      // fail forever with "connection not active".
-      const conns = await ctx.prisma.platformConnection.findMany({
-        where: { userId: ctx.userId, status: 'ACTIVE' },
-        select: { id: true, platform: true },
-      });
-      const connByPlatform = new Map<Platform, string>();
-      for (const c of conns) if (!connByPlatform.has(c.platform)) connByPlatform.set(c.platform, c.id);
+    const conns = await ctx.prisma.platformConnection.findMany({
+      where: { userId: ctx.userId, status: 'ACTIVE' },
+      select: { id: true, platform: true },
+    });
+    const connByPlatform = new Map<Platform, string>();
+    for (const c of conns)
+      if (!connByPlatform.has(c.platform)) connByPlatform.set(c.platform, c.id);
 
-      taskIds = publishable.map((t) => t.id);
-      await Promise.all(
-        publishable.map((t) =>
-          ctx.prisma.publishTask.update({
-            where: { id: t.id },
-            data: {
-              status: 'SCHEDULED',
-              attemptCount: 0,
-              nextAttemptAt: null,
-              scheduledAt: new Date(),
-              // Only overwrite when we have a current active connection for the
-              // platform; otherwise leave the existing id for the runner to hold.
-              ...(connByPlatform.has(t.platform)
-                ? { connectionId: connByPlatform.get(t.platform)! }
-                : {}),
-            },
-          }),
-        ),
-      );
-    } else if (existing.length === 0) {
-      // No tasks yet (item still awaiting a slot) — materialize them now for the
-      // item's connected target platforms, mirroring the scheduler.
-      const conns = await ctx.prisma.platformConnection.findMany({
-        where: { userId: ctx.userId, status: 'ACTIVE' },
-        select: { id: true, platform: true },
-      });
-      const connByPlatform = new Map<Platform, string>();
-      for (const c of conns) if (!connByPlatform.has(c.platform)) connByPlatform.set(c.platform, c.id);
+    // Where this item is headed, limited to platforms we can actually publish to.
+    const targets = (itemTargets.length > 0 ? itemTargets : [...connByPlatform.keys()]).filter(
+      (p) => connByPlatform.has(p),
+    );
 
-      const targets = (
-        itemTargets.length > 0 ? itemTargets : [...connByPlatform.keys()]
-      ).filter((p) => connByPlatform.has(p));
+    // The scheduler materializes an item's platforms slot by slot, so a partly
+    // scheduled item is normal: it can hold just its Instagram task while its
+    // TikTok/YouTube slot is still days out. "Publish now" means publish
+    // everywhere it's headed, so fill in the targets that have no task yet.
+    // Platforms already PUBLISHED/PROCESSING keep their task — they've gone out.
+    const hasTask = new Set(existing.map((t) => t.platform));
+    const missing = targets.filter((p) => !hasTask.has(p));
 
-      if (targets.length === 0) {
-        return { success: false as const, reason: 'no_connection' as const };
-      }
-
-      const now = new Date();
-      const created = await Promise.all(
-        targets.map((platform) =>
-          ctx.prisma.publishTask.create({
-            data: {
-              queueItemId: item.id,
-              platform,
-              connectionId: connByPlatform.get(platform)!,
-              status: 'SCHEDULED',
-              scheduledAt: now,
-            },
-            select: { id: true },
-          }),
-        ),
-      );
-      taskIds = created.map((t) => t.id);
-    } else {
-      // Tasks exist but none are publishable (already posted/processing).
-      return { success: false as const, reason: 'nothing_to_publish' as const };
+    if (publishable.length === 0 && missing.length === 0) {
+      // Nothing left to do: either everything already posted, or the item has no
+      // connected platform to post to at all.
+      return existing.length > 0
+        ? { success: false as const, reason: 'nothing_to_publish' as const }
+        : { success: false as const, reason: 'no_connection' as const };
     }
+
+    const now = new Date();
+
+    // Tasks already materialized — mark them due now. Re-bind each to the user's
+    // *current* ACTIVE connection for its platform: the connectionId snapshotted
+    // at schedule time can be stale after a reconnect (new/updated row), which
+    // otherwise makes the task fail forever with "connection not active".
+    await Promise.all(
+      publishable.map((t) =>
+        ctx.prisma.publishTask.update({
+          where: { id: t.id },
+          data: {
+            status: 'SCHEDULED',
+            attemptCount: 0,
+            nextAttemptAt: null,
+            scheduledAt: now,
+            // Only overwrite when we have a current active connection for the
+            // platform; otherwise leave the existing id for the runner to hold.
+            ...(connByPlatform.has(t.platform)
+              ? { connectionId: connByPlatform.get(t.platform)! }
+              : {}),
+          },
+        }),
+      ),
+    );
+
+    const created = await Promise.all(
+      missing.map((platform) =>
+        ctx.prisma.publishTask.create({
+          data: {
+            queueItemId: item.id,
+            platform,
+            connectionId: connByPlatform.get(platform)!,
+            status: 'SCHEDULED',
+            scheduledAt: now,
+          },
+          select: { id: true },
+        }),
+      ),
+    );
+
+    const taskIds = [...publishable.map((t) => t.id), ...created.map((t) => t.id)];
 
     // Sequential to respect platform rate limits, mirroring publishDueTasks.
     const results: Array<{ platform: Platform; outcome: string; detail?: string }> = [];
