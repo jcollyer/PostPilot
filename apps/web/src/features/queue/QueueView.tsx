@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import {
   DndContext,
   closestCenter,
@@ -26,6 +26,7 @@ import {
   GripVertical,
   Loader2,
   Pause,
+  Pencil,
   Play,
   RefreshCw,
   RotateCcw,
@@ -43,6 +44,7 @@ import { AccountAvatar, PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc/client';
+import { QueueItemEditDialog, type QueueEditTarget } from './QueueItemEditDialog';
 import { ScheduleEditor } from './ScheduleEditor';
 import { formatDayHeading, formatSlot, formatTime } from './format';
 
@@ -166,6 +168,10 @@ export function QueueView() {
 
   // How many published items to show before "Show more".
   const [showAllPublished, setShowAllPublished] = useState(false);
+
+  // The row whose "Edit details" panel is open (null = none). Both lists point
+  // at the same library record, so either can open the editor.
+  const [editTarget, setEditTarget] = useState<QueueEditTarget | null>(null);
 
   // Local mirror of the server order so drag feels instant.
   const serverItems = queue.data?.items ?? [];
@@ -384,6 +390,12 @@ export function QueueView() {
                             youtube={youtube}
                             selected={selectedIds.has(item.id)}
                             onToggleSelect={() => toggleSelect(item.id)}
+                            onEdit={() =>
+                              setEditTarget({
+                                mediaId: item.media.id,
+                                mediaType: item.media.mediaType,
+                              })
+                            }
                             onSkip={() => skip.mutate({ itemId: item.id })}
                             onRemove={() => removeItem.mutate({ itemId: item.id })}
                             onRetry={(taskId) => retryPublish.mutate({ taskId })}
@@ -516,11 +528,23 @@ export function QueueView() {
                 tiktok={tiktok}
                 instagram={instagram}
                 youtube={youtube}
+                onEdit={(post) =>
+                  setEditTarget({ mediaId: post.mediaId, mediaType: post.mediaType })
+                }
               />
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {editTarget ? (
+        <QueueItemEditDialog
+          target={editTarget}
+          open={Boolean(editTarget)}
+          onOpenChange={(o) => !o && setEditTarget(null)}
+          onSaved={refresh}
+        />
+      ) : null}
     </div>
   );
 }
@@ -566,16 +590,17 @@ function Checkbox({
   );
 }
 
+/** Rendered as a span so it stays valid inside the clickable upcoming rows. */
 function Thumb({ url }: { url: string | null }) {
   return (
-    <div className="bg-muted flex h-12 w-8 shrink-0 items-center justify-center overflow-hidden rounded">
+    <span className="bg-muted flex h-12 w-8 shrink-0 items-center justify-center overflow-hidden rounded">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
         <Film className="text-muted-foreground h-4 w-4" />
       )}
-    </div>
+    </span>
   );
 }
 
@@ -604,6 +629,7 @@ function SortableRow({
   youtube,
   selected,
   onToggleSelect,
+  onEdit,
   onSkip,
   onRemove,
   onRetry,
@@ -616,6 +642,7 @@ function SortableRow({
   youtube: YouTubeAccount | null;
   selected: boolean;
   onToggleSelect: () => void;
+  onEdit: () => void;
   onSkip: () => void;
   onRemove: () => void;
   onRetry: (taskId: string) => void;
@@ -627,11 +654,20 @@ function SortableRow({
   });
   const style = { transform: CSS.Transform.toString(transform), transition };
 
+  // Clicking the row opens its edit panel, but the row is full of its own
+  // controls (checkbox, drag handle, task chips, actions) — let any of those
+  // handle the click themselves. The pencil below is the keyboard equivalent.
+  const onRowClick = (e: MouseEvent<HTMLLIElement>) => {
+    if ((e.target as HTMLElement).closest('a, button, input, label')) return;
+    onEdit();
+  };
+
   return (
     <li
       ref={setNodeRef}
       style={style}
-      className={`bg-card flex items-center gap-2 rounded-md border p-2 ${
+      onClick={onRowClick}
+      className={`bg-card hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-md border p-2 transition-colors ${
         isDragging ? 'shadow-lg' : ''
       } ${selected ? 'border-primary ring-primary/30 ring-1' : ''}`}
     >
@@ -709,6 +745,15 @@ function SortableRow({
           )}
           Publish now
         </Button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="text-muted-foreground hover:text-foreground p-1"
+          aria-label="Edit details"
+          title="Edit details"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
         <button
           type="button"
           onClick={onSkip}
@@ -948,12 +993,14 @@ function UpcomingList({
   tiktok,
   instagram,
   youtube,
+  onEdit,
 }: {
   data: Upcoming | undefined;
   loading: boolean;
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
   youtube: YouTubeAccount | null;
+  onEdit: (post: Upcoming[number]) => void;
 }) {
   const groups = useMemo(() => {
     const map = new Map<string, Upcoming>();
@@ -1000,34 +1047,41 @@ function UpcomingList({
                       ? (youtube?.username ?? null)
                       : null;
               return (
-                <li key={p.taskId} className="flex items-center gap-2 text-sm">
-                  <Thumb url={p.thumbnailUrl} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate">{p.title ?? 'Untitled'}</p>
-                    <p className="text-muted-foreground flex items-center gap-1 text-xs">
-                      <span>
-                        {formatTime(p.scheduledAt)} · {PLATFORM_LABELS[p.platform]}
-                      </span>
-                      {avatarUrl || handle ? (
-                        <span className="flex items-center gap-1">
-                          {avatarUrl ? (
-                            <AccountAvatar
-                              url={avatarUrl}
-                              name={handle ?? PLATFORM_LABELS[p.platform]}
-                            />
-                          ) : null}
-                          {handle ? (
-                            <span className="truncate">
-                              {handle.startsWith('@') ? handle : `@${handle}`}
-                            </span>
-                          ) : null}
+                <li key={p.taskId}>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(p)}
+                    title="Edit details"
+                    className="hover:bg-accent/60 flex w-full items-center gap-2 rounded-md p-1 text-left text-sm transition-colors"
+                  >
+                    <Thumb url={p.thumbnailUrl} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate">{p.title ?? 'Untitled'}</span>
+                      <span className="text-muted-foreground flex items-center gap-1 text-xs">
+                        <span>
+                          {formatTime(p.scheduledAt)} · {PLATFORM_LABELS[p.platform]}
                         </span>
-                      ) : null}
-                      {p.needsConnection ? (
-                        <span className="text-red-600">· reconnect needed</span>
-                      ) : null}
-                    </p>
-                  </div>
+                        {avatarUrl || handle ? (
+                          <span className="flex items-center gap-1">
+                            {avatarUrl ? (
+                              <AccountAvatar
+                                url={avatarUrl}
+                                name={handle ?? PLATFORM_LABELS[p.platform]}
+                              />
+                            ) : null}
+                            {handle ? (
+                              <span className="truncate">
+                                {handle.startsWith('@') ? handle : `@${handle}`}
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : null}
+                        {p.needsConnection ? (
+                          <span className="text-red-600">· reconnect needed</span>
+                        ) : null}
+                      </span>
+                    </span>
+                  </button>
                 </li>
               );
             })}
