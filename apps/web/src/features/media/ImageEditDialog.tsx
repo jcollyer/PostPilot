@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Instagram, Layers, Loader2 } from 'lucide-react';
 
+import { PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -96,18 +97,15 @@ export function ImageEditDialog({
           <div className="flex items-center gap-2 pt-1">
             <span className="text-muted-foreground text-xs">Posting to</span>
             <span className="inline-flex items-center gap-1.5 rounded-full border bg-muted/40 py-0.5 pl-0.5 pr-2 text-xs font-medium">
-              {igConnected && igAvatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={igAvatar}
-                  alt=""
-                  className="h-5 w-5 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 via-red-500 to-amber-400 text-white">
-                  <Instagram className="h-3 w-3" />
-                </span>
-              )}
+              <PillAvatar
+                url={igConnected ? igAvatar : null}
+                className="h-5 w-5"
+                fallback={
+                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-fuchsia-500 via-red-500 to-amber-400 text-white">
+                    <Instagram className="h-3 w-3" />
+                  </span>
+                }
+              />
               <span>Instagram</span>
               {igConnected && igHandle ? (
                 <span className="text-muted-foreground font-normal">· {igHandle}</span>

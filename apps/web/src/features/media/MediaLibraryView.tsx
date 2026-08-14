@@ -44,6 +44,7 @@ import {
   type TikTokPrivacyLevel,
 } from '@postpilot/types';
 
+import { PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -795,14 +796,7 @@ export function MediaLibraryView() {
             {connected.has('TIKTOK') ? (
               <div className="flex flex-wrap items-center gap-2 border-t bg-muted-foreground/5 px-3 py-2">
                 <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                  {tiktokAccount.avatarUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={tiktokAccount.avatarUrl}
-                      alt=""
-                      className="h-4 w-4 shrink-0 rounded-full object-cover"
-                    />
-                  ) : null}
+                  <PillAvatar url={tiktokAccount.avatarUrl} />
                   <span>
                     Posting to TikTok as{' '}
                     <span className="text-foreground font-medium">
@@ -1946,14 +1940,7 @@ function ImageCard({
             Post to
           </p>
           <div className="flex items-center gap-1.5">
-            {instagramAvatarUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={instagramAvatarUrl}
-                alt="Instagram"
-                className="h-5 w-5 rounded-full object-cover"
-              />
-            ) : null}
+            <PillAvatar url={instagramAvatarUrl} className="h-5 w-5" />
             <span className="text-muted-foreground text-[11px]">
               Instagram
               {instagramConnected && instagramAccountLabel ? (

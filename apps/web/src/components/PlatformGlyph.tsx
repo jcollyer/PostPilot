@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 
 import { type Platform } from '@postpilot/types';
 
@@ -112,18 +112,21 @@ export function AccountAvatar({
   name: string;
   className?: string;
 }) {
-  const [broken, setBroken] = useState(false);
+  // Track *which* url failed rather than a bare boolean, so a later good url
+  // (e.g. once the avatar mirror backfills) retries instead of staying stuck on
+  // the letter tile until the component happens to remount.
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
   return (
     <span
       aria-hidden="true"
       className={`inline-flex shrink-0 overflow-hidden rounded-full bg-muted ${className}`}
     >
-      {url && !broken ? (
+      {url && brokenUrl !== url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={url}
           alt=""
-          onError={() => setBroken(true)}
+          onError={() => setBrokenUrl(url)}
           className="h-full w-full object-cover"
         />
       ) : (
@@ -132,5 +135,38 @@ export function AccountAvatar({
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * Account avatar for tight platform pills, where there's no room for
+ * `AccountAvatar`'s letter tile. Renders `fallback` (nothing, by default) when
+ * there's no avatar *or* when the one we have fails to load — so a dead URL
+ * collapses to the bare pill instead of the browser's broken-image glyph.
+ *
+ * Platform avatar URLs do die: Instagram and TikTok hand back signed URLs that
+ * expire within days. @postpilot/connectors' avatar-service mirrors the bytes
+ * into our own storage to stop that at the source; this is the belt-and-braces
+ * half, so a URL that fails for any other reason never renders as a broken image.
+ */
+export function PillAvatar({
+  url,
+  className = 'h-4 w-4',
+  fallback = null,
+}: {
+  url: string | null;
+  className?: string;
+  fallback?: ReactNode;
+}) {
+  const [brokenUrl, setBrokenUrl] = useState<string | null>(null);
+  if (!url || brokenUrl === url) return <>{fallback}</>;
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      onError={() => setBrokenUrl(url)}
+      className={`shrink-0 rounded-full object-cover ${className}`}
+    />
   );
 }

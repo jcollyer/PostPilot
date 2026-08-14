@@ -7,6 +7,7 @@ import type { AppRouter } from '@postpilot/api';
 
 import { PLATFORM_LABELS, platformSchema, type Platform } from '@postpilot/types';
 
+import { PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { trpc } from '@/lib/trpc/client';
@@ -319,14 +320,7 @@ function ScheduleForm({
                   selected ? 'bg-primary text-primary-foreground' : 'hover:bg-accent border'
                 }`}
               >
-                {avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatarUrl}
-                    alt=""
-                    className="-ml-0.5 h-4 w-4 shrink-0 rounded-full object-cover"
-                  />
-                ) : null}
+                <PillAvatar url={avatarUrl ?? null} className="-ml-0.5 h-4 w-4" />
                 {PLATFORM_LABELS[pl]}
                 {selected ? (
                   <span className="-mr-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-white">
