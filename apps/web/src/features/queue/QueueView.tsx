@@ -39,6 +39,7 @@ import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@postpilot/api';
 import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
+import { AccountAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc/client';
@@ -578,12 +579,22 @@ function Thumb({ url }: { url: string | null }) {
   );
 }
 
-/** Small round account avatar shown inside a platform pill. */
+/**
+ * Small round account avatar shown inside a platform pill. Renders nothing when
+ * there's no avatar — or when the one we have fails to load, so a dead URL
+ * collapses to the bare platform pill instead of a broken-image glyph.
+ */
 function PlatformAvatar({ url }: { url: string | null }) {
-  if (!url) return null;
+  const [broken, setBroken] = useState(false);
+  if (!url || broken) return null;
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt="" className="-ml-0.5 h-3.5 w-3.5 shrink-0 rounded-full object-cover" />
+    <img
+      src={url}
+      alt=""
+      onError={() => setBroken(true)}
+      className="-ml-0.5 h-3.5 w-3.5 shrink-0 rounded-full object-cover"
+    />
   );
 }
 
@@ -937,11 +948,9 @@ function UpcomingList({
                       {avatarUrl || handle ? (
                         <span className="flex items-center gap-1">
                           {avatarUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={avatarUrl}
-                              alt=""
-                              className="h-4 w-4 shrink-0 rounded-full object-cover"
+                            <AccountAvatar
+                              url={avatarUrl}
+                              name={handle ?? PLATFORM_LABELS[p.platform]}
                             />
                           ) : null}
                           {handle ? (

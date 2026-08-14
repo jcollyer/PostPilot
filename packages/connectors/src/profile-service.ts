@@ -1,6 +1,8 @@
 import { Prisma, prisma, type PlatformConnection } from '@postpilot/db';
+import { getStorageConfig, isStorageConfigured } from '@postpilot/storage';
 
 import { getAdapter } from './adapters';
+import { mirrorConnectionAvatar } from './avatar-service';
 import { decryptSecret } from './crypto';
 
 /**
@@ -31,16 +33,26 @@ export async function refreshProfileSnapshot(conn: PlatformConnection): Promise<
       accessToken,
       externalAccountId: conn.externalAccountId,
     });
+
+    // Refresh the cached avatar too, mirroring it into our own storage —
+    // Instagram's and TikTok's URLs expire, so the URL alone is worthless a
+    // day later (see avatar-service). Fall back to whatever is already on the
+    // row when the snapshot carried no avatar: right after connect that's the
+    // still-valid URL from fetchIdentity, which is worth mirroring even though
+    // Instagram's best-effort bio fetch came back empty.
+    const avatarSource = snapshot.avatarUrl ?? conn.avatarUrl;
+    const avatarUrl = avatarSource ? await mirrorConnectionAvatar(conn, avatarSource) : null;
+
     await prisma.platformConnection.update({
       where: { id: conn.id },
       data: {
         profileBio: snapshot.bio,
         profileRecentPosts: snapshot.recentPosts as unknown as Prisma.InputJsonValue,
         profileFetchedAt: new Date(),
-        // Refresh the cached avatar too. Only overwrite when the platform
-        // returned one, so a null (unsupported/absent) never clobbers a good
-        // value. This also backfills connections made before avatarUrl existed.
-        ...(snapshot.avatarUrl ? { avatarUrl: snapshot.avatarUrl } : {}),
+        // Only overwrite when we actually resolved one, so a null
+        // (unsupported/absent) never clobbers a good value. This also backfills
+        // connections made before avatarUrl existed.
+        ...(avatarUrl ? { avatarUrl } : {}),
       },
     });
     return true;
@@ -49,6 +61,20 @@ export async function refreshProfileSnapshot(conn: PlatformConnection): Promise<
     // migration has run) the DB update itself — none of these should abort
     // the caller's batch (see refreshDueProfiles).
     return false;
+  }
+}
+
+/**
+ * Match clause for connections whose avatar is still a raw platform URL.
+ * Empty when storage isn't configured — there'd be nowhere to mirror to, so
+ * sweeping those rows in would just burn platform API calls every run.
+ */
+function unmirroredAvatarFilter(): Prisma.PlatformConnectionWhereInput[] {
+  if (!isStorageConfigured()) return [];
+  try {
+    return [{ NOT: { avatarUrl: { startsWith: `${getStorageConfig().publicBaseUrl}/` } } }];
+  } catch {
+    return [];
   }
 }
 
@@ -77,6 +103,11 @@ export async function refreshDueProfiles(): Promise<ProfileRefreshResult[]> {
         // picked up on the next run so the real profile picture appears without
         // requiring the user to reconnect.
         { avatarUrl: null },
+        // Backfill: rows still holding a raw platform URL rather than a
+        // mirrored one. Instagram's and TikTok's expire, so these are already
+        // broken (or about to be) regardless of how fresh profileFetchedAt is —
+        // re-fetch them once to get the bytes into our own storage.
+        ...unmirroredAvatarFilter(),
       ],
     },
   });

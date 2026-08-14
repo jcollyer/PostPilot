@@ -19,6 +19,7 @@ export {
   thumbnailKey,
   imagePrefix,
   imageSourceKey,
+  connectionAvatarKey,
 } from './keys';
 
 // Server-side object IO (worker / AI pipeline only)
