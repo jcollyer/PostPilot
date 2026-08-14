@@ -89,6 +89,32 @@ export function EditMetadataDialog({
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
 }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="gap-0 p-0">
+        <EditMetadataPanel video={video} onClose={() => onOpenChange(false)} onSaved={onSaved} />
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+/**
+ * The panel's contents, without the sheet around them.
+ *
+ * Split out for callers that only have a video id and must fetch the record
+ * first (the queue): they can hold a single sheet open across the load and drop
+ * these contents in when it lands, instead of swapping one sheet for another —
+ * which reads as the panel closing and reopening.
+ */
+export function EditMetadataPanel({
+  video,
+  onClose,
+  onSaved,
+}: {
+  video: VideoDto;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [title, setTitle] = useState(video.title ?? '');
   const [caption, setCaption] = useState(video.caption ?? '');
   const [hashtags, setHashtags] = useState<string[]>(video.hashtags ?? []);
@@ -108,7 +134,7 @@ export function EditMetadataDialog({
     setTargetPlatforms.mutate({ videoId: video.id, platforms: targetsFromSelected(next) });
   };
 
-  const detail = trpc.media.get.useQuery({ videoId: video.id }, { enabled: open });
+  const detail = trpc.media.get.useQuery({ videoId: video.id });
   const updateMetadata = trpc.media.updateMetadata.useMutation();
   // Lets the footer "Save" also persist unsaved edits in the active per-platform
   // tab, so per-platform captions aren't silently dropped on save.
@@ -134,7 +160,7 @@ export function EditMetadataDialog({
       hashtags,
     });
     onSaved();
-    onOpenChange(false);
+    onClose();
   };
 
   const onCoverSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -169,232 +195,224 @@ export function EditMetadataDialog({
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="gap-0 p-0">
-        <SheetHeader className="border-b p-6 pr-12">
-          <SheetTitle>Edit details</SheetTitle>
-          <SheetDescription>
-            What actually publishes is the per-platform data below. Fallback details are used only
-            when a platform has no variant of its own.
-          </SheetDescription>
-        </SheetHeader>
+    <>
+      <SheetHeader className="border-b p-6 pr-12">
+        <SheetTitle>Edit details</SheetTitle>
+        <SheetDescription>
+          What actually publishes is the per-platform data below. Fallback details are used only
+          when a platform has no variant of its own.
+        </SheetDescription>
+      </SheetHeader>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-6">
-          <div className="space-y-1.5">
-            <Label>Post to</Label>
-            <PlatformChips
-              selected={targetSel}
-              connected={connected}
-              onChange={onToggleTargets}
-              tiktokAvatarUrl={tiktokAvatarUrl ?? avatarUrls.TIKTOK}
-              instagramAvatarUrl={avatarUrls.INSTAGRAM}
-              youtubeAvatarUrl={avatarUrls.YOUTUBE}
-            />
-            <p className="text-muted-foreground text-xs">
-              Choose which platforms this video publishes to. Unconnected platforms are marked —
-              they’ll post once connected.
-            </p>
-            <TargetAccountList
-              selected={targetSel}
-              connected={connected}
-              avatarUrls={avatarUrls}
-              accountLabels={accountLabels}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>Cover image</Label>
-            <div className="flex items-center gap-3">
-              <div className="bg-muted flex h-20 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border">
-                {coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" />
-                ) : (
-                  <ImagePlus className="text-muted-foreground h-5 w-5" />
-                )}
-              </div>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept={IMAGE_ACCEPT}
-                  className="hidden"
-                  onChange={onCoverSelect}
-                  disabled={coverBusy}
-                />
-                <span className="border-input hover:bg-accent inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium">
-                  {coverBusy ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <ImagePlus className="mr-2 h-4 w-4" />
-                  )}
-                  {coverUrl ? 'Replace cover' : 'Add cover'}
-                </span>
-              </label>
-            </div>
-            {coverError ? <p className="text-destructive text-xs">{coverError}</p> : null}
-            <p className="text-muted-foreground text-xs">
-              No cover? The AI-selected thumbnail below is used automatically.
-            </p>
-          </div>
-
-          {detail.data && detail.data.thumbnails.length > 0 ? (
-            <div className="space-y-1.5">
-              <Label>AI thumbnail suggestions</Label>
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {detail.data.thumbnails.map((t) => {
-                  const selected = t.id === detail.data?.selectedThumbnailId;
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() =>
-                        selectThumbnail.mutate({ videoId: video.id, thumbnailId: t.id })
-                      }
-                      disabled={selectThumbnail.isPending}
-                      className={`relative h-24 w-14 shrink-0 overflow-hidden rounded-md border-2 ${
-                        selected
-                          ? 'border-primary'
-                          : 'hover:border-muted-foreground/40 border-transparent'
-                      }`}
-                    >
-                      {t.url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={t.url} alt="Frame" className="h-full w-full object-cover" />
-                      ) : null}
-                      {selected ? (
-                        <span className="bg-primary absolute bottom-0.5 right-0.5 rounded-full p-0.5 text-white">
-                          <Check className="h-3 w-3" />
-                        </span>
-                      ) : null}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
-
-          {detail.data ? (
-            <div className="space-y-4">
-              <Label>Per-platform data</Label>
-
-              {/* Captions subsection */}
-              <div className="space-y-1.5">
-                <p className="text-sm font-medium">Captions</p>
-                <p className="text-muted-foreground text-xs">
-                  AI tailors each platform. Edits here are kept and won&apos;t be overwritten on
-                  re-generate.
-                </p>
-                <PlatformMetaEditor
-                  ref={platformMetaRef}
-                  videoId={video.id}
-                  meta={detail.data.platformMeta}
-                  selected={targetSel}
-                  connected={connected}
-                  onSaved={() => {
-                    detail.refetch();
-                    onSaved();
-                  }}
-                />
-              </div>
-
-              {/* TikTok posting requirements — only relevant when this video
-                actually targets TikTok. Hidden otherwise so its rules don't
-                apply. */}
-              {targetSel.has('TIKTOK') ? (
-                <TikTokRequirementsEditor
-                  videoId={video.id}
-                  connected={detail.data.tiktokConnected}
-                  initial={detail.data.tiktok}
-                  durationSec={video.durationSec}
-                  onSaved={() => {
-                    detail.refetch();
-                    onSaved();
-                  }}
-                />
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* Fallback details — the base title/caption/hashtags. These publish
-            only when a platform has no variant of its own, so they're collapsed
-            by default to keep the focus on the per-platform data above. */}
-          <div className="rounded-md border">
-            <button
-              type="button"
-              onClick={() => setFallbackOpen((v) => !v)}
-              aria-expanded={fallbackOpen}
-              className="hover:bg-accent/50 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left"
-            >
-              <span>
-                <span className="text-sm font-medium">Fallback details</span>
-                <span className="text-muted-foreground block text-xs">
-                  Used only when a platform has no variant of its own.
-                </span>
-              </span>
-              <ChevronDown
-                className={`text-muted-foreground h-4 w-4 shrink-0 transition-transform ${
-                  fallbackOpen ? 'rotate-180' : ''
-                }`}
-              />
-            </button>
-
-            {fallbackOpen ? (
-              <div className="space-y-4 border-t p-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="video-title">Title</Label>
-                  <Input
-                    id="video-title"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Give this video a title"
-                    maxLength={150}
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="video-caption">Caption</Label>
-                  <textarea
-                    id="video-caption"
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    placeholder="Write a caption…"
-                    rows={4}
-                    className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label htmlFor="video-hashtags">Hashtags</Label>
-                  <HashtagInput
-                    id="video-hashtags"
-                    value={hashtags}
-                    onChange={setHashtags}
-                    placeholder="travel drone sunset"
-                  />
-                  <p className="text-muted-foreground text-xs">
-                    Press Enter or comma to turn text into a tag.
-                  </p>
-                </div>
-              </div>
-            ) : null}
-          </div>
+      <div className="flex-1 space-y-4 overflow-y-auto p-6">
+        <div className="space-y-1.5">
+          <Label>Post to</Label>
+          <PlatformChips
+            selected={targetSel}
+            connected={connected}
+            onChange={onToggleTargets}
+            tiktokAvatarUrl={tiktokAvatarUrl ?? avatarUrls.TIKTOK}
+            instagramAvatarUrl={avatarUrls.INSTAGRAM}
+            youtubeAvatarUrl={avatarUrls.YOUTUBE}
+          />
+          <p className="text-muted-foreground text-xs">
+            Choose which platforms this video publishes to. Unconnected platforms are marked —
+            they’ll post once connected.
+          </p>
+          <TargetAccountList
+            selected={targetSel}
+            connected={connected}
+            avatarUrls={avatarUrls}
+            accountLabels={accountLabels}
+          />
         </div>
 
-        <SheetFooter className="border-t p-6">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={updateMetadata.isPending}
+        <div className="space-y-1.5">
+          <Label>Cover image</Label>
+          <div className="flex items-center gap-3">
+            <div className="bg-muted flex h-20 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border">
+              {coverUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={coverUrl} alt="Cover" className="h-full w-full object-cover" />
+              ) : (
+                <ImagePlus className="text-muted-foreground h-5 w-5" />
+              )}
+            </div>
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept={IMAGE_ACCEPT}
+                className="hidden"
+                onChange={onCoverSelect}
+                disabled={coverBusy}
+              />
+              <span className="border-input hover:bg-accent inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium">
+                {coverBusy ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <ImagePlus className="mr-2 h-4 w-4" />
+                )}
+                {coverUrl ? 'Replace cover' : 'Add cover'}
+              </span>
+            </label>
+          </div>
+          {coverError ? <p className="text-destructive text-xs">{coverError}</p> : null}
+          <p className="text-muted-foreground text-xs">
+            No cover? The AI-selected thumbnail below is used automatically.
+          </p>
+        </div>
+
+        {detail.data && detail.data.thumbnails.length > 0 ? (
+          <div className="space-y-1.5">
+            <Label>AI thumbnail suggestions</Label>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {detail.data.thumbnails.map((t) => {
+                const selected = t.id === detail.data?.selectedThumbnailId;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => selectThumbnail.mutate({ videoId: video.id, thumbnailId: t.id })}
+                    disabled={selectThumbnail.isPending}
+                    className={`relative h-24 w-14 shrink-0 overflow-hidden rounded-md border-2 ${
+                      selected
+                        ? 'border-primary'
+                        : 'hover:border-muted-foreground/40 border-transparent'
+                    }`}
+                  >
+                    {t.url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={t.url} alt="Frame" className="h-full w-full object-cover" />
+                    ) : null}
+                    {selected ? (
+                      <span className="bg-primary absolute bottom-0.5 right-0.5 rounded-full p-0.5 text-white">
+                        <Check className="h-3 w-3" />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
+
+        {detail.data ? (
+          <div className="space-y-4">
+            <Label>Per-platform data</Label>
+
+            {/* Captions subsection */}
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Captions</p>
+              <p className="text-muted-foreground text-xs">
+                AI tailors each platform. Edits here are kept and won&apos;t be overwritten on
+                re-generate.
+              </p>
+              <PlatformMetaEditor
+                ref={platformMetaRef}
+                videoId={video.id}
+                meta={detail.data.platformMeta}
+                selected={targetSel}
+                connected={connected}
+                onSaved={() => {
+                  detail.refetch();
+                  onSaved();
+                }}
+              />
+            </div>
+
+            {/* TikTok posting requirements — only relevant when this video
+                actually targets TikTok. Hidden otherwise so its rules don't
+                apply. */}
+            {targetSel.has('TIKTOK') ? (
+              <TikTokRequirementsEditor
+                videoId={video.id}
+                connected={detail.data.tiktokConnected}
+                initial={detail.data.tiktok}
+                durationSec={video.durationSec}
+                onSaved={() => {
+                  detail.refetch();
+                  onSaved();
+                }}
+              />
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Fallback details — the base title/caption/hashtags. These publish
+            only when a platform has no variant of its own, so they're collapsed
+            by default to keep the focus on the per-platform data above. */}
+        <div className="rounded-md border">
+          <button
+            type="button"
+            onClick={() => setFallbackOpen((v) => !v)}
+            aria-expanded={fallbackOpen}
+            className="hover:bg-accent/50 flex w-full items-center justify-between gap-2 rounded-md px-3 py-2.5 text-left"
           >
-            Cancel
-          </Button>
-          <Button onClick={save} disabled={updateMetadata.isPending}>
-            {updateMetadata.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-            Save
-          </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+            <span>
+              <span className="text-sm font-medium">Fallback details</span>
+              <span className="text-muted-foreground block text-xs">
+                Used only when a platform has no variant of its own.
+              </span>
+            </span>
+            <ChevronDown
+              className={`text-muted-foreground h-4 w-4 shrink-0 transition-transform ${
+                fallbackOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {fallbackOpen ? (
+            <div className="space-y-4 border-t p-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="video-title">Title</Label>
+                <Input
+                  id="video-title"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="Give this video a title"
+                  maxLength={150}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="video-caption">Caption</Label>
+                <textarea
+                  id="video-caption"
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  placeholder="Write a caption…"
+                  rows={4}
+                  className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex w-full rounded-md border px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="video-hashtags">Hashtags</Label>
+                <HashtagInput
+                  id="video-hashtags"
+                  value={hashtags}
+                  onChange={setHashtags}
+                  placeholder="travel drone sunset"
+                />
+                <p className="text-muted-foreground text-xs">
+                  Press Enter or comma to turn text into a tag.
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      <SheetFooter className="border-t p-6">
+        <Button variant="outline" onClick={onClose} disabled={updateMetadata.isPending}>
+          Cancel
+        </Button>
+        <Button onClick={save} disabled={updateMetadata.isPending}>
+          {updateMetadata.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          Save
+        </Button>
+      </SheetFooter>
+    </>
   );
 }
 
