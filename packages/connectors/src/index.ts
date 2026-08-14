@@ -55,3 +55,6 @@ export {
   refreshDueProfiles,
   type ProfileRefreshResult,
 } from './profile-service';
+
+// Avatar mirroring (platform avatar URLs expire — we host the bytes ourselves)
+export { mirrorConnectionAvatar, isMirroredAvatarUrl } from './avatar-service';

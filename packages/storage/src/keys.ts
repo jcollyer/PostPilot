@@ -63,3 +63,15 @@ export function imagePrefix(userId: string, imageId: string): string {
 export function imageSourceKey(userId: string, imageId: string, ext: string): string {
   return `${imagePrefix(userId, imageId)}/source${ext}`;
 }
+
+/**
+ * Mirrored platform-account avatars, one object per connection:
+ *
+ *   users/<userId>/connections/<connectionId>/avatar<ext>
+ *
+ * The key is stable so re-mirroring overwrites in place rather than
+ * accumulating objects (see @postpilot/connectors' avatar-service).
+ */
+export function connectionAvatarKey(userId: string, connectionId: string, ext: string): string {
+  return `users/${userId}/connections/${connectionId}/avatar${ext}`;
+}

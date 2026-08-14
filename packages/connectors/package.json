@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@postpilot/db": "*",
+    "@postpilot/storage": "*",
     "@postpilot/types": "*",
     "@trigger.dev/sdk": "^4.0.0"
   },
