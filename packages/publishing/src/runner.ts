@@ -487,11 +487,19 @@ async function failTask(
 /**
  * Roll a queue item's status up from its tasks: COMPLETED once every task is
  * terminal, PUBLISHING while any is in flight or already posted.
+ *
+ * "Every task is terminal" is not the same as "the item is done". The scheduler
+ * materializes an item's platforms slot by slot, so a cross-post video can hold
+ * a published Instagram task while the TikTok/YouTube slot it still needs sits
+ * beyond the scheduling horizon. Completing it there would drop it out of the
+ * queue for good having posted to one platform of three — the exact failure this
+ * path exists to prevent. Such an item stays PUBLISHING, keeping it in the queue
+ * so the next recompute can give its missing platforms a slot.
  */
 async function rollupItemStatus(queueItemId: string): Promise<void> {
   const tasks = await prisma.publishTask.findMany({
     where: { queueItemId },
-    select: { status: true },
+    select: { status: true, platform: true },
   });
   if (tasks.length === 0) return;
 
@@ -501,14 +509,50 @@ async function rollupItemStatus(queueItemId: string): Promise<void> {
 
   const item = await prisma.queueItem.findUnique({
     where: { id: queueItemId },
-    select: { status: true },
+    select: {
+      status: true,
+      imageId: true,
+      video: { select: { targetPlatforms: true } },
+      queue: { select: { userId: true } },
+    },
   });
   if (!item || item.status === 'SKIPPED' || item.status === 'CANCELED') return;
 
-  const next = allTerminal ? 'COMPLETED' : anyActive ? 'PUBLISHING' : item.status;
+  // Only worth asking once the tasks on hand have all settled.
+  const done = allTerminal && (await everyTargetAttempted(item, tasks));
+  const next = done ? 'COMPLETED' : anyActive ? 'PUBLISHING' : item.status;
   if (next !== item.status) {
     await prisma.queueItem.update({ where: { id: queueItemId }, data: { status: next } });
   }
+}
+
+/**
+ * Does every platform this item targets already have a task? Mirrors the
+ * scheduler's notion of an item's wanted platforms: its explicit targets, or all
+ * currently-connected platforms when left on the "all connected" default.
+ */
+async function everyTargetAttempted(
+  item: {
+    imageId: string | null;
+    video: { targetPlatforms: Platform[] } | null;
+    queue: { userId: string };
+  },
+  tasks: Array<{ platform: Platform }>,
+): Promise<boolean> {
+  // Images/carousels are Instagram-only; videos carry their own targets.
+  const targets = item.imageId ? [Platform.INSTAGRAM] : (item.video?.targetPlatforms ?? []);
+  const wanted =
+    targets.length > 0
+      ? targets
+      : (
+          await prisma.platformConnection.findMany({
+            where: { userId: item.queue.userId, status: 'ACTIVE' },
+            select: { platform: true },
+          })
+        ).map((c) => c.platform);
+
+  const covered = new Set(tasks.map((t) => t.platform));
+  return wanted.every((p) => covered.has(p));
 }
 
 /** One platform's recorded publish, as stored in Video/Image.postedPosts (JSON). */
