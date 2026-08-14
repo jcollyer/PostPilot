@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 
 import { PLATFORM_LABELS, platformSchema, type Platform } from '@postpilot/types';
 
+import { PillAvatar } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
 /**
@@ -213,12 +214,7 @@ export function PlatformChips({
             }`}
           >
             {showAvatar ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={avatarUrl as string}
-                alt=""
-                className={`-ml-0.5 shrink-0 rounded-full object-cover ${avatarSize}`}
-              />
+              <PillAvatar url={avatarUrl ?? null} className={`-ml-0.5 ${avatarSize}`} />
             ) : null}
             {label}
             {!isConnected ? (

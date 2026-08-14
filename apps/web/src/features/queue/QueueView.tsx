@@ -39,7 +39,7 @@ import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@postpilot/api';
 import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
-import { AccountAvatar } from '@/components/PlatformGlyph';
+import { AccountAvatar, PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { trpc } from '@/lib/trpc/client';
@@ -579,23 +579,9 @@ function Thumb({ url }: { url: string | null }) {
   );
 }
 
-/**
- * Small round account avatar shown inside a platform pill. Renders nothing when
- * there's no avatar — or when the one we have fails to load, so a dead URL
- * collapses to the bare platform pill instead of a broken-image glyph.
- */
+/** Small round account avatar shown inside a platform pill. */
 function PlatformAvatar({ url }: { url: string | null }) {
-  const [broken, setBroken] = useState(false);
-  if (!url || broken) return null;
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={url}
-      alt=""
-      onError={() => setBroken(true)}
-      className="-ml-0.5 h-3.5 w-3.5 shrink-0 rounded-full object-cover"
-    />
-  );
+  return <PillAvatar url={url} className="-ml-0.5 h-3.5 w-3.5" />;
 }
 
 /** The account avatar to show inside a given platform's pill, if any. */
