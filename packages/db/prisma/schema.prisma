@@ -71,6 +71,7 @@ model User {
   notificationPrefs   NotificationPreference[]
   devices             Device[]
   creatorProfile      CreatorProfile?
+  usageSnapshots      UsageSnapshot[]
 
   @@map("user")
 }
@@ -918,4 +919,47 @@ model Device {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+/// One row per user per day: what they were storing and how much AI work their
+/// library had consumed at that point. Written by the nightly snapshot job.
+///
+/// Live usage is always computed fresh from Video/Image (see @postpilot/usage) —
+/// this table is history, not the source of truth, so a missed night leaves a
+/// gap rather than corrupting anything. It exists to answer questions the live
+/// numbers can't: whether storage per user is trending toward the plan caps,
+/// and whether the ~182 MB/video assumption behind the pricing model actually
+/// holds once real creators are uploading.
+model UsageSnapshot {
+  id     String   @id @default(cuid())
+  userId String
+  /// UTC day this snapshot describes. Date (not timestamp) so one run per day
+  /// upserts cleanly no matter what time it fires.
+  day    DateTime @db.Date
+
+  /// Billable bytes: video sources still stored + image sources. Excludes
+  /// videos whose source the retention sweep removed, which is the whole point
+  /// of that feature. Derived thumbnails and covers aren't counted — no size is
+  /// recorded for them, and they're well under 1% of a video's footprint.
+  storageBytes BigInt
+  /// The video-source portion of storageBytes, so average source size can be
+  /// computed against videosWithSource rather than the whole library.
+  videoBytes   BigInt
+
+  /// Every video in the library, including ones whose source was removed.
+  videoCount       Int
+  /// Videos whose source file is still stored — the denominator for average
+  /// source size.
+  videosWithSource Int
+  /// Videos the AI pipeline has completed. Proxy for cumulative AI spend,
+  /// which is charged once per video at upload.
+  videosProcessed  Int
+  imageCount       Int
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, day])
+  @@index([day])
 }

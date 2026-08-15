@@ -7,6 +7,7 @@ import { queueRouter } from './routers/queue';
 import { notificationsRouter } from './routers/notifications';
 import { dashboardRouter } from './routers/dashboard';
 import { creatorProfileRouter } from './routers/creator-profile';
+import { usageRouter } from './routers/usage';
 
 export const appRouter = router({
   user: userRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   dashboard: dashboardRouter,
   creatorProfile: creatorProfileRouter,
+  usage: usageRouter,
 });
 
 export type AppRouter = typeof appRouter;
