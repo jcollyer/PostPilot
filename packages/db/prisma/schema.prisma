@@ -10,10 +10,10 @@
 // Auth convention. `createdAt`/`updatedAt` are managed by Prisma.
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
   // Include the Vercel/Lambda Linux engine alongside the local native engine
   // so the same generated client runs locally and on serverless hosts.
-  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+  binaryTargets   = ["native", "rhel-openssl-3.0.x"]
   // postgresqlExtensions lets Prisma manage the pgvector extension declared on
   // the datasource below.
   previewFeatures = ["postgresqlExtensions"]
@@ -32,15 +32,21 @@ datasource db {
 // ----------------------------------------------------------------------------
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?
+  id                           String    @id @default(cuid())
+  name                         String?
+  email                        String    @unique
+  emailVerified                Boolean   @default(false)
+  image                        String?
   // IANA timezone (e.g. "America/Los_Angeles") used to interpret schedules.
-  timezone      String    @default("UTC")
+  timezone                     String    @default("UTC")
   // E.164 phone for urgent SMS alerts (opt-in; see Notification).
-  phoneNumber   String?
+  phoneNumber                  String?
+  // Opt-in storage retention. When true, a video's source file is removed from
+  // R2 once it has been published for SOURCE_RETENTION_DAYS and has no publish
+  // work still outstanding. The library row, thumbnails, metadata and post
+  // history all survive — only the heavy original goes. Off by default: this
+  // discards the user's media, so it is never enabled on their behalf.
+  deleteSourceAfterPublish     Boolean   @default(false)
   // When the creator-profile onboarding modal was completed or explicitly
   // skipped. Null means "never shown a decision" — the modal keeps
   // appearing. Set on both save and skip, so it's a dismissal marker, not a
@@ -80,17 +86,17 @@ model CreatorProfile {
   userId String @unique
 
   // Short descriptor of their content, e.g. "Van life & budget travel".
-  niche String?
+  niche           String?
   // Free-text voice description, e.g. "Witty, a little sarcastic, never corporate".
-  tone String?
+  tone            String?
   // Who the content is for, e.g. "20-somethings saving up to travel".
-  audience String?
+  audience        String?
   // Words/phrases the AI must never use — enforced both in the prompt and as
   // a hard post-generation filter (see metadata.ts's removeBannedWords).
-  bannedWords String[]
+  bannedWords     String[]
   // A caption the creator wrote themselves, given to the model as a concrete
   // voice reference alongside the inferred style examples.
-  exampleCaption String? @db.Text
+  exampleCaption  String?         @db.Text
   emojiPreference EmojiPreference @default(MODERATE)
 
   createdAt DateTime @default(now())
@@ -290,16 +296,16 @@ enum EmojiPreference {
 /// (encrypted in the app layer, chunk 3) — never plaintext. TikTok rotates its
 /// refresh token on every use, so `refreshToken` is overwritten on rotation.
 model PlatformConnection {
-  id        String           @id @default(cuid())
-  userId    String
-  platform  Platform
-  status    ConnectionStatus @default(ACTIVE)
+  id       String           @id @default(cuid())
+  userId   String
+  platform Platform
+  status   ConnectionStatus @default(ACTIVE)
 
   // Identity on the platform.
   externalAccountId String
   username          String?
   displayName       String?
-  avatarUrl         String?   @db.Text
+  avatarUrl         String? @db.Text
 
   // Encrypted OAuth material.
   accessToken           String?   @db.Text
@@ -310,9 +316,9 @@ model PlatformConnection {
   refreshTokenExpiresAt DateTime?
 
   // Operational state.
-  lastRefreshedAt    DateTime?
+  lastRefreshedAt     DateTime?
   needsReconnectSince DateTime?
-  lastError          String?  @db.Text
+  lastError           String?   @db.Text
 
   // Cached "creator profile" snapshot (bio + recent post captions/hashtags)
   // pulled from the platform's own API. Powers AI metadata generation as
@@ -437,7 +443,7 @@ model Video {
   // Base metadata (platform-agnostic). Per-platform overrides live in
   // VideoPlatformMeta.
   title    String?
-  caption  String? @db.Text
+  caption  String?  @db.Text
   hashtags String[]
 
   // Which platforms this video should be published to when queued. Empty means
@@ -447,30 +453,30 @@ model Video {
   targetPlatforms Platform[]
 
   // AI pipeline outputs.
-  transcript     String?          @db.Text
-  aiStatus       AiPipelineStatus @default(PENDING)
+  transcript    String?          @db.Text
+  aiStatus      AiPipelineStatus @default(PENDING)
   // When the worker last moved this video into RUNNING. Used to detect and
   // reclaim rows orphaned in RUNNING by a killed worker run (OOM, maxDuration,
   // deploy restart) so they don't spin forever.
-  aiStartedAt    DateTime?
-  aiProcessedAt  DateTime?
+  aiStartedAt   DateTime?
+  aiProcessedAt DateTime?
   // Number of times the worker has moved this row into RUNNING. Incremented up
   // front (before the heavy pipeline work) so it survives a run killed
   // mid-pipeline by an OOM/restart, which never reaches a catch block. Bounds
   // the reclaim loop: once this hits AI_MAX_ATTEMPTS the row is retired to
   // FAILED instead of being retried forever. Reset to 0 on manual re-queue.
-  aiAttempts     Int              @default(0)
-  categoryId     String?
+  aiAttempts    Int              @default(0)
+  categoryId    String?
 
   // Media Library folder this video lives in (null = the root). A video lives
   // in exactly one folder. onDelete: SetNull is a safety net — folder deletes
   // remove the videos explicitly (with R2 cleanup) before the row disappears.
-  folderId       String?
+  folderId String?
 
   // Duplicate detection / smart ordering.
-  pHash       String?
-  embedding   Unsupported("vector(1536)")?
-  isDuplicate Boolean                      @default(false)
+  pHash         String?
+  embedding     Unsupported("vector(1536)")?
+  isDuplicate   Boolean                      @default(false)
   duplicateOfId String?
 
   // Publish history (denormalized). `postedAt` is the first time this video was
@@ -483,6 +489,13 @@ model Video {
   // video is re-queued.
   postedAt    DateTime?
   postedPosts Json?
+
+  // When the source file was removed from R2 by the retention job (see
+  // User.deleteSourceAfterPublish). Non-null means `storageKey` no longer
+  // points at a real object: the video can't be re-published or re-run through
+  // the AI pipeline, but its metadata, thumbnails and post history remain. The
+  // key is deliberately left in place as a record of what was stored.
+  sourceDeletedAt DateTime?
 
   uploadSessionId String?
 
@@ -514,31 +527,34 @@ model Video {
   @@index([userId, folderId])
   @@index([uploadSessionId])
   @@index([duplicateOfId])
+  // Drives the retention sweep: scoped to opted-in users, ordered by how long
+  // ago the video was published.
+  @@index([userId, postedAt])
 }
 
 /// Platform-specific metadata override. Captions are optimized per platform
 /// rather than reused verbatim.
 model VideoPlatformMeta {
-  id        String   @id @default(cuid())
-  videoId   String
-  platform  Platform
-  title     String?
-  caption   String?  @db.Text
-  hashtags  String[]
+  id          String   @id @default(cuid())
+  videoId     String
+  platform    Platform
+  title       String?
+  caption     String?  @db.Text
+  hashtags    String[]
   // Whether this row was AI-generated and whether the user has edited it.
-  aiGenerated Boolean @default(false)
-  edited      Boolean @default(false)
+  aiGenerated Boolean  @default(false)
+  edited      Boolean  @default(false)
 
   // ---- TikTok Direct Post options (TikTok platform rows only) ----
   // Privacy level the creator must MANUALLY choose — TikTok mandates no
   // default, so this is null until the user picks one. Stored as a string to
   // track whatever `privacy_level_options` creator_info returns
   // (PUBLIC_TO_EVERYONE | MUTUAL_FOLLOW_FRIENDS | FOLLOWER_OF_CREATOR | SELF_ONLY).
-  tiktokPrivacy String?
+  tiktokPrivacy        String?
   // Interaction abilities. TikTok requires these OFF by default; the user opts in.
-  tiktokAllowComment Boolean @default(false)
-  tiktokAllowDuet    Boolean @default(false)
-  tiktokAllowStitch  Boolean @default(false)
+  tiktokAllowComment   Boolean @default(false)
+  tiktokAllowDuet      Boolean @default(false)
+  tiktokAllowStitch    Boolean @default(false)
   // Commercial content disclosure (off by default). When on, at least one of
   // the two brand flags below must be set.
   tiktokCommercial     Boolean @default(false) // disclosure toggle
@@ -549,13 +565,13 @@ model VideoPlatformMeta {
   // COPPA "Made for Kids" self-declaration. Off by default; the user opts in per
   // video on the YouTube tab. Threaded to videos.insert's
   // status.selfDeclaredMadeForKids at publish time.
-  youtubeMadeForKids Boolean @default(false)
+  youtubeMadeForKids            Boolean @default(false)
   // snippet.categoryId — defaults to "22" (People & Blogs).
-  youtubeCategoryId String @default("22")
+  youtubeCategoryId             String  @default("22")
   // status.containsSyntheticMedia — altered/AI content disclosure. Off by default.
   youtubeContainsSyntheticMedia Boolean @default(false)
   // status.license — "youtube" (Standard) or "creativeCommon".
-  youtubeLicense String @default("youtube")
+  youtubeLicense                String  @default("youtube")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -569,16 +585,16 @@ model VideoPlatformMeta {
 /// Candidate thumbnail frames extracted by ffmpeg, scored by the AI. The chosen
 /// one is referenced by Video.selectedThumbnailId.
 model ThumbnailCandidate {
-  id          String  @id @default(cuid())
-  videoId     String
-  storageKey  String
-  url         String?
+  id           String   @id @default(cuid())
+  videoId      String
+  storageKey   String
+  url          String?
   frameTimeSec Float
-  score       Float?
-  createdAt   DateTime @default(now())
+  score        Float?
+  createdAt    DateTime @default(now())
 
-  video         Video  @relation("VideoThumbnails", fields: [videoId], references: [id], onDelete: Cascade)
-  selectedFor   Video? @relation("SelectedThumbnail")
+  video       Video  @relation("VideoThumbnails", fields: [videoId], references: [id], onDelete: Cascade)
+  selectedFor Video? @relation("SelectedThumbnail")
 
   @@index([videoId])
 }
@@ -609,7 +625,7 @@ model Image {
   // Base metadata (Instagram is the only target, so there are no per-platform
   // overrides). `hashtags` mirrors Video for a shared editing UI.
   title    String?
-  caption  String? @db.Text
+  caption  String?  @db.Text
   hashtags String[]
 
   // AI pipeline outputs (vision metadata over the single image).
@@ -787,16 +803,16 @@ model Schedule {
 /// and record the resulting platform post. HELD means the platform connection
 /// needs reconnecting and the video is parked (never silently dropped).
 model PublishTask {
-  id          String        @id @default(cuid())
-  queueItemId String
+  id           String        @id @default(cuid())
+  queueItemId  String
   connectionId String?
-  platform    Platform
-  status      PublishStatus @default(PENDING)
+  platform     Platform
+  status       PublishStatus @default(PENDING)
 
-  scheduledAt DateTime
-  attemptCount Int      @default(0)
+  scheduledAt   DateTime
+  attemptCount  Int       @default(0)
   nextAttemptAt DateTime?
-  lastError    String?  @db.Text
+  lastError     String?   @db.Text
 
   // Platform handles captured during the publish flow.
   externalContainerId String? // e.g. IG media container / TikTok publish id (for polling)
@@ -839,7 +855,7 @@ model Notification {
   relatedVideoId      String?
 
   // Dedupe / throttle.
-  dedupeKey     String?
+  dedupeKey      String?
   throttledUntil DateTime?
 
   readAt    DateTime?
@@ -857,14 +873,14 @@ model Notification {
 /// Per-channel send record for a notification (Resend email, Expo push, Twilio
 /// SMS), so one alert can fan out and each channel's outcome is tracked.
 model NotificationDelivery {
-  id             String              @id @default(cuid())
-  notificationId String
-  channel        NotificationChannel
-  status         DeliveryStatus      @default(PENDING)
+  id                String              @id @default(cuid())
+  notificationId    String
+  channel           NotificationChannel
+  status            DeliveryStatus      @default(PENDING)
   providerMessageId String?
-  error          String?             @db.Text
-  sentAt         DateTime?
-  createdAt      DateTime            @default(now())
+  error             String?             @db.Text
+  sentAt            DateTime?
+  createdAt         DateTime            @default(now())
 
   notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
 
@@ -892,12 +908,12 @@ model NotificationPreference {
 
 /// A registered mobile device for Expo push notifications.
 model Device {
-  id             String         @id @default(cuid())
-  userId         String
-  expoPushToken  String         @unique
-  platform       DevicePlatform?
-  lastSeenAt     DateTime       @default(now())
-  createdAt      DateTime       @default(now())
+  id            String          @id @default(cuid())
+  userId        String
+  expoPushToken String          @unique
+  platform      DevicePlatform?
+  lastSeenAt    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

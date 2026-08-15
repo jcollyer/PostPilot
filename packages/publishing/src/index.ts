@@ -7,6 +7,13 @@ export {
   type PublishRunResult,
 } from './runner';
 
+// Opt-in source retention (storage cleanup for published videos)
+export {
+  sweepPublishedSources,
+  type RetentionSweepResult,
+  type RetentionSweepOptions,
+} from './retention';
+
 // Adapters (Publish(Video) per platform)
 export { getPublishAdapter, fetchTikTokCreatorInfo, type TikTokCreatorInfo } from './adapters';
 export type {

@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--workspace=@postpilot/web",
+        "exec",
+        "--",
+        "dotenv",
+        "-e",
+        "../../.env",
+        "--",
+        "next",
+        "dev",
+        "--port",
+        "3100"
+      ],
+      "port": 3100
+    }
+  ]
+}
