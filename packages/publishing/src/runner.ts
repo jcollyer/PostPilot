@@ -275,6 +275,20 @@ async function startPublish(task: TaskWithRelations): Promise<PublishRunResult> 
   if (!token) return holdTask(task, 'connection not active');
 
   const { video, image } = task.queueItem;
+
+  // The retention sweep removed this video's source after it published, so
+  // there are no bytes left to send. It shouldn't reach here — the sweep skips
+  // videos with publish work outstanding and the queue won't re-add them — but
+  // a task that was already in flight when the sweep ran would, and handing an
+  // adapter a dead key fails far less clearly than this does.
+  if (video?.sourceDeletedAt) {
+    return failTask(
+      task,
+      'the source file was removed after this video published — re-upload it to post again',
+      { reject: false },
+    );
+  }
+
   // TikTok + Instagram fetch the file from a public URL; YouTube uploads bytes.
   if (image) {
     // Every slide (parent + children) must have a public URL before we can post.

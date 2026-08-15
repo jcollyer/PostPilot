@@ -82,6 +82,9 @@ export async function processPending(params?: {
   const pending = await prisma.video.findMany({
     where: {
       status: { in: ['READY', 'PROCESSING'] },
+      // The retention sweep removed the source file, so there is nothing left
+      // to download, transcribe or sample frames from.
+      sourceDeletedAt: null,
       ...scope,
       ...aiClaim,
     },

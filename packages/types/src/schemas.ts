@@ -23,6 +23,17 @@ export const deleteAccountSchema = z.object({
 export type DeleteAccountInput = z.infer<typeof deleteAccountSchema>;
 
 /**
+ * Payload for the signed-in user's storage retention preference. Turning this
+ * on lets the retention sweep delete published source files (see
+ * SOURCE_RETENTION_DAYS); turning it off stops future deletions but cannot
+ * bring back sources already removed.
+ */
+export const updateStorageSettingsSchema = z.object({
+  deleteSourceAfterPublish: z.boolean(),
+});
+export type UpdateStorageSettingsInput = z.infer<typeof updateStorageSettingsSchema>;
+
+/**
  * Full-replace payload for the signed-in user's CreatorProfile — explicit
  * voice/context instructions injected into every AI metadata generation run
  * (see @postpilot/ai-pipeline's steps/metadata.ts). Every field is nullable

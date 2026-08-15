@@ -15,6 +15,7 @@ import { trpc } from '@/lib/trpc/client';
 import { CreatorProfileSettings } from './CreatorProfileSettings';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { NotificationsSettings } from './NotificationsSettings';
+import { StorageSettings } from './StorageSettings';
 import { signOutAfterAccountDelete } from './actions';
 
 /**
@@ -207,6 +208,18 @@ export function SettingsView() {
         </CardHeader>
         <CardContent>
           <NotificationsSettings />
+        </CardContent>
+      </Card>
+
+      <Card id="storage" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle>Storage</CardTitle>
+          <CardDescription>
+            Keep your library from growing forever by clearing out files you&apos;ve already posted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <StorageSettings />
         </CardContent>
       </Card>
 

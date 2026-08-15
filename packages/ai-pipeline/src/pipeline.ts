@@ -70,6 +70,17 @@ export async function processVideo(videoId: string): Promise<ProcessResult> {
   if (!video) return { videoId, ok: false, error: 'video not found' };
   if (!video.storageKey) return { videoId, ok: false, error: 'video has no storage key' };
 
+  // The retention sweep removed the source after this video published, so
+  // there is nothing to download. Both callers already filter these out; this
+  // is the backstop for a direct processVideo call. Marked FAILED (not left
+  // PENDING) so the cron stops re-picking it and the reason is visible.
+  if (video.sourceDeletedAt) {
+    await prisma.video
+      .update({ where: { id: videoId }, data: { aiStatus: 'FAILED' } })
+      .catch(() => {});
+    return { videoId, ok: false, error: 'source file was removed after publishing' };
+  }
+
   // Cheap pre-download guard: if what we already know (upload file size, any
   // stored duration) is over the limits, fail now — before pulling a multi-GB
   // file down and OOMing the worker. Marking FAILED (not leaving it PENDING)

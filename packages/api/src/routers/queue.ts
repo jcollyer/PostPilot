@@ -170,7 +170,16 @@ export const queueRouter = router({
     );
 
     const videos = await ctx.prisma.video.findMany({
-      where: { id: { in: input.videoIds }, userId: ctx.userId, status: 'READY' },
+      where: {
+        id: { in: input.videoIds },
+        userId: ctx.userId,
+        status: 'READY',
+        // Its source file was removed after publishing (see the retention
+        // sweep), so there is nothing left to upload. Excluded here rather
+        // than failing later in the runner, and counted in `skipped` like any
+        // other unusable video.
+        sourceDeletedAt: null,
+      },
       select: {
         id: true,
         targetPlatforms: true,

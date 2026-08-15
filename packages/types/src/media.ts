@@ -45,6 +45,20 @@ export const AI_METADATA_MAX_VIDEO_BYTES = 2 * 1024 * 1024 * 1024;
 export const AI_METADATA_MAX_VIDEO_DURATION_SEC = 60 * 60;
 
 /**
+ * How long a published video's source file is kept before the retention sweep
+ * removes it from storage, for creators who opted in via
+ * `User.deleteSourceAfterPublish`.
+ *
+ * Measured from `postedAt` (the first successful publish to any platform), and
+ * only applied once the video has no publish work still outstanding — a video
+ * posted to TikTok but still scheduled for YouTube keeps its source until every
+ * platform is done. Long enough to re-download or re-post a video by hand if
+ * something went wrong, short enough that storage tracks queue depth rather
+ * than lifetime uploads.
+ */
+export const SOURCE_RETENTION_DAYS = 30;
+
+/**
  * Whether a video is too large/long for auto-generated metadata, with a short
  * human-readable reason. `sizeBytes`/`durationSec` may be undefined when not yet
  * known (e.g. duration before the client has probed the file) — an unknown

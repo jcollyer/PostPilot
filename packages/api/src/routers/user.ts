@@ -1,6 +1,10 @@
 import { TRPCError } from '@trpc/server';
 
-import { deleteAccountSchema, updateProfileSchema } from '@postpilot/types';
+import {
+  deleteAccountSchema,
+  updateProfileSchema,
+  updateStorageSettingsSchema,
+} from '@postpilot/types';
 
 import { protectedProcedure, publicProcedure, router } from '../trpc';
 
@@ -10,6 +14,7 @@ const userSelect = {
   email: true,
   image: true,
   createdAt: true,
+  deleteSourceAfterPublish: true,
 } as const;
 
 export const userRouter = router({
@@ -32,6 +37,24 @@ export const userRouter = router({
       select: userSelect,
     }),
   ),
+
+  /**
+   * Update the signed-in user's storage retention preference.
+   *
+   * Turning this on lets the retention sweep remove source files for videos
+   * published more than SOURCE_RETENTION_DAYS ago. Turning it off stops future
+   * deletions; it cannot restore sources that were already removed, which is
+   * why the UI states that plainly before the first opt-in.
+   */
+  updateStorageSettings: protectedProcedure
+    .input(updateStorageSettingsSchema)
+    .mutation(({ ctx, input }) =>
+      ctx.prisma.user.update({
+        where: { id: ctx.userId },
+        data: { deleteSourceAfterPublish: input.deleteSourceAfterPublish },
+        select: userSelect,
+      }),
+    ),
 
   /**
    * Permanently delete the signed-in user and all of their data.

@@ -212,6 +212,10 @@ export function toVideoDto(v: VideoRecord, tiktokConnected = false) {
     // posted) + the latest post per platform, for the "Posted" badge and links.
     postedAt: v.postedAt,
     postedPosts: parsePostedPosts(v.postedPosts),
+    // Set once the retention sweep removed the source file (opt-in, see
+    // User.deleteSourceAfterPublish). The entry still shows its thumbnail,
+    // metadata and post links, but it can't be re-queued or re-processed.
+    sourceDeletedAt: v.sourceDeletedAt,
     // True when this video already has a slot in the user's queue.
     inQueue: v._count.queueItems > 0,
     // True when the user must supply TikTok details before this can be queued
@@ -1097,6 +1101,9 @@ export const mediaRouter = router({
         userId: ctx.userId,
         status: { in: ['READY', 'PROCESSING'] },
         aiStatus: input.onlyFailed ? 'FAILED' : { not: 'RUNNING' },
+        // The retention sweep removed the source, so the pipeline has nothing
+        // to read. Excluded from the count rather than queued and failed.
+        sourceDeletedAt: null,
       };
       if (input.videoId) where.id = input.videoId;
       if (input.videoIds) where.id = { in: input.videoIds };
