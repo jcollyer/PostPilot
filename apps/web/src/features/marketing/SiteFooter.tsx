@@ -8,7 +8,10 @@ export function SiteFooter() {
     <footer className="border-border/60 border-t">
       <div className="text-muted-foreground mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 px-6 py-8 text-sm sm:flex-row">
         <p>© {new Date().getFullYear()} PostPilot. All rights reserved.</p>
-        <nav className="flex items-center gap-4">
+        {/* Seven links overflow a phone in one row, so they wrap — centered
+            under the copyright on mobile, right-aligned once the footer
+            becomes a row. gap-y keeps wrapped rows from colliding. */}
+        <nav className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:justify-end">
           <Link href="/pricing" className="hover:text-foreground">
             Pricing
           </Link>

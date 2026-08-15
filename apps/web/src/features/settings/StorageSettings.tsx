@@ -3,18 +3,22 @@
 import { Loader2 } from 'lucide-react';
 
 import { Switch } from '@/components/ui/switch';
-import { SOURCE_RETENTION_DAYS } from '@postpilot/types';
+import { formatBytes, SOURCE_RETENTION_DAYS } from '@postpilot/types';
 import { trpc } from '@/lib/trpc/client';
 
 /**
- * Opt-in control for removing published source files after the retention
- * window. Off by default and never enabled on the user's behalf — turning it on
- * eventually deletes their media, so the copy says exactly what goes, what
- * stays, and that it can't be undone.
+ * What the user is storing, plus the opt-in control for removing published
+ * source files after the retention window.
+ *
+ * The switch is off by default and never enabled on their behalf — turning it
+ * on eventually deletes their media, so the copy says exactly what goes, what
+ * stays, and that it can't be undone. Showing current usage directly above it
+ * is what makes the trade concrete.
  */
 export function StorageSettings() {
   const utils = trpc.useUtils();
   const { data: me, isLoading } = trpc.user.me.useQuery();
+  const { data: usage } = trpc.usage.get.useQuery();
 
   const update = trpc.user.updateStorageSettings.useMutation({
     // Flip optimistically so the switch feels instant, rolling back on error.
@@ -46,6 +50,33 @@ export function StorageSettings() {
 
   return (
     <div className="space-y-4">
+      {usage ? (
+        <dl className="bg-border grid grid-cols-2 gap-px overflow-hidden rounded-md border sm:grid-cols-4">
+          {[
+            { label: 'Stored', value: formatBytes(usage.storageBytes) },
+            { label: 'Videos', value: usage.videoCount.toLocaleString() },
+            { label: 'Photos', value: usage.imageCount.toLocaleString() },
+            {
+              label: 'Avg. video',
+              value: usage.bytesPerVideo == null ? '—' : formatBytes(usage.bytesPerVideo),
+            },
+          ].map((stat) => (
+            <div key={stat.label} className="bg-card px-4 py-3">
+              <dt className="text-muted-foreground text-xs">{stat.label}</dt>
+              <dd className="mt-0.5 text-lg font-semibold tabular-nums">{stat.value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
+      {usage && usage.videoCount > usage.videosWithSource ? (
+        <p className="text-muted-foreground text-sm">
+          {(usage.videoCount - usage.videosWithSource).toLocaleString()} published{' '}
+          {usage.videoCount - usage.videosWithSource === 1 ? 'video has' : 'videos have'} had their
+          source removed. They stay in your library with their thumbnails and post links.
+        </p>
+      ) : null}
+
       <div className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <p className="text-sm font-medium leading-none">Remove source files after publishing</p>

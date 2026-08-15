@@ -15,6 +15,7 @@
     "@postpilot/notifications": "*",
     "@postpilot/publishing": "*",
     "@postpilot/queue": "*",
+    "@postpilot/usage": "*",
     "@trigger.dev/sdk": "4.5.10"
   },
   "devDependencies": {

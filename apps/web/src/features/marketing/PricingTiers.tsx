@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { ArrowRight, Check } from 'lucide-react';
 
+import { formatBytes, PLAN_LIMITS, type PlanId } from '@postpilot/types';
+
 import { Button } from '@/components/ui/button';
 
 /**
@@ -16,63 +18,61 @@ import { Button } from '@/components/ui/button';
  *
  * Annual is priced at ten months, so it reads as "2 months free" while also
  * covering the up-front AI spend of a large first upload batch.
+ *
+ * Prices and capacity come from PLAN_LIMITS so this page, usage metering and
+ * future cap enforcement can never quote different numbers.
  */
 
 type Billing = 'monthly' | 'annual';
 
 interface Tier {
-  name: string;
-  monthly: number;
-  annual: number;
+  id: PlanId;
   blurb: string;
   cta: string;
   featured?: boolean;
-  features: string[];
+  /** Copy beyond the capacity lines, which are generated from PLAN_LIMITS. */
+  extras: string[];
 }
 
 const TIERS: Tier[] = [
   {
-    name: 'Free',
-    monthly: 0,
-    annual: 0,
+    id: 'FREE',
     blurb: 'Enough queue to see it run on its own.',
     cta: 'Start free',
-    features: [
-      '25 videos in your library',
-      '5 GB storage',
+    extras: [
       'Full AI on every video',
       'TikTok, Reels & Shorts',
       'Automatic scheduling & publishing',
     ],
   },
   {
-    name: 'Creator',
-    monthly: 5,
-    annual: 50,
+    id: 'CREATOR',
     blurb: 'For solo creators staying consistent.',
     cta: 'Choose Creator',
     featured: true,
-    features: [
-      'Everything in Free',
-      '300 videos in your library',
-      '60 GB storage',
-      'Roughly 10 months of daily posting',
-    ],
+    extras: ['Everything in Free', 'Roughly 10 months of daily posting'],
   },
   {
-    name: 'Pro',
-    monthly: 12,
-    annual: 120,
+    id: 'PRO',
     blurb: 'For big batches and deep backlogs.',
     cta: 'Choose Pro',
-    features: [
-      'Everything in Creator',
-      '1,200 videos in your library',
-      '220 GB storage',
-      'Extra storage at $3/mo per 100 GB',
-    ],
+    extras: ['Everything in Creator', 'Extra storage at $3/mo per 100 GB'],
   },
 ];
+
+/** Capacity lines first, then the tier's own copy. */
+function featuresFor(tier: Tier): string[] {
+  const limits = PLAN_LIMITS[tier.id];
+  const capacity = [
+    `${limits.videos.toLocaleString()} videos in your library`,
+    `${formatBytes(limits.storageBytes)} storage`,
+  ];
+  // "Everything in <lower tier>" reads first when present.
+  const [inherits, ...rest] = tier.extras;
+  return inherits?.startsWith('Everything in')
+    ? [inherits, ...capacity, ...rest]
+    : [...capacity, ...tier.extras];
+}
 
 export function PricingTiers() {
   const [billing, setBilling] = useState<Billing>('monthly');
@@ -116,13 +116,14 @@ export function PricingTiers() {
 
       <div className="mt-12 grid gap-6 lg:grid-cols-3">
         {TIERS.map((t) => {
-          const free = t.monthly === 0;
-          const amount = billing === 'monthly' ? t.monthly : t.annual;
+          const limits = PLAN_LIMITS[t.id];
+          const free = limits.monthly === 0;
+          const amount = billing === 'monthly' ? limits.monthly : limits.annual;
           const unit = billing === 'monthly' ? '/mo' : '/yr';
 
           return (
             <div
-              key={t.name}
+              key={t.id}
               className={`relative flex flex-col rounded-2xl border p-7 ${
                 t.featured
                   ? 'border-primary bg-primary/5 shadow-md'
@@ -135,7 +136,7 @@ export function PricingTiers() {
                 </span>
               ) : null}
 
-              <h2 className="text-lg font-semibold">{t.name}</h2>
+              <h2 className="text-lg font-semibold">{limits.name}</h2>
 
               <p className="mt-2 flex items-baseline gap-1">
                 <span className="text-4xl font-semibold tracking-tight">${amount}</span>
@@ -146,13 +147,13 @@ export function PricingTiers() {
               <p className="text-muted-foreground mt-1 h-5 text-xs">
                 {free || billing === 'monthly'
                   ? null
-                  : `Billed yearly — $${(t.annual / 12).toFixed(2)}/mo`}
+                  : `Billed yearly — $${(limits.annual / 12).toFixed(2)}/mo`}
               </p>
 
               <p className="text-muted-foreground mt-2 text-sm">{t.blurb}</p>
 
               <ul className="mt-6 space-y-3 text-sm">
-                {t.features.map((f) => (
+                {featuresFor(t).map((f) => (
                   <li key={f} className="flex items-start gap-2">
                     <Check className="text-foreground mt-0.5 h-4 w-4 shrink-0" />
                     <span>{f}</span>
