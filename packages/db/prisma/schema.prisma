@@ -52,8 +52,31 @@ model User {
   // appearing. Set on both save and skip, so it's a dismissal marker, not a
   // "profile has data" marker (CreatorProfile can still be empty/absent).
   creatorOnboardingCompletedAt DateTime?
-  createdAt                    DateTime  @default(now())
-  updatedAt                    DateTime  @updatedAt
+
+  // --- Plan + billing -------------------------------------------------------
+  // The plan enforcement reads. Set by the Stripe webhook, never by the
+  // post-checkout redirect — a redirect can be dropped or forged, a webhook is
+  // what Stripe actually guarantees. Defaults to FREE so an account always has
+  // a usable plan even before it has chosen one.
+  plan                     Plan      @default(FREE)
+  // When the creator picked a plan. Null means "never chose" — the selection
+  // gate keeps appearing, same dismissal-marker pattern as
+  // creatorOnboardingCompletedAt.
+  planSelectedAt           DateTime?
+  stripeCustomerId         String?   @unique
+  stripeSubscriptionId     String?   @unique
+  // Stripe's own status string (active, trialing, past_due, canceled, …) kept
+  // as text rather than an enum: Stripe adds values, and a Prisma enum that
+  // drifts from them turns a webhook into a crash.
+  stripeSubscriptionStatus String?
+  // Which price the subscription is on, so monthly vs annual is recoverable
+  // without calling Stripe.
+  stripePriceId            String?
+  currentPeriodEnd         DateTime?
+  cancelAtPeriodEnd        Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Auth
   sessions Session[]
@@ -159,6 +182,15 @@ model Verification {
 // ----------------------------------------------------------------------------
 // Enums
 // ----------------------------------------------------------------------------
+
+/// Subscription plans, mirroring PLAN_IDS in @postpilot/types. Capacity limits
+/// for each live there (PLAN_LIMITS) rather than here — the database records
+/// which plan a user is on, not what it entitles them to.
+enum Plan {
+  FREE
+  CREATOR
+  PRO
+}
 
 /// The only three supported destinations. Nothing else, by design.
 enum Platform {

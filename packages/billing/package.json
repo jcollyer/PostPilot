@@ -1,5 +1,5 @@
 {
-  "name": "@postpilot/usage",
+  "name": "@postpilot/billing",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
@@ -9,12 +9,14 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "billing:setup": "tsx src/scripts/setup-stripe.ts",
+    "billing:doctor": "tsx src/scripts/doctor.ts",
     "clean": "rm -rf node_modules .turbo"
   },
   "dependencies": {
     "@postpilot/db": "*",
-    "@postpilot/storage": "*",
-    "@postpilot/types": "*"
+    "@postpilot/types": "*",
+    "stripe": "^22.5.0"
   },
   "devDependencies": {
     "@postpilot/config": "*",

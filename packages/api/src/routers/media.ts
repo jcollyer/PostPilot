@@ -55,8 +55,41 @@ import {
   videoPrefix,
 } from '@postpilot/storage';
 import { ensureQueue, recomputeSchedule } from '@postpilot/queue';
+import { checkUploadAllowed, computeUsage } from '@postpilot/usage';
 
 import { protectedProcedure, router } from '../trpc';
+
+/**
+ * Refuse an upload that would break the caller's plan caps.
+ *
+ * Uploads are the only place new cost enters the system — queueing and
+ * publishing add nothing — so this is the one gate that has to hold. It runs
+ * before any bytes move, since `initUpload` is handed the file size up front.
+ *
+ * Being over a cap blocks *new* uploads only. Nothing already stored is
+ * touched and the queue keeps publishing, so a lapsed subscription never costs
+ * someone the library they already built.
+ */
+async function assertWithinPlan(
+  prisma: PrismaClient,
+  userId: string,
+  incoming: { bytes: number; addsVideo: boolean },
+) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { plan: true } });
+  if (!user) throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
+
+  const usage = await computeUsage(userId, prisma);
+  const check = checkUploadAllowed(usage, user.plan, incoming);
+
+  if (!check.ok) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      // The client keys its upgrade prompt off this prefix; the rest of the
+      // string is already user-facing copy from checkUploadAllowed.
+      message: `PLAN_LIMIT_${check.reason?.toUpperCase()}: ${check.message}`,
+    });
+  }
+}
 
 /**
  * Re-materialize the caller's queue plan after a change that can affect which
@@ -418,6 +451,7 @@ export const mediaRouter = router({
    */
   initUpload: protectedProcedure.input(initUploadSchema).mutation(async ({ ctx, input }) => {
     assertStorageConfigured();
+    await assertWithinPlan(ctx.prisma, ctx.userId, { bytes: input.fileSize, addsVideo: true });
 
     if (input.uploadSessionId) {
       const session = await ctx.prisma.uploadSession.findFirst({
@@ -585,6 +619,8 @@ export const mediaRouter = router({
     .input(initImageUploadSchema)
     .mutation(async ({ ctx, input }) => {
       assertStorageConfigured();
+      // Photos count against storage but not the video cap.
+      await assertWithinPlan(ctx.prisma, ctx.userId, { bytes: input.fileSize, addsVideo: false });
 
       if (input.uploadSessionId) {
         const session = await ctx.prisma.uploadSession.findFirst({
