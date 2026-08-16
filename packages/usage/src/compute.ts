@@ -1,5 +1,11 @@
 import { prisma as defaultPrisma, type PrismaClient } from '@postpilot/db';
-import { ASSUMED_BYTES_PER_VIDEO, PLAN_LIMITS, type PlanId } from '@postpilot/types';
+import {
+  ASSUMED_BYTES_PER_VIDEO,
+  formatBytes,
+  PLAN_LIMITS,
+  type PlanId,
+  type PlanLimits,
+} from '@postpilot/types';
 
 /**
  * What a user is currently costing, measured rather than assumed.
@@ -124,6 +130,62 @@ export function withPlan(usage: Usage, plan: PlanId): PlanUsage {
     overVideos,
     overLimit: overStorage || overVideos,
   };
+}
+
+export interface CapCheck {
+  ok: boolean;
+  /** Which cap would be broken, when one would. */
+  reason: 'storage' | 'videos' | null;
+  /** User-facing explanation, ready to show. Null when the upload is allowed. */
+  message: string | null;
+  plan: PlanId;
+  limits: PlanLimits;
+}
+
+/**
+ * Whether one more upload fits inside the plan.
+ *
+ * Checked *before* any bytes move — `initUpload` receives the file size up
+ * front, so a rejection costs the user nothing but a message. Being over a cap
+ * only ever blocks new uploads: nothing already stored is deleted, and the
+ * queue keeps publishing, so a lapsed subscription never costs someone their
+ * library.
+ *
+ * The incoming file is included in the comparison rather than checked after the
+ * fact, so a single huge upload can't step over a cap it started underneath.
+ */
+export function checkUploadAllowed(
+  usage: Usage,
+  plan: PlanId,
+  incoming: { bytes: number; addsVideo: boolean },
+): CapCheck {
+  const limits = PLAN_LIMITS[plan];
+  const base = { plan, limits };
+
+  if (incoming.addsVideo && usage.videoCount + 1 > limits.videos) {
+    return {
+      ...base,
+      ok: false,
+      reason: 'videos',
+      message:
+        `Your ${limits.name} plan holds ${limits.videos.toLocaleString()} videos and you have ` +
+        `${usage.videoCount.toLocaleString()}. Upgrade, or remove some videos to make room.`,
+    };
+  }
+
+  if (usage.storageBytes + incoming.bytes > limits.storageBytes) {
+    return {
+      ...base,
+      ok: false,
+      reason: 'storage',
+      message:
+        `That upload would put you over the ${formatBytes(limits.storageBytes)} of storage on ` +
+        `your ${limits.name} plan — you're using ${formatBytes(usage.storageBytes)}. Upgrade, or ` +
+        'free up space by removing published source files.',
+    };
+  }
+
+  return { ...base, ok: true, reason: null, message: null };
 }
 
 /**

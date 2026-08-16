@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { getInitials } from '@/lib/utils';
 import { trpc } from '@/lib/trpc/client';
 
+import { BillingSettings } from './BillingSettings';
 import { CreatorProfileSettings } from './CreatorProfileSettings';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { NotificationsSettings } from './NotificationsSettings';
@@ -208,6 +209,18 @@ export function SettingsView() {
         </CardHeader>
         <CardContent>
           <NotificationsSettings />
+        </CardContent>
+      </Card>
+
+      <Card id="billing" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle>Plan &amp; billing</CardTitle>
+          <CardDescription>
+            What your plan holds, how much of it you&apos;re using, and where to change it.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <BillingSettings />
         </CardContent>
       </Card>
 

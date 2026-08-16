@@ -1,5 +1,5 @@
 import { schedules } from '@trigger.dev/sdk';
-import { snapshotAllUsers } from '@postpilot/usage';
+import { snapshotAllUsers, sweepAbandonedUploads } from '@postpilot/usage';
 
 /**
  * Daily: record each user's storage and AI usage for the day.
@@ -11,5 +11,11 @@ import { snapshotAllUsers } from '@postpilot/usage';
 export const usageSnapshot = schedules.task({
   id: 'usage-snapshot',
   cron: '40 3 * * *',
-  run: async () => snapshotAllUsers(),
+  run: async () => {
+    // Clear abandoned uploads first so the snapshot records real usage rather
+    // than quota held by rows that will never finish.
+    const reclaimed = await sweepAbandonedUploads();
+    const snapshot = await snapshotAllUsers();
+    return { reclaimed, snapshot };
+  },
 });
