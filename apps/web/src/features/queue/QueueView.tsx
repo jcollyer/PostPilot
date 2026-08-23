@@ -18,13 +18,13 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
-  Calendar,
   Check,
   Copy,
   ExternalLink,
   Film,
   GripVertical,
   Loader2,
+  MoreHorizontal,
   Pause,
   Pencil,
   Play,
@@ -42,7 +42,12 @@ import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { AccountAvatar, PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { trpc } from '@/lib/trpc/client';
 import { QueueItemEditDialog, type QueueEditTarget } from './QueueItemEditDialog';
 import { ScheduleEditor } from './ScheduleEditor';
@@ -71,6 +76,13 @@ type YouTubeAccount = {
   username: string | null;
 };
 
+/** Every account handle the queue needs, keyed by platform. */
+type Accounts = {
+  tiktok: TikTokAccount | null;
+  instagram: InstagramAccount | null;
+  youtube: YouTubeAccount | null;
+};
+
 const PLATFORM_SHORT: Record<Platform, string> = {
   TIKTOK: 'TikTok',
   INSTAGRAM: 'Instagram',
@@ -86,6 +98,10 @@ function latestPublishedAt(item: QueueItem): number {
     const ts = t.publishedAt ? new Date(t.publishedAt).getTime() : 0;
     return ts > max ? ts : max;
   }, 0);
+}
+
+function mediaTitle(item: QueueItem): string {
+  return item.media.title ?? item.media.originalFilename ?? 'Untitled';
 }
 
 export function QueueView() {
@@ -129,6 +145,8 @@ export function QueueView() {
     )?.connection;
     return conn ? { avatarUrl: conn.avatarUrl, username: conn.username } : null;
   }, [connections.data]);
+
+  const accounts: Accounts = { tiktok, instagram, youtube };
 
   const refresh = () => {
     utils.queue.get.invalidate();
@@ -256,14 +274,37 @@ export function QueueView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Queue</h1>
-          <p className="text-muted-foreground text-sm">
-            {active.length} in rotation · PostPilot publishes the top of the queue at each scheduled
-            time.
-          </p>
+          <h1 className="text-2xl font-medium tracking-[-0.02em]">Queue</h1>
+          {isPaused ? (
+            <p className="border-warn-line bg-warn-soft text-warn mt-2 inline-flex items-center gap-2 rounded-md border px-2.5 py-1 text-sm font-medium">
+              <Pause className="h-3.5 w-3.5 flex-none" aria-hidden />
+              Paused — {active.length} waiting. Nothing publishes until you resume.
+            </p>
+          ) : (
+            <p className="text-muted-foreground mt-1.5 flex items-start gap-2 text-sm">
+              {/* The dot only pulses when something really is queued to go out. */}
+              {active.length > 0 ? (
+                <span className="pp-live-dot mt-[0.4rem]" aria-hidden />
+              ) : (
+                <span
+                  className="bg-muted-foreground/40 mt-[0.4rem] h-2 w-2 flex-none rounded-full"
+                  aria-hidden
+                />
+              )}
+              {active.length > 0 ? (
+                <span>
+                  <span className="text-foreground font-medium">{active.length} in rotation</span> —
+                  PostPilot publishes the top of the queue at each scheduled time.
+                </span>
+              ) : (
+                <span>Nothing in rotation.</span>
+              )}
+            </p>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
@@ -272,269 +313,247 @@ export function QueueView() {
             title="Reorder to space similar videos apart"
           >
             {smartArrange.isPending ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             ) : (
-              <Shuffle className="mr-2 h-4 w-4" />
+              <Shuffle className="h-4 w-4" aria-hidden />
             )}
             Smart arrange
           </Button>
           {isPaused ? (
             <Button onClick={() => resume.mutate()} disabled={resume.isPending}>
-              <Play className="mr-2 h-4 w-4" /> Resume queue
+              {resume.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Play className="h-4 w-4" aria-hidden />
+              )}
+              Resume queue
             </Button>
           ) : (
             <Button variant="outline" onClick={() => pause.mutate()} disabled={pause.isPending}>
-              <Pause className="mr-2 h-4 w-4" /> Pause queue
+              <Pause className="h-4 w-4" aria-hidden />
+              Pause queue
             </Button>
           )}
         </div>
-      </div>
-
-      {isPaused ? (
-        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-          The queue is paused — nothing will publish until you resume.
-        </div>
-      ) : null}
+      </header>
 
       {publishError ? (
-        <div className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-3 text-sm">
+        <p
+          role="alert"
+          className="border-danger-line bg-danger-soft text-danger flex items-start gap-2 rounded-lg border px-4 py-3 text-sm"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
           {publishError}
-        </div>
+        </p>
       ) : null}
 
-      <div className="grid gap-6 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="min-w-0 space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Up next</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {queue.isLoading ? (
-                <p className="text-muted-foreground flex items-center gap-2 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-                </p>
-              ) : active.length === 0 ? (
-                <EmptyQueue />
+      <div className="grid items-start gap-x-8 gap-y-10 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        {/* The working list: what goes out, in what order. */}
+        <section className="min-w-0">
+          <div className="border-border bg-card overflow-hidden rounded-xl border">
+            <div className="border-line flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b px-3 py-3 sm:px-4">
+              {active.length > 0 ? (
+                <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm">
+                  <Checkbox
+                    checked={allSelected}
+                    indeterminate={someSelected && !allSelected}
+                    onChange={toggleSelectAll}
+                    aria-label={allSelected ? 'Deselect all' : 'Select all'}
+                  />
+                  <span className={someSelected ? 'font-medium' : 'text-muted-foreground'}>
+                    {someSelected ? `${selectedCount} selected` : 'Up next'}
+                  </span>
+                </label>
               ) : (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
-                    <label className="text-muted-foreground flex cursor-pointer select-none items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={allSelected}
-                        indeterminate={someSelected && !allSelected}
-                        onChange={toggleSelectAll}
-                        aria-label={allSelected ? 'Deselect all' : 'Select all'}
-                      />
-                      {someSelected ? `${selectedCount} selected` : 'Select all'}
-                    </label>
-
-                    {someSelected ? (
-                      <div className="flex flex-wrap items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={bulkPublish}
-                          disabled={bulkBusy}
-                          title="Publish the selected items now"
-                        >
-                          <Send className="mr-1 h-4 w-4" /> Publish now
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={bulkSkip}
-                          disabled={bulkBusy}
-                          title="Skip the selected items"
-                        >
-                          <SkipForward className="mr-1 h-4 w-4" /> Skip
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={bulkDelete}
-                          disabled={bulkBusy}
-                          className="text-destructive hover:text-destructive"
-                          title="Remove the selected items from the queue"
-                        >
-                          <Trash2 className="mr-1 h-4 w-4" /> Delete
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={clearSelection}
-                          className="text-muted-foreground hover:text-foreground p-1"
-                          aria-label="Clear selection"
-                          title="Clear selection"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={onDragEnd}
-                  >
-                    <SortableContext
-                      items={active.map((i) => i.id)}
-                      strategy={verticalListSortingStrategy}
-                    >
-                      <ul className="space-y-2">
-                        {active.map((item) => (
-                          <SortableRow
-                            key={item.id}
-                            item={item}
-                            tiktok={tiktok}
-                            instagram={instagram}
-                            youtube={youtube}
-                            selected={selectedIds.has(item.id)}
-                            onToggleSelect={() => toggleSelect(item.id)}
-                            onEdit={() =>
-                              setEditTarget({
-                                mediaId: item.media.id,
-                                mediaType: item.media.mediaType,
-                              })
-                            }
-                            onSkip={() => skip.mutate({ itemId: item.id })}
-                            onRemove={() => removeItem.mutate({ itemId: item.id })}
-                            onRetry={(taskId) => retryPublish.mutate({ taskId })}
-                            onPublishNow={() => publishNow.mutate({ itemId: item.id })}
-                            publishing={
-                              publishNow.isPending && publishNow.variables?.itemId === item.id
-                            }
-                          />
-                        ))}
-                      </ul>
-                    </SortableContext>
-                  </DndContext>
-                </>
+                <span className="text-muted-foreground text-sm">Up next</span>
               )}
 
-              {completed.length > 0 ? (
-                <div className="space-y-2 pt-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                      Published
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => clearCompleted.mutate()}
-                      disabled={clearCompleted.isPending}
-                      title="Remove all published items from this list (posts stay live)"
-                    >
-                      {clearCompleted.isPending ? (
-                        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="mr-1 h-4 w-4" />
-                      )}
-                      Clear published
-                    </Button>
-                  </div>
-                  {visiblePublished.map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 rounded-md border p-2">
-                      <Thumb url={item.media.thumbnailUrl} />
-                      <div className="min-w-0 flex-1">
-                        <span className="block min-w-0 truncate text-sm font-medium">
-                          {item.media.title ?? item.media.originalFilename ?? 'Untitled'}
-                        </span>
-                        <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                          {item.tasks.map((t) => (
-                            <TaskChip
-                              key={t.id}
-                              task={t}
-                              tiktok={tiktok}
-                              instagram={instagram}
-                              youtube={youtube}
-                              onRetry={() => retryPublish.mutate({ taskId: t.id })}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeItem.mutate({ itemId: item.id })}
-                      >
-                        <Trash2 className="mr-1 h-4 w-4" /> Remove from queue
-                      </Button>
-                    </div>
-                  ))}
-                  {completed.length > PUBLISHED_CAP ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="w-full"
-                      onClick={() => setShowAllPublished((v) => !v)}
-                    >
-                      {showAllPublished
-                        ? 'Show less'
-                        : `Show ${completed.length - PUBLISHED_CAP} more`}
-                    </Button>
+              {someSelected ? (
+                <div className="flex flex-wrap items-center gap-1">
+                  <Button size="sm" variant="outline" onClick={bulkPublish} disabled={bulkBusy}>
+                    <Send className="h-3.5 w-3.5" aria-hidden /> Publish now
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={bulkSkip} disabled={bulkBusy}>
+                    <SkipForward className="h-3.5 w-3.5" aria-hidden /> Skip
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={bulkDelete}
+                    disabled={bulkBusy}
+                    className="text-danger hover:text-danger"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden /> Remove
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={clearSelection}
+                    className="text-muted-foreground hover:text-foreground focus-visible:ring-ring ml-1 rounded p-1.5 focus-visible:outline-none focus-visible:ring-2"
+                    aria-label="Clear selection"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {queue.isLoading ? (
+              <ul className="divide-line divide-y">
+                {[0, 1, 2, 3].map((i) => (
+                  <RowSkeleton key={i} />
+                ))}
+              </ul>
+            ) : active.length === 0 ? (
+              <EmptyQueue hasHistory={completed.length > 0} />
+            ) : (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={onDragEnd}
+              >
+                <SortableContext
+                  items={active.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <ul className="divide-line divide-y">
+                    {active.map((item, index) => (
+                      <SortableRow
+                        key={item.id}
+                        item={item}
+                        index={index}
+                        accounts={accounts}
+                        selected={selectedIds.has(item.id)}
+                        onToggleSelect={() => toggleSelect(item.id)}
+                        onEdit={() =>
+                          setEditTarget({
+                            mediaId: item.media.id,
+                            mediaType: item.media.mediaType,
+                          })
+                        }
+                        onSkip={() => skip.mutate({ itemId: item.id })}
+                        onRemove={() => removeItem.mutate({ itemId: item.id })}
+                        onRetry={(taskId) => retryPublish.mutate({ taskId })}
+                        onPublishNow={() => publishNow.mutate({ itemId: item.id })}
+                        publishing={
+                          publishNow.isPending && publishNow.variables?.itemId === item.id
+                        }
+                      />
+                    ))}
+                  </ul>
+                </SortableContext>
+              </DndContext>
+            )}
+          </div>
+
+          {completed.length > 0 ? (
+            <Aside
+              title="Published"
+              action={
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => clearCompleted.mutate()}
+                  disabled={clearCompleted.isPending}
+                  title="Remove all published items from this list (posts stay live)"
+                >
+                  {clearCompleted.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                   ) : null}
-                </div>
-              ) : null}
-
-              {skipped.length > 0 ? (
-                <div className="space-y-2 pt-3">
-                  <p className="text-muted-foreground text-xs font-medium uppercase tracking-wide">
-                    Skipped
-                  </p>
-                  {skipped.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center gap-3 rounded-md border border-dashed p-2 opacity-70"
-                    >
-                      <Thumb url={item.media.thumbnailUrl} />
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        {item.media.title ?? item.media.originalFilename ?? 'Untitled'}
-                      </span>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => unskip.mutate({ itemId: item.id })}
-                      >
-                        <RotateCcw className="mr-1 h-4 w-4" /> Restore
-                      </Button>
+                  Clear published
+                </Button>
+              }
+            >
+              <ul className="divide-line divide-y">
+                {visiblePublished.map((item) => (
+                  <li key={item.id} className="flex items-center gap-3 py-2.5">
+                    <Thumb url={item.media.thumbnailUrl} />
+                    <div className="min-w-0 flex-1">
+                      <span className="block min-w-0 truncate text-sm">{mediaTitle(item)}</span>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {item.tasks.map((t) => (
+                          <TaskChip
+                            key={t.id}
+                            task={t}
+                            accounts={accounts}
+                            onRetry={() => retryPublish.mutate({ taskId: t.id })}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                    <button
+                      type="button"
+                      onClick={() => removeItem.mutate({ itemId: item.id })}
+                      className="text-muted-foreground hover:text-danger focus-visible:ring-ring shrink-0 rounded p-1.5 focus-visible:outline-none focus-visible:ring-2"
+                      aria-label={`Remove ${mediaTitle(item)} from the queue`}
+                      title="Remove from queue (the post stays live)"
+                    >
+                      <Trash2 className="h-4 w-4" aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {completed.length > PUBLISHED_CAP ? (
+                <button
+                  type="button"
+                  onClick={() => setShowAllPublished((v) => !v)}
+                  className="text-muted-foreground hover:text-foreground focus-visible:ring-ring mt-2 rounded text-sm underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2"
+                >
+                  {showAllPublished ? 'Show less' : `Show ${completed.length - PUBLISHED_CAP} more`}
+                </button>
               ) : null}
-            </CardContent>
-          </Card>
-        </div>
+            </Aside>
+          ) : null}
 
-        <div className="min-w-0 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Schedule</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ScheduleEditor onChanged={refresh} />
-            </CardContent>
-          </Card>
+          {skipped.length > 0 ? (
+            <Aside title="Skipped">
+              <ul className="divide-line divide-y">
+                {skipped.map((item) => (
+                  <li key={item.id} className="flex items-center gap-3 py-2.5">
+                    <span className="opacity-55">
+                      <Thumb url={item.media.thumbnailUrl} />
+                    </span>
+                    <span className="text-muted-foreground min-w-0 flex-1 truncate text-sm">
+                      {mediaTitle(item)}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => unskip.mutate({ itemId: item.id })}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" aria-hidden /> Restore
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </Aside>
+          ) : null}
+        </section>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Calendar className="h-4 w-4" /> Upcoming posts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+        {/* The plan: when the engine will act. Reference material, so it sits on
+            the page ground rather than in a panel of its own — the working list
+            is the only thing here that should read as a surface. */}
+        <aside className="min-w-0 space-y-10">
+          <section>
+            <ScheduleEditor onChanged={refresh} />
+          </section>
+
+          <section>
+            <h2 className="text-sm font-medium">Upcoming posts</h2>
+            <p className="text-muted-foreground mt-1 text-xs">
+              The next slots your schedules produce.
+            </p>
+            <div className="mt-3">
               <UpcomingList
                 data={upcoming.data}
                 loading={upcoming.isLoading}
-                tiktok={tiktok}
-                instagram={instagram}
-                youtube={youtube}
+                accounts={accounts}
                 onEdit={(post) =>
                   setEditTarget({ mediaId: post.mediaId, mediaType: post.mediaType })
                 }
               />
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </section>
+        </aside>
       </div>
 
       {editTarget ? (
@@ -549,14 +568,44 @@ export function QueueView() {
   );
 }
 
-function EmptyQueue() {
+/* -------------------------------------------------------------------------- */
+
+/** A secondary list under the working queue — published, skipped. */
+function Aside({
+  title,
+  action,
+  children,
+}: {
+  title: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-center gap-2 py-8 text-center">
-      <Film className="text-muted-foreground h-7 w-7" />
-      <p className="font-medium">Your queue is empty</p>
-      <p className="text-muted-foreground max-w-xs text-sm">
-        Add ready videos from your Media Library, set a schedule, and PostPilot takes it from there.
+    <section className="mt-8">
+      <div className="border-line flex items-center justify-between gap-4 border-b pb-2">
+        <h2 className="text-muted-foreground text-sm font-medium">{title}</h2>
+        {action}
+      </div>
+      <div className="mt-1">{children}</div>
+    </section>
+  );
+}
+
+function EmptyQueue({ hasHistory }: { hasHistory: boolean }) {
+  return (
+    <div className="px-6 py-14 text-center">
+      <p className="text-lg font-medium">
+        {hasHistory ? 'Everything queued has gone out' : 'Nothing in the queue yet'}
       </p>
+      <p className="text-muted-foreground mx-auto mt-2 max-w-sm text-pretty text-sm leading-relaxed">
+        Add ready videos from your library, set a posting schedule, and PostPilot takes it from
+        there.
+      </p>
+      <div className="mt-5 flex items-center justify-center gap-2">
+        <Button asChild size="sm">
+          <a href="/media">Open library</a>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -585,7 +634,7 @@ function Checkbox({
       onChange={onChange}
       onClick={(e) => e.stopPropagation()}
       aria-label={ariaLabel}
-      className="border-input accent-primary h-4 w-4 shrink-0 cursor-pointer rounded"
+      className="border-input accent-primary focus-visible:ring-ring h-4 w-4 shrink-0 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
     />
   );
 }
@@ -593,12 +642,12 @@ function Checkbox({
 /** Rendered as a span so it stays valid inside the clickable upcoming rows. */
 function Thumb({ url }: { url: string | null }) {
   return (
-    <span className="bg-muted flex h-12 w-8 shrink-0 items-center justify-center overflow-hidden rounded">
+    <span className="bg-muted ring-line flex h-12 w-8 shrink-0 items-center justify-center overflow-hidden rounded ring-1">
       {url ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={url} alt="" className="h-full w-full object-cover" />
       ) : (
-        <Film className="text-muted-foreground h-4 w-4" />
+        <Film className="text-muted-foreground h-4 w-4" aria-hidden />
       )}
     </span>
   );
@@ -610,23 +659,25 @@ function PlatformAvatar({ url }: { url: string | null }) {
 }
 
 /** The account avatar to show inside a given platform's pill, if any. */
-function platformAvatarUrl(
-  platform: Platform,
-  tiktok: TikTokAccount | null,
-  instagram: InstagramAccount | null,
-  youtube: YouTubeAccount | null,
-): string | null {
-  if (platform === 'TIKTOK') return tiktok?.avatarUrl ?? null;
-  if (platform === 'INSTAGRAM') return instagram?.avatarUrl ?? null;
-  if (platform === 'YOUTUBE') return youtube?.avatarUrl ?? null;
+function platformAvatarUrl(platform: Platform, accounts: Accounts): string | null {
+  if (platform === 'TIKTOK') return accounts.tiktok?.avatarUrl ?? null;
+  if (platform === 'INSTAGRAM') return accounts.instagram?.avatarUrl ?? null;
+  if (platform === 'YOUTUBE') return accounts.youtube?.avatarUrl ?? null;
+  return null;
+}
+
+/** The connected handle for a platform, if any. */
+function platformHandle(platform: Platform, accounts: Accounts): string | null {
+  if (platform === 'TIKTOK') return accounts.tiktok?.username ?? null;
+  if (platform === 'INSTAGRAM') return accounts.instagram?.username ?? null;
+  if (platform === 'YOUTUBE') return accounts.youtube?.username ?? null;
   return null;
 }
 
 function SortableRow({
   item,
-  tiktok,
-  instagram,
-  youtube,
+  index,
+  accounts,
   selected,
   onToggleSelect,
   onEdit,
@@ -637,9 +688,8 @@ function SortableRow({
   publishing,
 }: {
   item: QueueItem;
-  tiktok: TikTokAccount | null;
-  instagram: InstagramAccount | null;
-  youtube: YouTubeAccount | null;
+  index: number;
+  accounts: Accounts;
   selected: boolean;
   onToggleSelect: () => void;
   onEdit: () => void;
@@ -653,12 +703,16 @@ function SortableRow({
     id: item.id,
   });
   const style = { transform: CSS.Transform.toString(transform), transition };
+  const title = mediaTitle(item);
 
   // Clicking the row opens its edit panel, but the row is full of its own
   // controls (checkbox, drag handle, task chips, actions) — let any of those
   // handle the click themselves. The pencil below is the keyboard equivalent.
   const onRowClick = (e: MouseEvent<HTMLLIElement>) => {
     if ((e.target as HTMLElement).closest('a, button, input, label')) return;
+    // Selecting the title shouldn't also open the editor — a drag-select or a
+    // double-click on a word would otherwise be swallowed by the panel.
+    if (window.getSelection()?.toString()) return;
     onEdit();
   };
 
@@ -667,112 +721,144 @@ function SortableRow({
       ref={setNodeRef}
       style={style}
       onClick={onRowClick}
-      className={`bg-card hover:bg-accent/40 flex cursor-pointer items-center gap-2 rounded-md border p-2 transition-colors ${
-        isDragging ? 'shadow-lg' : ''
-      } ${selected ? 'border-primary ring-primary/30 ring-1' : ''}`}
+      className={`hover:bg-accent/40 group relative flex cursor-pointer items-center gap-2.5 px-3 py-3 transition-colors sm:gap-3 sm:px-4 ${
+        isDragging
+          ? 'bg-card relative z-10 shadow-[0_8px_24px_-8px_hsl(var(--foreground)/0.25)]'
+          : ''
+      } ${selected ? 'bg-accent' : ''}`}
     >
       <Checkbox
         checked={selected}
         onChange={onToggleSelect}
-        aria-label={selected ? 'Deselect item' : 'Select item'}
+        aria-label={selected ? `Deselect ${title}` : `Select ${title}`}
       />
 
+      {/* Position doubles as the drag handle: the number tells you where this
+          sits in the rotation, and reaching for it is how you change that. */}
       <button
         type="button"
-        className="text-muted-foreground hover:text-foreground cursor-grab touch-none"
-        aria-label="Drag to reorder"
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring relative h-7 w-5 shrink-0 cursor-grab touch-none rounded text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 active:cursor-grabbing sm:w-6"
+        aria-label={`Reorder ${title}, currently ${index + 1}`}
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="h-4 w-4" />
+        {/* The number gives way to the grip on hover. Touch devices never
+            hover, so there the grip is simply always the visible state. */}
+        <span
+          aria-hidden
+          className="absolute inset-0 flex items-center justify-center transition-opacity group-hover:opacity-0 [@media(hover:none)]:opacity-0"
+        >
+          {index + 1}
+        </span>
+        <GripVertical
+          aria-hidden
+          className="absolute inset-0 m-auto h-4 w-4 opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100"
+        />
       </button>
 
       <Thumb url={item.media.thumbnailUrl} />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
-          <span className="min-w-0 truncate text-sm font-medium">
-            {item.media.title ?? item.media.originalFilename ?? 'Untitled'}
-          </span>
+          <span className="min-w-0 truncate text-sm font-medium">{title}</span>
           {item.media.isDuplicate ? (
-            <Copy className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-label="Possible duplicate" />
+            <Copy
+              className="text-warn h-3.5 w-3.5 shrink-0"
+              aria-label="Possible duplicate"
+              role="img"
+            />
           ) : null}
         </div>
-        <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <SlotLabel item={item} />
           {item.tasks.length > 0 ? (
             <>
               {item.tasks.map((t) => (
-                <TaskChip
-                  key={t.id}
-                  task={t}
-                  tiktok={tiktok}
-                  instagram={instagram}
-                  youtube={youtube}
-                  onRetry={() => onRetry(t.id)}
-                />
+                <TaskChip key={t.id} task={t} accounts={accounts} onRetry={() => onRetry(t.id)} />
               ))}
               <AwaitingSlot
                 platforms={item.postsTo.filter((p) => !item.tasks.some((t) => t.platform === p))}
-                tiktok={tiktok}
-                instagram={instagram}
-                youtube={youtube}
+                accounts={accounts}
               />
             </>
           ) : (
-            <Destinations
-              platforms={item.postsTo}
-              tiktok={tiktok}
-              instagram={instagram}
-              youtube={youtube}
-            />
+            <Destinations platforms={item.postsTo} accounts={accounts} />
           )}
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
-        <Button
-          size="sm"
-          variant="ghost"
+      {/* Two shortcuts and a menu on a wide screen; on a phone the shortcuts
+          fold into the menu, because the title needs those 80px more than the
+          row needs a second click target. */}
+      <div className="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
           onClick={onPublishNow}
           disabled={publishing}
-          title="Publish this item now, without waiting for its scheduled time"
+          className="text-muted-foreground hover:text-foreground hover:bg-background focus-visible:ring-ring hidden rounded-md p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 sm:inline-flex"
+          aria-label={`Publish ${title} now`}
+          title="Publish now, without waiting for its scheduled time"
         >
           {publishing ? (
-            <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           ) : (
-            <Send className="mr-1 h-4 w-4" />
+            <Send className="h-4 w-4" aria-hidden />
           )}
-          Publish now
-        </Button>
+        </button>
         <button
           type="button"
           onClick={onEdit}
-          className="text-muted-foreground hover:text-foreground p-1"
-          aria-label="Edit details"
+          className="text-muted-foreground hover:text-foreground hover:bg-background focus-visible:ring-ring hidden rounded-md p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 sm:inline-flex"
+          aria-label={`Edit details for ${title}`}
           title="Edit details"
         >
-          <Pencil className="h-4 w-4" />
+          <Pencil className="h-4 w-4" aria-hidden />
         </button>
-        <button
-          type="button"
-          onClick={onSkip}
-          className="text-muted-foreground hover:text-foreground p-1"
-          aria-label="Skip"
-          title="Skip"
-        >
-          <SkipForward className="h-4 w-4" />
-        </button>
-        <button
-          type="button"
-          onClick={onRemove}
-          className="text-muted-foreground hover:text-destructive p-1"
-          aria-label="Remove"
-          title="Remove from queue"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="text-muted-foreground hover:text-foreground hover:bg-background focus-visible:ring-ring rounded-md p-2 transition-colors focus-visible:outline-none focus-visible:ring-2"
+              aria-label={`More actions for ${title}`}
+            >
+              <MoreHorizontal className="h-4 w-4" aria-hidden />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onSelect={onPublishNow} className="cursor-pointer sm:hidden">
+              <Send className="mr-2 h-4 w-4" aria-hidden />
+              Publish now
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onEdit} className="cursor-pointer sm:hidden">
+              <Pencil className="mr-2 h-4 w-4" aria-hidden />
+              Edit details
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onSkip} className="cursor-pointer">
+              <SkipForward className="mr-2 h-4 w-4" aria-hidden />
+              Skip this one
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onRemove} className="text-danger cursor-pointer">
+              <Trash2 className="mr-2 h-4 w-4" aria-hidden />
+              Remove from queue
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+    </li>
+  );
+}
+
+function RowSkeleton() {
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <span className="bg-muted h-4 w-4 shrink-0 animate-pulse rounded" />
+      <span className="bg-muted h-4 w-4 shrink-0 animate-pulse rounded" />
+      <span className="bg-muted h-12 w-8 shrink-0 animate-pulse rounded" />
+      <span className="flex-1 space-y-2">
+        <span className="bg-muted block h-4 w-2/3 animate-pulse rounded" />
+        <span className="bg-muted block h-3 w-1/3 animate-pulse rounded" />
+      </span>
     </li>
   );
 }
@@ -792,57 +878,46 @@ function SlotLabel({ item }: { item: QueueItem }) {
     return Math.max(0, times.size - 1);
   }, [item.tasks]);
 
-  if (!item.scheduledAt) return <span>Awaiting a slot</span>;
+  if (!item.scheduledAt) return <span className="text-muted-foreground">Awaiting a slot</span>;
   return (
-    <span>
+    <span className="text-foreground font-medium">
       {formatSlot(item.scheduledAt)}
       {extra > 0 ? (
-        <span title="This item's platforms publish at different scheduled times">
-          {` · +${extra} more time${extra > 1 ? 's' : ''}`}
+        <span
+          className="text-muted-foreground font-normal"
+          title="This item's platforms publish at different scheduled times"
+        >
+          {` +${extra} more time${extra > 1 ? 's' : ''}`}
         </span>
       ) : null}
     </span>
   );
 }
 
+/** Shared chip geometry, so every destination pill sits on the same baseline. */
+const CHIP = 'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] leading-4';
+
 /**
  * Where this item will post, shown before publish tasks are materialized (i.e.
  * while it's still awaiting a slot). Once scheduled, the per-platform TaskChips
  * convey the same destinations with live status, so this is only the fallback.
  */
-function Destinations({
-  platforms,
-  tiktok,
-  instagram,
-  youtube,
-}: {
-  platforms: Platform[];
-  tiktok: TikTokAccount | null;
-  instagram: InstagramAccount | null;
-  youtube: YouTubeAccount | null;
-}) {
+function Destinations({ platforms, accounts }: { platforms: Platform[]; accounts: Accounts }) {
   if (platforms.length === 0) {
-    return <span className="text-muted-foreground">No connected platforms</span>;
+    return <span className="text-warn font-medium">No connected platforms</span>;
   }
   return (
     <span className="flex items-center gap-1">
-      <span className="text-muted-foreground/70">Posts to</span>
+      <span className="text-muted-foreground">Posts to</span>
       {platforms.map((p) => {
-        const handle =
-          p === 'TIKTOK'
-            ? tiktok?.username
-            : p === 'INSTAGRAM'
-              ? instagram?.username
-              : p === 'YOUTUBE'
-                ? youtube?.username
-                : null;
+        const handle = platformHandle(p, accounts);
         return (
           <span
             key={p}
-            className="inline-flex items-center gap-0.5 rounded bg-slate-100 px-1 text-slate-600"
+            className={`${CHIP} bg-muted text-muted-foreground`}
             title={handle ? `${PLATFORM_LABELS[p]} · @${handle}` : PLATFORM_LABELS[p]}
           >
-            <PlatformAvatar url={platformAvatarUrl(p, tiktok, instagram, youtube)} />
+            <PlatformAvatar url={platformAvatarUrl(p, accounts)} />
             {PLATFORM_SHORT[p]}
           </span>
         );
@@ -860,27 +935,17 @@ function Destinations({
  * showing one Instagram chip and nothing else is exactly what made the old
  * "posted to Instagram only" bug invisible.
  */
-function AwaitingSlot({
-  platforms,
-  tiktok,
-  instagram,
-  youtube,
-}: {
-  platforms: Platform[];
-  tiktok: TikTokAccount | null;
-  instagram: InstagramAccount | null;
-  youtube: YouTubeAccount | null;
-}) {
+function AwaitingSlot({ platforms, accounts }: { platforms: Platform[]; accounts: Accounts }) {
   if (platforms.length === 0) return null;
   return (
     <>
       {platforms.map((p) => (
         <span
           key={p}
-          className="inline-flex items-center gap-0.5 rounded border border-dashed border-slate-300 px-1 text-slate-500"
+          className={`${CHIP} border-border text-muted-foreground border border-dashed`}
           title={`${PLATFORM_LABELS[p]} — awaiting a slot in your schedule`}
         >
-          <PlatformAvatar url={platformAvatarUrl(p, tiktok, instagram, youtube)} />
+          <PlatformAvatar url={platformAvatarUrl(p, accounts)} />
           {PLATFORM_SHORT[p]}
         </span>
       ))}
@@ -892,52 +957,41 @@ type QueueTask = QueueItem['tasks'][number];
 
 function TaskChip({
   task,
-  tiktok,
-  instagram,
-  youtube,
+  accounts,
   onRetry,
 }: {
   task: QueueTask;
-  tiktok: TikTokAccount | null;
-  instagram: InstagramAccount | null;
-  youtube: YouTubeAccount | null;
+  accounts: Accounts;
   onRetry: () => void;
 }) {
   const label = PLATFORM_SHORT[task.platform];
   const full = PLATFORM_LABELS[task.platform];
-  const base = 'inline-flex items-center gap-0.5 rounded px-1';
   // Show the connected account avatar inside the pill (TikTok, Instagram, YouTube).
-  const avatar = (
-    <PlatformAvatar url={platformAvatarUrl(task.platform, tiktok, instagram, youtube)} />
-  );
-  const handle =
-    task.platform === 'TIKTOK'
-      ? tiktok?.username
-      : task.platform === 'INSTAGRAM'
-        ? instagram?.username
-        : task.platform === 'YOUTUBE'
-          ? youtube?.username
-          : null;
+  const avatar = <PlatformAvatar url={platformAvatarUrl(task.platform, accounts)} />;
+  const handle = platformHandle(task.platform, accounts);
   const at = handle ? ` · @${handle}` : '';
 
   if (task.status === 'PUBLISHED') {
-    const cls = `${base} bg-emerald-100 text-emerald-700`;
+    // A published post is the system working. It stays quiet — no colour, just
+    // a tick — so the one failed chip beside it is impossible to miss.
+    const cls = `${CHIP} bg-muted text-muted-foreground`;
     if (task.postUrl) {
       return (
         <a
           href={task.postUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className={cls}
-          title={`Posted to ${full}${at}`}
+          className={`${cls} hover:text-foreground transition-colors`}
+          title={`Posted to ${full}${at} — open the post`}
         >
-          <Check className="h-3 w-3" /> {avatar} {label} <ExternalLink className="h-3 w-3" />
+          <Check className="h-3 w-3" aria-hidden /> {avatar} {label}{' '}
+          <ExternalLink className="h-2.5 w-2.5" aria-hidden />
         </a>
       );
     }
     return (
       <span className={cls} title={`Posted to ${full}${at}`}>
-        <Check className="h-3 w-3" /> {avatar} {label}
+        <Check className="h-3 w-3" aria-hidden /> {avatar} {label}
       </span>
     );
   }
@@ -953,8 +1007,8 @@ function TaskChip({
         ? `Uploading to ${full}${at}…`
         : `${full} is processing this post${at}…`;
     return (
-      <span className={`${base} bg-blue-100 text-blue-700`} title={title}>
-        <Loader2 className="h-3 w-3 animate-spin" /> {avatar} {label}
+      <span className={`${CHIP} bg-muted text-foreground font-medium`} title={title}>
+        <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> {avatar} {label}
       </span>
     );
   }
@@ -967,10 +1021,11 @@ function TaskChip({
       <button
         type="button"
         onClick={onRetry}
-        className={`${base} bg-red-100 text-red-700 hover:bg-red-200`}
+        className={`${CHIP} bg-danger-soft text-danger ring-danger-line hover:bg-danger-soft/70 font-medium ring-1 transition-colors`}
         title={title}
       >
-        <AlertTriangle className="h-3 w-3" /> {avatar} {label} <RefreshCw className="h-3 w-3" />
+        <AlertTriangle className="h-3 w-3" aria-hidden /> {avatar} {label}{' '}
+        <RefreshCw className="h-2.5 w-2.5" aria-hidden />
       </button>
     );
   }
@@ -979,7 +1034,7 @@ function TaskChip({
   // can be on a different schedule entirely — so the chip carries its own.
   return (
     <span
-      className={`${base} bg-slate-100 text-slate-600`}
+      className={`${CHIP} bg-muted text-muted-foreground`}
       title={`Scheduled for ${full}${at} — ${formatSlot(task.scheduledAt)}`}
     >
       {avatar} {label}
@@ -990,16 +1045,12 @@ function TaskChip({
 function UpcomingList({
   data,
   loading,
-  tiktok,
-  instagram,
-  youtube,
+  accounts,
   onEdit,
 }: {
   data: Upcoming | undefined;
   loading: boolean;
-  tiktok: TikTokAccount | null;
-  instagram: InstagramAccount | null;
-  youtube: YouTubeAccount | null;
+  accounts: Accounts;
   onEdit: (post: Upcoming[number]) => void;
 }) {
   const groups = useMemo(() => {
@@ -1016,53 +1067,48 @@ function UpcomingList({
   if (loading) {
     return (
       <p className="text-muted-foreground flex items-center gap-2 text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading…
       </p>
     );
   }
   if (!data || data.length === 0) {
     return (
-      <p className="text-muted-foreground text-sm">
+      <p className="text-muted-foreground text-sm leading-relaxed">
         Nothing scheduled yet. Add a schedule and queued videos will appear here.
       </p>
     );
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       {groups.map(([day, posts]) => (
         <div key={day}>
-          <p className="text-muted-foreground mb-1 text-xs font-medium uppercase tracking-wide">
-            {day}
-          </p>
-          <ul className="space-y-1.5">
+          <p className="border-line text-foreground border-b pb-1.5 text-xs font-medium">{day}</p>
+          <ul className="divide-line divide-y">
             {posts.map((p) => {
-              const avatarUrl = platformAvatarUrl(p.platform, tiktok, instagram, youtube);
+              const avatarUrl = platformAvatarUrl(p.platform, accounts);
               const handle =
                 p.platform === 'TIKTOK'
-                  ? (tiktok?.username ?? tiktok?.nickname ?? null)
-                  : p.platform === 'INSTAGRAM'
-                    ? (instagram?.username ?? null)
-                    : p.platform === 'YOUTUBE'
-                      ? (youtube?.username ?? null)
-                      : null;
+                  ? (accounts.tiktok?.username ?? accounts.tiktok?.nickname ?? null)
+                  : platformHandle(p.platform, accounts);
               return (
                 <li key={p.taskId}>
                   <button
                     type="button"
                     onClick={() => onEdit(p)}
                     title="Edit details"
-                    className="hover:bg-accent/60 flex w-full items-center gap-2 rounded-md p-1 text-left text-sm transition-colors"
+                    className="hover:bg-accent/60 focus-visible:ring-ring group flex w-full items-baseline gap-3 rounded-md px-1.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2"
                   >
-                    <Thumb url={p.thumbnailUrl} />
+                    <span className="text-muted-foreground w-[4.5rem] shrink-0 text-xs tabular-nums">
+                      {formatTime(p.scheduledAt)}
+                    </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate">{p.title ?? 'Untitled'}</span>
-                      <span className="text-muted-foreground flex items-center gap-1 text-xs">
-                        <span>
-                          {formatTime(p.scheduledAt)} · {PLATFORM_LABELS[p.platform]}
-                        </span>
+                      <span className="block truncate text-sm">{p.title ?? 'Untitled'}</span>
+                      <span className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+                        <span>{PLATFORM_LABELS[p.platform]}</span>
                         {avatarUrl || handle ? (
-                          <span className="flex items-center gap-1">
+                          <span className="flex min-w-0 items-center gap-1">
+                            <span aria-hidden>·</span>
                             {avatarUrl ? (
                               <AccountAvatar
                                 url={avatarUrl}
@@ -1076,10 +1122,12 @@ function UpcomingList({
                             ) : null}
                           </span>
                         ) : null}
-                        {p.needsConnection ? (
-                          <span className="text-red-600">· reconnect needed</span>
-                        ) : null}
                       </span>
+                      {p.needsConnection ? (
+                        <span className="text-danger mt-0.5 block text-xs font-medium">
+                          Held — reconnect {PLATFORM_LABELS[p.platform]} to publish this
+                        </span>
+                      ) : null}
                     </span>
                   </button>
                 </li>

@@ -16,10 +16,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session?.user) redirect('/signin');
 
   return (
-    <div className="app-theme flex min-h-dvh flex-col">
+    <div className="app-theme bg-background text-foreground flex min-h-dvh flex-col">
       <AppThemeScope />
       <NavBar name={session.user.name} email={session.user.email} image={session.user.image} />
-      <main className="container flex-1 py-8">{children}</main>
+      <main className="container flex-1 py-8 sm:py-10">{children}</main>
       {/* Plan choice comes first — it gates the account, whereas the creator
           profile is optional. Both are modals; the plan one wins because it
           renders last and cannot be dismissed. */}

@@ -1,14 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowLeft, Check, Loader2, RefreshCw, Unplug } from 'lucide-react';
+import { Check, ChevronLeft, Loader2, RefreshCw, Unplug } from 'lucide-react';
 
 import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@postpilot/api';
 import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AccountAvatar, PlatformGlyph, PlatformLogo } from '@/components/PlatformGlyph';
 import { trpc } from '@/lib/trpc/client';
 
@@ -25,11 +25,24 @@ const CONNECT_BRAND: Partial<Record<Platform, string>> = {
 };
 
 /**
+ * What a platform needs from the creator before a connection can succeed.
+ * Shown only while disconnected, where it saves a failed OAuth round-trip.
+ */
+const CONNECT_REQUIREMENT: Partial<Record<Platform, string>> = {
+  INSTAGRAM: 'Requires a Business or Creator account linked to a Facebook Page.',
+};
+
+/**
  * Display a username as an @-handle without doubling the prefix — some
  * platforms (e.g. YouTube's customUrl) already include a leading "@".
  */
 function formatHandle(username: string): string {
   return username.startsWith('@') ? username : `@${username}`;
+}
+
+/** Casing, spacing, dots and the @ prefix are noise when comparing identities. */
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -50,43 +63,59 @@ export function ConnectionsView({ connected, error }: ConnectionsViewProps) {
     onSuccess: () => utils.connections.overview.invalidate(),
   });
 
+  // A broken connection is why most people open this page — an alert sent them
+  // here. Float it to the top so the repair is the first thing under the title.
+  const entries = [...(overview ?? [])].sort((a, b) => {
+    const rank = (e: OverviewEntry) =>
+      e.connection?.status === 'NEEDS_RECONNECT' ? 0 : e.configured ? 1 : 2;
+    return rank(a) - rank(b);
+  });
+  const brokenCount = entries.filter((e) => e.connection?.status === 'NEEDS_RECONNECT').length;
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/settings">
-            <ArrowLeft className="mr-1 h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">Connections</h1>
-      </div>
+    <div className="mx-auto max-w-2xl">
+      <Link
+        href="/settings"
+        className="text-muted-foreground hover:text-foreground focus-visible:ring-ring -ml-1 inline-flex items-center gap-1 rounded px-1 py-0.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
+      >
+        <ChevronLeft className="h-4 w-4" aria-hidden />
+        Settings
+      </Link>
+
+      <h1 className="mt-3 text-2xl font-medium tracking-[-0.02em]">Connections</h1>
+      <p className="text-muted-foreground mt-2 max-w-prose text-sm leading-relaxed">
+        The accounts PostPilot publishes to. Each one refreshes its own access in the background —
+        you&apos;ll only see a prompt here if a connection genuinely breaks.
+      </p>
 
       {connected ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
-          Connected {PLATFORM_LABELS[connected.toUpperCase() as Platform] ?? connected}.
-        </div>
+        <p className="border-border bg-card mt-6 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm">
+          <span className="bg-primary text-primary-foreground flex h-5 w-5 flex-none items-center justify-center rounded-full">
+            <Check className="h-3 w-3" aria-hidden />
+          </span>
+          {PLATFORM_LABELS[connected.toUpperCase() as Platform] ?? connected} is connected. Anything
+          held for it will publish on its next slot.
+        </p>
       ) : null}
 
       {error ? (
-        <div className="border-destructive/40 bg-destructive/10 text-destructive rounded-md border p-3 text-sm">
+        <p className="border-danger-line bg-danger-soft text-danger mt-6 rounded-lg border px-4 py-3 text-sm">
           {ERROR_MESSAGES[error] ?? 'Something went wrong connecting that account.'}
-        </div>
+        </p>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Platforms</CardTitle>
-          <CardDescription>
-            Connect the accounts PostPilot will publish to. Each platform refreshes its own access
-            automatically — we&apos;ll only ask you to reconnect if a connection genuinely breaks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {isLoading ? (
-            <p className="text-muted-foreground text-sm">Loading…</p>
-          ) : (
-            overview?.map((entry) => (
+      {brokenCount > 0 ? (
+        <p className="text-danger mt-6 text-sm font-medium">
+          {brokenCount === 1
+            ? 'One account needs reconnecting. Its posts are on hold until you do.'
+            : `${brokenCount} accounts need reconnecting. Their posts are on hold until you do.`}
+        </p>
+      ) : null}
+
+      <ul className="border-border bg-card divide-line mt-4 divide-y overflow-hidden rounded-xl border">
+        {isLoading
+          ? [0, 1, 2].map((i) => <PlatformRowSkeleton key={i} />)
+          : entries.map((entry) => (
               <PlatformRow
                 key={entry.platform}
                 entry={entry}
@@ -96,14 +125,12 @@ export function ConnectionsView({ connected, error }: ConnectionsViewProps) {
                   disconnect.variables?.connectionId === entry.connection?.id
                 }
               />
-            ))
-          )}
-        </CardContent>
-      </Card>
+            ))}
+      </ul>
 
-      <p className="text-muted-foreground text-xs leading-relaxed">
-        By connecting an account, you agree to that platform&apos;s terms. PostPilot uses YouTube API
-        Services; by connecting YouTube you agree to the{' '}
+      <p className="text-muted-foreground mt-6 max-w-prose text-xs leading-relaxed">
+        By connecting an account, you agree to that platform&apos;s terms. PostPilot uses YouTube
+        API Services; by connecting YouTube you agree to the{' '}
         <a
           href="https://www.youtube.com/t/terms"
           target="_blank"
@@ -149,41 +176,53 @@ function PlatformRow({
   const label = PLATFORM_LABELS[entry.platform];
   const conn = entry.connection;
   const status = conn?.status ?? (entry.configured ? 'NONE' : 'UNAVAILABLE');
+  const broken = status === 'NEEDS_RECONNECT';
+  const handle = conn?.username ? formatHandle(conn.username) : null;
+  const requirement = CONNECT_REQUIREMENT[entry.platform];
+  // "@aerialjeremy · Aerial Jeremy" says the same thing twice. Show the display
+  // name only when it carries information the handle doesn't.
+  const showDisplayName =
+    Boolean(conn?.displayName) &&
+    Boolean(handle) &&
+    normalizeName(conn!.displayName!) !== normalizeName(handle!);
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border p-4">
-      <div className="flex min-w-0 items-center gap-3">
-        {conn && (conn.username || conn.displayName) ? (
-          <PlatformLogo platform={entry.platform} />
+    <li
+      className={`flex flex-wrap items-center gap-x-4 gap-y-3 p-4 sm:p-5 ${
+        broken ? 'bg-danger-soft' : ''
+      }`}
+    >
+      <PlatformLogo platform={entry.platform} />
+
+      <div className="min-w-0 flex-1 basis-48">
+        <p className="font-medium leading-tight">{label}</p>
+
+        {handle || conn?.displayName ? (
+          <p className="text-muted-foreground mt-1 flex min-w-0 items-center gap-1.5 text-sm">
+            <AccountAvatar
+              url={conn?.avatarUrl ?? null}
+              name={handle ?? conn?.displayName ?? '?'}
+            />
+            <span className="truncate">{handle ?? conn?.displayName}</span>
+            {showDisplayName ? <span className="truncate">· {conn!.displayName}</span> : null}
+          </p>
         ) : null}
-        <div className="min-w-0 space-y-1">
-          <p className="font-medium leading-none">{label}</p>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <StatusBadge status={status} />
-            {conn?.username || conn?.displayName ? (
-              <span className="text-foreground inline-flex items-center gap-1.5 truncate text-sm font-medium">
-                <AccountAvatar
-                  url={conn.avatarUrl}
-                  name={conn.username ?? conn.displayName ?? '?'}
-                />
-                {conn.username ? formatHandle(conn.username) : conn.displayName}
-              </span>
-            ) : null}
-            {conn?.username && conn?.displayName && conn.displayName !== conn.username ? (
-              <span className="text-muted-foreground truncate text-xs">{conn.displayName}</span>
-            ) : null}
-          </div>
-        </div>
+
+        <p
+          className={`mt-1 text-sm ${broken ? 'text-danger' : 'text-muted-foreground'} ${
+            broken ? 'font-medium' : ''
+          }`}
+        >
+          <StatusLine status={status} requirement={requirement} />
+        </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {!entry.configured ? (
-          <span className="text-muted-foreground text-xs">Not available</span>
-        ) : status === 'NEEDS_RECONNECT' ? (
+      <div className="flex w-full shrink-0 items-center gap-2 pl-[3.25rem] sm:ml-auto sm:w-auto sm:pl-0">
+        {!entry.configured ? null : broken ? (
           <>
             <Button asChild size="sm">
               <a href={`/api/connections/${entry.platform.toLowerCase()}/start`}>
-                <RefreshCw className="mr-1 h-4 w-4" />
+                <RefreshCw className="h-4 w-4" aria-hidden />
                 Reconnect
               </a>
             </Button>
@@ -210,7 +249,7 @@ function PlatformRow({
             asChild
             size="sm"
             variant="outline"
-            className="border-input bg-white text-foreground hover:bg-neutral-50"
+            className="border-input text-foreground bg-white hover:bg-neutral-50"
           >
             <a href={`/api/connections/${entry.platform.toLowerCase()}/start`}>
               {/* Per-platform sizing so the visible marks look balanced:
@@ -221,7 +260,7 @@ function PlatformRow({
                   - TikTok fills its box, so h-5 already matches. */}
               <PlatformGlyph
                 platform={entry.platform}
-                className={`mr-1.5 w-auto ${
+                className={`-ml-1 w-auto ${
                   entry.platform === 'INSTAGRAM'
                     ? 'h-7'
                     : entry.platform === 'YOUTUBE'
@@ -234,8 +273,33 @@ function PlatformRow({
           </Button>
         )}
       </div>
-    </div>
+    </li>
   );
+}
+
+/**
+ * One line of plain language per state. Healthy connections stay in the muted
+ * neutral — in this app a working system is quiet, and only a broken one gets
+ * to take colour.
+ */
+function StatusLine({ status, requirement }: { status: string; requirement?: string }) {
+  switch (status) {
+    case 'ACTIVE':
+      return (
+        <span className="inline-flex items-start gap-1.5">
+          <Check className="mt-[0.2em] h-3.5 w-3.5 flex-none" aria-hidden />
+          Connected — publishing normally.
+        </span>
+      );
+    case 'NEEDS_RECONNECT':
+      return <>Connection lost — reconnect to resume.</>;
+    case 'PAUSED':
+      return <>Paused. Nothing will publish here until it resumes.</>;
+    case 'UNAVAILABLE':
+      return <>Not available yet.</>;
+    default:
+      return <>Not connected.{requirement ? ` ${requirement}` : ''}</>;
+  }
 }
 
 function DisconnectButton({
@@ -255,33 +319,24 @@ function DisconnectButton({
       disabled={disconnecting}
     >
       {disconnecting ? (
-        <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
       ) : (
-        <Unplug className="mr-1 h-4 w-4" />
+        <Unplug className="h-4 w-4" aria-hidden />
       )}
-      Disconnect
+      {disconnecting ? 'Disconnecting…' : 'Disconnect'}
     </Button>
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; className: string }> = {
-    ACTIVE: { label: 'Connected', className: 'bg-emerald-100 text-emerald-800' },
-    NEEDS_RECONNECT: { label: 'Reconnect needed', className: 'bg-red-100 text-red-800' },
-    PAUSED: { label: 'Paused', className: 'bg-amber-100 text-amber-800' },
-    DISCONNECTED: { label: 'Disconnected', className: 'bg-slate-100 text-slate-700' },
-    NONE: { label: 'Not connected', className: 'bg-slate-100 text-slate-700' },
-    UNAVAILABLE: { label: 'Unavailable', className: 'bg-slate-100 text-slate-500' },
-  };
-  const s = map[status] ?? map.NONE!;
+function PlatformRowSkeleton() {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${s.className}`}
-    >
-      {s.label}
-      {status === 'ACTIVE' ? <Check className="h-3 w-3" aria-hidden="true" /> : null}
-    </span>
+    <li className="flex items-center gap-4 p-4 sm:p-5">
+      <Skeleton className="h-9 w-9 shrink-0 rounded" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-3.5 w-40" />
+      </div>
+      <Skeleton className="h-9 w-32 shrink-0 rounded-md" />
+    </li>
   );
 }
-
-

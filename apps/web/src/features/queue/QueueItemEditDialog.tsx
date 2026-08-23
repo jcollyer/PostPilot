@@ -87,7 +87,7 @@ export function QueueItemEditDialog({
           />
         ) : (
           <>
-            <SheetHeader className="border-b p-6 pr-12">
+            <SheetHeader className="border-line border-b p-6 pr-12">
               <SheetTitle>Edit details</SheetTitle>
               <SheetDescription>
                 {error ? "This post's details couldn't be loaded." : 'Loading this post…'}
@@ -95,9 +95,11 @@ export function QueueItemEditDialog({
             </SheetHeader>
             <div className="flex flex-1 items-center justify-center p-6">
               {error ? (
-                <p className="text-destructive text-sm">{error.message}</p>
+                <p className="text-danger max-w-xs text-balance text-center text-sm">
+                  {error.message} Close this panel and try again.
+                </p>
               ) : (
-                <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" />
+                <Loader2 className="text-muted-foreground h-5 w-5 animate-spin" aria-hidden />
               )}
             </div>
           </>

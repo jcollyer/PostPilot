@@ -66,8 +66,11 @@ export function ScheduleEditor({ onChanged }: { onChanged: () => void }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Schedules</h2>
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-medium">Schedules</h2>
+          <p className="text-muted-foreground mt-1 text-xs">When PostPilot is allowed to post.</p>
+        </div>
         {!adding ? (
           <Button
             size="sm"
@@ -77,7 +80,7 @@ export function ScheduleEditor({ onChanged }: { onChanged: () => void }) {
               setAdding(true);
             }}
           >
-            <Plus className="mr-1 h-4 w-4" /> Add schedule
+            <Plus className="h-4 w-4" aria-hidden /> Add schedule
           </Button>
         ) : null}
       </div>
@@ -87,7 +90,7 @@ export function ScheduleEditor({ onChanged }: { onChanged: () => void }) {
           {schedules.data.map((s) => {
             const isEditing = editingId === s.id;
             return (
-              <li key={s.id} className="rounded-md border text-sm">
+              <li key={s.id} className="border-border bg-card rounded-lg border text-sm">
                 <div className="flex items-center justify-between gap-3 p-3">
                   <button
                     type="button"
@@ -108,23 +111,24 @@ export function ScheduleEditor({ onChanged }: { onChanged: () => void }) {
                     </span>
                   </button>
                   <div className="flex shrink-0 items-center gap-2">
-                    <label className="flex items-center gap-1.5 text-xs">
+                    <label className="text-muted-foreground flex cursor-pointer select-none items-center gap-1.5 text-xs">
                       <input
                         type="checkbox"
                         checked={s.isActive}
                         onChange={(e) =>
                           update.mutate({ scheduleId: s.id, isActive: e.target.checked })
                         }
+                        className="border-input accent-primary focus-visible:ring-ring h-3.5 w-3.5 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                       />
                       Active
                     </label>
                     <button
                       type="button"
                       onClick={() => remove.mutate({ scheduleId: s.id })}
-                      className="text-muted-foreground hover:text-destructive"
+                      className="text-muted-foreground hover:text-danger focus-visible:ring-ring -m-1 rounded p-1 transition-colors focus-visible:outline-none focus-visible:ring-2"
                       aria-label="Delete schedule"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-4 w-4" aria-hidden />
                     </button>
                   </div>
                 </div>
@@ -147,7 +151,7 @@ export function ScheduleEditor({ onChanged }: { onChanged: () => void }) {
           })}
         </ul>
       ) : !adding ? (
-        <p className="text-muted-foreground text-sm">
+        <p className="text-muted-foreground text-sm leading-relaxed">
           No schedules yet. Add one so PostPilot knows when to publish.
         </p>
       ) : null}
@@ -187,17 +191,14 @@ function ScheduleForm({
 
   // The connected TikTok account, used to badge the TikTok pill with its avatar.
   const tiktokInfo = trpc.connections.tiktokCreatorInfo.useQuery();
-  const tiktokAvatarUrl = tiktokInfo.data?.available
-    ? tiktokInfo.data.info.creatorAvatarUrl
-    : null;
+  const tiktokAvatarUrl = tiktokInfo.data?.available ? tiktokInfo.data.info.creatorAvatarUrl : null;
 
   // The connected Instagram/YouTube accounts, used to badge their pills with avatars.
   const connections = trpc.connections.overview.useQuery();
   const platformAvatarUrls = useMemo<Partial<Record<Platform, string | null>>>(() => {
     const findAvatar = (platform: Platform) =>
-      connections.data?.find(
-        (e) => e.platform === platform && e.connection?.status === 'ACTIVE',
-      )?.connection?.avatarUrl ?? null;
+      connections.data?.find((e) => e.platform === platform && e.connection?.status === 'ACTIVE')
+        ?.connection?.avatarUrl ?? null;
     return {
       TIKTOK: tiktokAvatarUrl,
       INSTAGRAM: findAvatar('INSTAGRAM'),
@@ -249,7 +250,7 @@ function ScheduleForm({
   const canSave = draft.daysOfWeek.length > 0 && draft.times.length > 0 && !saving;
 
   return (
-    <div className="space-y-3 rounded-md border p-3">
+    <div className="border-border bg-card space-y-3 rounded-lg border p-3">
       <Input
         value={draft.name}
         onChange={(e) => setDraft((p) => ({ ...p, name: e.target.value }))}
@@ -257,17 +258,17 @@ function ScheduleForm({
       />
 
       <div>
-        <p className="mb-1 text-xs font-medium">Days</p>
+        <p className="text-muted-foreground mb-1.5 text-xs font-medium">Days</p>
         <div className="flex flex-wrap gap-1">
           {DAY_LABELS.map((label, d) => (
             <button
               key={d}
               type="button"
               onClick={() => toggleDay(d)}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+              className={`focus-visible:ring-ring rounded-md px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
                 draft.daysOfWeek.includes(d)
                   ? 'bg-primary text-primary-foreground'
-                  : 'hover:bg-accent border'
+                  : 'border-border hover:bg-accent border'
               }`}
             >
               {label}
@@ -277,7 +278,7 @@ function ScheduleForm({
       </div>
 
       <div>
-        <p className="mb-1 text-xs font-medium">Times</p>
+        <p className="text-muted-foreground mb-1.5 text-xs font-medium">Times</p>
         <div className="space-y-1.5">
           {draft.times.map((t, i) => (
             <div key={i} className="flex items-center gap-2">
@@ -291,7 +292,7 @@ function ScheduleForm({
                 <button
                   type="button"
                   onClick={() => removeTime(i)}
-                  className="text-muted-foreground hover:text-destructive"
+                  className="text-muted-foreground hover:text-danger focus-visible:ring-ring rounded p-1 focus-visible:outline-none focus-visible:ring-2"
                   aria-label="Remove time"
                 >
                   <X className="h-4 w-4" />
@@ -300,13 +301,13 @@ function ScheduleForm({
             </div>
           ))}
           <Button size="sm" variant="ghost" onClick={addTime}>
-            <Plus className="mr-1 h-4 w-4" /> Add time
+            <Plus className="h-4 w-4" aria-hidden /> Add time
           </Button>
         </div>
       </div>
 
       <div>
-        <p className="mb-1 text-xs font-medium">Platforms</p>
+        <p className="text-muted-foreground mb-1.5 text-xs font-medium">Platforms</p>
         <div className="flex flex-wrap gap-1">
           {platformSchema.options.map((pl) => {
             const selected = draft.platforms.includes(pl);
@@ -316,16 +317,16 @@ function ScheduleForm({
                 key={pl}
                 type="button"
                 onClick={() => togglePlatform(pl)}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                  selected ? 'bg-primary text-primary-foreground' : 'hover:bg-accent border'
+                className={`focus-visible:ring-ring inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 ${
+                  selected
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border-border hover:bg-accent border'
                 }`}
               >
                 <PillAvatar url={avatarUrl ?? null} className="-ml-0.5 h-4 w-4" />
                 {PLATFORM_LABELS[pl]}
                 {selected ? (
-                  <span className="-mr-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-white">
-                    <Check className="h-2.5 w-2.5 text-blue-600" strokeWidth={3} />
-                  </span>
+                  <Check className="-mr-0.5 h-3 w-3 shrink-0" strokeWidth={3} aria-hidden />
                 ) : null}
               </button>
             );
@@ -334,7 +335,7 @@ function ScheduleForm({
       </div>
 
       <div className="space-y-1">
-        <p className="text-xs font-medium">Timezone</p>
+        <p className="text-muted-foreground text-xs font-medium">Timezone</p>
         <Input
           value={draft.timezone}
           onChange={(e) => setDraft((p) => ({ ...p, timezone: e.target.value }))}
@@ -347,7 +348,7 @@ function ScheduleForm({
           Cancel
         </Button>
         <Button size="sm" onClick={save} disabled={!canSave}>
-          {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
           {isEditing ? 'Save changes' : 'Save schedule'}
         </Button>
       </div>

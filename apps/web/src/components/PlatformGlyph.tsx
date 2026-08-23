@@ -8,13 +8,7 @@ import { type Platform } from '@postpilot/types';
  * official brand colors (red/white and the Instagram gradient). Marks are kept
  * undistorted per each platform's brand guidelines.
  */
-export function PlatformGlyph({
-  platform,
-  className,
-}: {
-  platform: Platform;
-  className?: string;
-}) {
+export function PlatformGlyph({ platform, className }: { platform: Platform; className?: string }) {
   // Unique gradient id per render so multiple Instagram glyphs on one page don't
   // collide (colons stripped so the id is safe inside an SVG url() reference).
   const gradientId = `ig-grad-${useId().replace(/:/g, '')}`;
@@ -69,7 +63,6 @@ export const PLATFORM_BRAND_TEXT: Record<Platform, string> = {
   YOUTUBE: 'text-[#FF0000]',
 };
 
-
 /**
  * A standalone platform logo, sized so the three marks look visually balanced.
  * The logo is rendered on its own and must never be covered or overlapped, per
@@ -95,7 +88,16 @@ export function PlatformLogo({
       : size === 'sm'
         ? 'h-7 w-auto'
         : 'h-9 w-auto';
-  return <PlatformGlyph platform={platform} className={`shrink-0 ${logo}`} />;
+  // YouTube's mark is wider than it is tall (28x20 viewBox) while TikTok's and
+  // Instagram's are square, so at matched heights they occupy different widths
+  // and everything to their right stops lining up in a list. Centre each mark
+  // in a fixed box instead of scaling any of them out of spec.
+  const box = size === 'sm' ? 'w-8' : 'w-10';
+  return (
+    <span className={`flex shrink-0 items-center justify-center ${box}`}>
+      <PlatformGlyph platform={platform} className={`shrink-0 ${logo}`} />
+    </span>
+  );
 }
 
 /**
@@ -119,7 +121,7 @@ export function AccountAvatar({
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex shrink-0 overflow-hidden rounded-full bg-muted ${className}`}
+      className={`bg-muted inline-flex shrink-0 overflow-hidden rounded-full ${className}`}
     >
       {url && brokenUrl !== url ? (
         // eslint-disable-next-line @next/next/no-img-element

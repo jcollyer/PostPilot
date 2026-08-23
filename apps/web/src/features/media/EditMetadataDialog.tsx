@@ -285,7 +285,7 @@ export function EditMetadataPanel({
                       <img src={t.url} alt="Frame" className="h-full w-full object-cover" />
                     ) : null}
                     {selected ? (
-                      <span className="bg-primary absolute bottom-0.5 right-0.5 rounded-full p-0.5 text-white">
+                      <span className="bg-primary text-primary-foreground absolute bottom-0.5 right-0.5 rounded-full p-0.5">
                         <Check className="h-3 w-3" />
                       </span>
                     ) : null}

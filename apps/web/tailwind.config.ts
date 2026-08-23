@@ -47,6 +47,22 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        /* Authenticated-app semantics. `line` is the hairline used inside a
+           panel, one step lighter than `border`, which edges the panel itself.
+           `warn` and `danger` are the only two alert hues the app may use; the
+           "engine is live" lime is `--live`, consumed by `.pp-live-dot` and
+           `.pp-runway` in globals.css rather than as a utility class. */
+        line: 'hsl(var(--line))',
+        warn: {
+          DEFAULT: 'hsl(var(--warn))',
+          soft: 'hsl(var(--warn-soft))',
+          line: 'hsl(var(--warn-line))',
+        },
+        danger: {
+          DEFAULT: 'hsl(var(--danger))',
+          soft: 'hsl(var(--danger-soft))',
+          line: 'hsl(var(--danger-line))',
+        },
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'sans-serif'],

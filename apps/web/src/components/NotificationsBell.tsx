@@ -70,26 +70,28 @@ export function NotificationsBell() {
         <button
           type="button"
           aria-label="Notifications"
-          className="hover:bg-accent relative rounded-full p-2"
+          className="text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:ring-ring relative rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2"
         >
-          <Bell className="h-5 w-5" />
+          <Bell className="h-5 w-5" aria-hidden />
+          {/* PostPilot only notifies when it genuinely needs a human, so an
+              unread count really is a problem — it takes the alert colour. */}
           {count > 0 ? (
-            <span className="bg-destructive absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white">
+            <span className="bg-danger ring-background absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold text-white ring-2">
               {count > 9 ? '9+' : count}
             </span>
           ) : null}
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-sm font-semibold">Notifications</span>
+        <div className="border-line flex items-center justify-between border-b px-3 py-2">
+          <span className="text-sm font-medium">Notifications</span>
           {count > 0 ? (
             <button
               type="button"
               onClick={() => markAllRead.mutate()}
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs"
+              className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-1 rounded px-1 py-0.5 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2"
             >
-              <Check className="h-3 w-3" /> Mark all read
+              <Check className="h-3 w-3" aria-hidden /> Mark all read
             </button>
           ) : null}
         </div>
@@ -97,7 +99,7 @@ export function NotificationsBell() {
         <div className="max-h-96 overflow-y-auto">
           {list.isLoading ? (
             <div className="text-muted-foreground flex items-center gap-2 p-4 text-sm">
-              <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading…
             </div>
           ) : (list.data?.items.length ?? 0) === 0 ? (
             <p className="text-muted-foreground p-6 text-center text-sm">
@@ -111,13 +113,13 @@ export function NotificationsBell() {
                 onClick={() => {
                   if (!n.readAt) markRead.mutate({ id: n.id });
                 }}
-                className={`hover:bg-accent block border-b px-3 py-2.5 last:border-b-0 ${
-                  n.readAt ? '' : 'bg-primary/5'
+                className={`hover:bg-accent border-line focus-visible:ring-ring block border-b px-3 py-2.5 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset ${
+                  n.readAt ? '' : 'bg-accent/60'
                 }`}
               >
                 <div className="flex items-start gap-2">
                   {!n.readAt ? (
-                    <span className="bg-primary mt-1.5 h-2 w-2 shrink-0 rounded-full" />
+                    <span className="bg-danger mt-1.5 h-2 w-2 shrink-0 rounded-full" aria-hidden />
                   ) : (
                     <span className="mt-1.5 h-2 w-2 shrink-0" />
                   )}
@@ -136,10 +138,10 @@ export function NotificationsBell() {
           )}
         </div>
 
-        <div className="border-t">
+        <div className="border-line border-t">
           <Link
             href="/settings#notifications"
-            className="hover:bg-accent block px-3 py-2.5 text-center text-sm font-medium"
+            className="hover:bg-accent focus-visible:ring-ring block px-3 py-2.5 text-center text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset"
           >
             See all notifications
           </Link>
