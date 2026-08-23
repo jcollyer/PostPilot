@@ -133,9 +133,15 @@ export function PlanSelection() {
                 <h3 className="text-sm font-semibold">{limits.name}</h3>
                 <p className="mt-1 flex items-baseline gap-1">
                   <span className="text-2xl font-semibold tracking-tight">${amount}</span>
-                  {free ? null : (
-                    <span className="text-muted-foreground text-xs">{annual ? '/yr' : '/mo'}</span>
-                  )}
+                  {/* Free fills the period slot with the reassurance instead of
+                      leaving it blank. This gate can't be dismissed, so the way
+                      through it has to be obvious at the point where the "do I
+                      have to pay?" question forms — the price. Matters most for
+                      platform app reviewers, who arrive without context and
+                      cannot be told to look for the Free card. */}
+                  <span className="text-muted-foreground text-xs">
+                    {free ? 'No card required' : annual ? '/yr' : '/mo'}
+                  </span>
                 </p>
 
                 <ul className="text-muted-foreground mt-3 flex-1 space-y-1.5 text-xs">

@@ -315,7 +315,7 @@ function ImagePickerModal({
                         <ImageIcon className="text-muted-foreground absolute left-1/2 top-1/2 h-6 w-6 -translate-x-1/2 -translate-y-1/2" />
                       )}
                       {isPicked ? (
-                        <span className="bg-primary absolute right-1 top-1 rounded-full p-0.5 text-white">
+                        <span className="bg-primary text-primary-foreground absolute right-1 top-1 rounded-full p-0.5">
                           <Check className="h-3 w-3" />
                         </span>
                       ) : null}

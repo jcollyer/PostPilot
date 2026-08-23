@@ -48,17 +48,85 @@
     --radius: 0.625rem;
   }
 
-  /* Authenticated app scope — the logged-in pages use royal blue (#2563eb) as
-     the primary brand color instead of the marketing lime. Applied both to the
-     (app) layout wrapper (instant, no flash) and to <html> via a data attribute
-     while an app page is mounted, so Radix overlays that portal to <body>
-     (menus, dialogs, sheets) pick up the blue too. Foreground is white so
-     button and pill labels read as white on the blue fill. */
+  /* ------------------------------------------------------------------ *
+     Authenticated app scope.
+
+     The signed-in product runs on the same brand world as the marketing site:
+     lime #e8f256 on warm near-black ink. It used to override `--primary` with
+     a royal blue, which left the app looking like a different product than the
+     one people signed up for.
+
+     The colour discipline here is deliberate and worth keeping:
+
+       lime   = "the engine is live", and the one primary action per view.
+                Never decoration, never a status pill.
+       ink    = everything healthy. Connected, scheduled, published — a working
+                system is quiet, so success states carry no colour at all.
+       warn   = paused, held, running low. Something needs you soon.
+       danger = broken. Something needs you now.
+
+     Two alert colours in a warm neutral world, and one colour that means
+     alive. That is the whole palette. Adding a third alert hue, or tinting a
+     healthy state, breaks the signal.
+
+     Applied both to the (app) layout wrapper (instant, no flash) and to <html>
+     via a data attribute while an app page is mounted, so Radix overlays that
+     portal to <body> (menus, dialogs, sheets) inherit it too.
+   * ------------------------------------------------------------------ */
   .app-theme,
-  [data-app-theme='blue'] {
-    --primary: 221 83% 53%;
-    --primary-foreground: 0 0% 100%;
-    --ring: 221 83% 53%;
+  [data-app-theme='app'] {
+    /* Warm paper ground so white cards read as raised without a shadow. */
+    --background: 44 24% 97%;
+    --card: 0 0% 100%;
+    --card-foreground: 40 16% 4%;
+    --popover: 0 0% 100%;
+
+    --muted: 44 20% 94%;
+    --muted-foreground: 40 6% 40%;
+    --accent: 44 22% 94%;
+    --secondary: 44 20% 94%;
+
+    --border: 40 12% 87%;
+    --input: 40 12% 84%;
+
+    /* Focus lands on ink, not lime — a lime ring on warm paper is invisible. */
+    --ring: 40 16% 20%;
+
+    /* Hairline for inside-panel rules, a step lighter than --border. */
+    --line: 40 12% 91%;
+
+    /* The one colour that means "running". */
+    --live: 64 86% 64%;
+
+    --warn: 30 74% 32%;
+    --warn-soft: 44 86% 91%;
+    --warn-line: 40 60% 78%;
+
+    --danger: 4 68% 42%;
+    --danger-soft: 8 78% 96%;
+    --danger-line: 6 60% 86%;
+  }
+
+  .dark .app-theme,
+  .dark[data-app-theme='app'] {
+    --background: 40 16% 4%;
+    --card: 40 14% 7%;
+    --muted: 40 8% 13%;
+    --muted-foreground: 40 6% 62%;
+    --accent: 40 8% 13%;
+    --secondary: 40 8% 13%;
+    --border: 40 8% 16%;
+    --input: 40 8% 20%;
+    --ring: 44 20% 80%;
+    --line: 40 8% 13%;
+
+    --warn: 42 88% 66%;
+    --warn-soft: 38 32% 13%;
+    --warn-line: 38 30% 24%;
+
+    --danger: 6 78% 68%;
+    --danger-soft: 6 34% 12%;
+    --danger-line: 6 32% 24%;
   }
 
   .dark {
@@ -103,6 +171,142 @@
     font-feature-settings:
       'rlig' 1,
       'calt' 1;
+  }
+
+  /* The surfaces the browser draws for us still belong to the design. */
+  ::selection {
+    background-color: hsl(var(--primary) / 0.5);
+    color: hsl(var(--foreground));
+  }
+
+  :root {
+    accent-color: hsl(var(--primary));
+    caret-color: hsl(var(--foreground));
+  }
+}
+
+@layer base {
+  /* ------------------------------------------------------------------ *
+     Authenticated app — shared surface behaviour.
+   * ------------------------------------------------------------------ */
+
+  /* A scrollbar in the app's own neutrals rather than the OS default grey. */
+  .app-theme *,
+  [data-app-theme='app'] * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.2) transparent;
+  }
+  .app-theme ::-webkit-scrollbar,
+  [data-app-theme='app'] ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  .app-theme ::-webkit-scrollbar-track,
+  [data-app-theme='app'] ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .app-theme ::-webkit-scrollbar-thumb,
+  [data-app-theme='app'] ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.18);
+    border: 3px solid transparent;
+    border-radius: 99px;
+    background-clip: content-box;
+  }
+  .app-theme ::-webkit-scrollbar-thumb:hover,
+  [data-app-theme='app'] ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--foreground) / 0.32);
+  }
+
+  /* Counts, times and dates are compared column-to-column all over this app,
+     so every numeral in it is tabular and slightly tightened. */
+  .app-theme,
+  [data-app-theme='app'] {
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1,
+      'tnum' 1;
+  }
+
+  .app-theme a,
+  [data-app-theme='app'] a {
+    text-underline-offset: 0.2em;
+    text-decoration-thickness: from-font;
+  }
+}
+
+@layer components {
+  /* ------------------------------------------------------------------ *
+     The live indicator: the only place lime is allowed to move.
+
+     A creator opens this app to answer one question — "is it still running?"
+     The dot answers it before any text is read. It breathes on a slow 3s
+     cycle, close to a resting heart rate, so it reads as alive rather than as
+     an alert. Reduced motion gets the same dot, held still.
+   * ------------------------------------------------------------------ */
+  .pp-live-dot {
+    position: relative;
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    flex: none;
+    border-radius: 999px;
+    background-color: hsl(var(--live));
+    box-shadow: 0 0 0 1px hsl(var(--foreground) / 0.12) inset;
+  }
+  .pp-live-dot::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-color: hsl(var(--live));
+    animation: pp-live-pulse 3s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+
+  @keyframes pp-live-pulse {
+    0% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    70%,
+    100% {
+      opacity: 0;
+      transform: scale(2.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pp-live-dot::after {
+      animation: none;
+    }
+  }
+
+  /* The runway: days of content left, drawn as a strip that burns down.
+     `--pp-run` is the filled fraction, `--pp-mark` the upload-by position. */
+  .pp-runway {
+    position: relative;
+    height: 0.625rem;
+    border-radius: 999px;
+    background-color: hsl(var(--foreground) / 0.07);
+    overflow: hidden;
+  }
+  .pp-runway::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: calc(var(--pp-run, 0) * 100%);
+    min-width: 0.625rem;
+    border-radius: inherit;
+    background-color: hsl(var(--live));
+    /* Lime on warm paper is a low-contrast pairing; the inset keeps the band's
+       edge readable without darkening the fill itself. */
+    box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.16);
+    transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pp-runway::before {
+      transition: none;
+    }
   }
 }
 
