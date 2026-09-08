@@ -19,6 +19,7 @@ import { prismaExtension } from '@trigger.dev/build/extensions/prisma';
 export default defineConfig({
   // Set via TRIGGER_PROJECT_REF, or the hardcoded project ref below.
   project: process.env.TRIGGER_PROJECT_REF ?? 'proj_yijxjqynykowfgttnnts',
+  runtime: 'node-24',
   dirs: ['./src/trigger'],
   maxDuration: 3600,
   build: {
