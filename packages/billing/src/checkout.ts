@@ -1,3 +1,5 @@
+import type Stripe from 'stripe';
+
 import { prisma as defaultPrisma, type PrismaClient } from '@postpilot/db';
 
 import { appBaseUrl, getStripe, priceIdFor, type BillingPeriod, type PaidPlanId } from './config';
@@ -40,6 +42,53 @@ export async function ensureCustomer(userId: string, client?: PrismaClient): Pro
   });
 
   return customer.id;
+}
+
+/**
+ * Statuses under which a subscription is still running, so a plan change
+ * belongs in the Customer Portal rather than in a second Checkout. Wider than
+ * the set that keeps a paid plan switched on (see webhook.ts): an `unpaid`
+ * subscription has lost its plan, but buying again would still start a second
+ * subscription alongside it.
+ */
+const LIVE_STATUSES: ReadonlySet<string> = new Set<Stripe.Subscription.Status>([
+  'active',
+  'trialing',
+  'past_due',
+  'unpaid',
+  'paused',
+  // Waiting on its first payment: it becomes active or expires within a day.
+  'incomplete',
+]);
+
+/** Whether a subscription status, stored or fresh from Stripe, counts as running. */
+export function isLiveSubscriptionStatus(status: string | null | undefined): boolean {
+  return status != null && LIVE_STATUSES.has(status);
+}
+
+/**
+ * Whether the user already has a running subscription, asked of Stripe rather
+ * than read from our copy of the status. Our copy lags by however long the
+ * webhook takes, and that lag is exactly when someone back from Checkout —
+ * still shown their old plan — clicks to buy again.
+ */
+export async function hasLiveSubscription(userId: string, client?: PrismaClient): Promise<boolean> {
+  const prisma = client ?? defaultPrisma;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { stripeCustomerId: true },
+  });
+  // No customer means nothing was ever bought, and no reason to create one to ask.
+  if (!user?.stripeCustomerId) return false;
+
+  // The default listing already leaves out canceled subscriptions; the status
+  // check drops the other dead one, incomplete_expired.
+  const { data } = await getStripe().subscriptions.list({
+    customer: user.stripeCustomerId,
+    limit: 100,
+  });
+  return data.some((subscription) => isLiveSubscriptionStatus(subscription.status));
 }
 
 export interface CheckoutParams {
