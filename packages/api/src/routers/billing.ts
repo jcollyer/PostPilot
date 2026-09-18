@@ -4,7 +4,9 @@ import { z } from 'zod';
 import {
   createCheckoutSession,
   createPortalSession,
+  hasLiveSubscription,
   isBillingConfigured,
+  isLiveSubscriptionStatus,
   originFromHeaders,
   type PaidPlanId,
 } from '@postpilot/billing';
@@ -65,6 +67,11 @@ export const billingRouter = router({
       usage,
       /** The selection gate shows until a plan has been chosen. */
       needsPlanSelection: user.planSelectedAt == null,
+      /**
+       * Whether a subscription is running, which decides where plans change:
+       * the Customer Portal for subscribers, Checkout for everyone else.
+       */
+      hasSubscription: isLiveSubscriptionStatus(user.stripeSubscriptionStatus),
       /** Whether paid plans can be bought at all in this deployment. */
       billingConfigured: isBillingConfigured(),
     };
@@ -85,17 +92,35 @@ export const billingRouter = router({
     return { success: true as const };
   }),
 
-  /** A Stripe Checkout URL for a paid plan. */
+  /**
+   * Where to go to buy a paid plan: a Stripe Checkout URL, or the Customer
+   * Portal for someone who already has a subscription.
+   */
   startCheckout: protectedProcedure
     .input(z.object({ plan: paidPlanSchema, period: periodSchema }))
     .mutation(async ({ ctx, input }) => {
       assertConfigured();
+      // Return them to the origin they're on, so their session survives.
+      const requestOrigin = originFromHeaders(ctx.headers);
+
+      // A second Checkout would start a second subscription, billed alongside
+      // the first. The usual way here is someone back from Checkout before the
+      // webhook has landed, still looking at their old plan — the portal shows
+      // them the subscription they just bought, and is where plans change anyway.
+      if (await hasLiveSubscription(ctx.userId, ctx.prisma)) {
+        const url = await createPortalSession({
+          userId: ctx.userId,
+          requestOrigin,
+          client: ctx.prisma,
+        });
+        return { url };
+      }
+
       const url = await createCheckoutSession({
         userId: ctx.userId,
         plan: input.plan,
         period: input.period,
-        // Return them to the origin they're on, so their session survives.
-        requestOrigin: originFromHeaders(ctx.headers),
+        requestOrigin,
         client: ctx.prisma,
       });
       return { url };

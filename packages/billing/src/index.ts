@@ -14,6 +14,8 @@ export {
 // Hosted Checkout + Customer Portal
 export {
   ensureCustomer,
+  isLiveSubscriptionStatus,
+  hasLiveSubscription,
   createCheckoutSession,
   createPortalSession,
   type CheckoutParams,
