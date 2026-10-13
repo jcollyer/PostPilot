@@ -227,6 +227,20 @@ export function EditMetadataPanel({
           />
         </div>
 
+        {/* Preview */}
+        {video.cdnUrl ? (
+          <div className="bg-muted overflow-hidden rounded-md border">
+            <video
+              src={video.cdnUrl}
+              poster={coverUrl ?? video.thumbnailUrl ?? undefined}
+              controls
+              playsInline
+              preload="metadata"
+              className="max-h-64 w-full bg-black object-contain"
+            />
+          </div>
+        ) : null}
+
         <div className="space-y-1.5">
           <Label>Cover image</Label>
           <div className="flex items-center gap-3">
