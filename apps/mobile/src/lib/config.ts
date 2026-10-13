@@ -1,9 +1,13 @@
 import Constants from 'expo-constants';
 
 /**
- * Backend API URL. In dev this must be your machine's LAN IP (not localhost,
- * because localhost on the phone points to the phone itself). Set it via:
- *   EXPO_PUBLIC_API_URL=http://192.168.1.42:3000 npx expo start
+ * Backend API URL. In local dev, set EXPO_PUBLIC_API_URL in
+ * `apps/mobile/.env.local` to the same origin as AUTH_URL in the root `.env`
+ * (the ngrok domain). Google sign-in only works when the app, Better Auth's
+ * baseURL, and Google's redirect URI share one origin.
+ *
+ * Without it, this falls back to the Metro host on port 3000, which is fine
+ * for email/password but not Google.
  *
  * In production this is your hosted origin, e.g. https://your-domain.com.
  */
