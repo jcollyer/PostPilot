@@ -5,8 +5,8 @@ web-build/
 expo-env.d.ts
 
 # Native
-.ios/
-.android/
+/ios
+/android
 
 # Metro
 .metro-health-check*

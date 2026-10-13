@@ -18,6 +18,18 @@
         "3100"
       ],
       "port": 3100
+    },
+    {
+      "name": "web-3000",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "mobile-metro",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--workspace=@postpilot/mobile", "exec", "--", "expo", "start", "--dev-client", "--clear", "--port", "8081"],
+      "port": 8081
     }
   ]
 }
