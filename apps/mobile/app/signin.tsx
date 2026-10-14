@@ -94,7 +94,11 @@ export default function SignInScreen() {
       });
       if (error) {
         if (error.status === 403) {
-          setNotice("Your email isn't verified yet. We've sent a fresh link — check your inbox.");
+          // The server re-sends the link on sign-in (sendOnSignIn, at most
+          // once a minute per address).
+          setNotice(
+            "Your email isn't verified yet. We've emailed you a verification link — check your inbox.",
+          );
         } else {
           setError(error.message ?? 'Invalid email or password.');
         }

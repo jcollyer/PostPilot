@@ -6,6 +6,8 @@ import { Resend } from 'resend';
 
 import { prisma } from '@postpilot/db';
 
+import { claimVerificationEmailSlot } from './verification-cooldown';
+
 /**
  * Better Auth server instance — the single source of truth for authentication
  * across web and mobile.
@@ -84,8 +86,15 @@ export const auth = betterAuth({
 
   emailVerification: {
     sendOnSignUp: true,
+    // An unverified user who signs in with the right password gets a fresh
+    // link along with the 403; the web and mobile notices say so. Better Auth
+    // only resends after the password checks out.
+    sendOnSignIn: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
+      // At most one email per address per minute, whatever triggered it. A
+      // skipped send still leaves a link from under a minute ago in the inbox.
+      if (!(await claimVerificationEmailSlot(user.email))) return;
       await sendEmail({
         to: user.email,
         subject: 'Verify your email for PostPilot',
