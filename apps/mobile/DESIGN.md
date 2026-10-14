@@ -118,12 +118,6 @@ components:
     rounded: "{rounded.full}"
     padding: "4px 10px"
     typography: "{typography.caption}"
-  avatar:
-    backgroundColor: "{colors.navy-wash}"
-    textColor: "{colors.deep-slate-navy}"
-    rounded: "{rounded.full}"
-    height: "32px"
-    width: "32px"
 ---
 
 # Design System: PostPilot Mobile
@@ -152,8 +146,8 @@ A cool, low-saturation palette: one navy tint against a six-step slate ink ramp,
 
 ### Primary
 
-- **Deep Slate Navy** (`#2d3f63`): The single tint. Primary button fills, the sign-in mark, link and nav-tint text, avatar initials, and every loading spinner. It marks interactivity and brand presence — nothing else. Its restraint is what makes a green "Connected" or a red "Reconnect needed" read instantly.
-- **Navy Wash** (`#dbe2ef`): The tint at surface strength. Currently the header avatar's fill; the correct choice for any tinted container that needs to belong to the navy without shouting.
+- **Deep Slate Navy** (`#2d3f63`): The single tint. Primary button fills, the sign-in mark, link and nav-tint text, the tab bar's selected item, and every loading spinner. It marks interactivity and brand presence — nothing else. Its restraint is what makes a green "Connected" or a red "Reconnect needed" read instantly.
+- **Navy Wash** (`#dbe2ef`): The tint at surface strength. The correct choice for any tinted container that needs to belong to the navy without shouting.
 
 ### Neutral
 
@@ -229,13 +223,13 @@ The dark tint lightens deliberately: `#2d3f63` on a near-black ground fails cont
 
 ## Layout
 
-A single-column scroll on every screen — no grid, no sidebar, no tabs. Screens are `ScrollView`s with the ground color and a uniform inset, and cards are the only structural unit.
+A single-column scroll on every screen — no grid, no sidebar. Top-level navigation is the native tab bar (see Navigation). Screens are `ScrollView`s with the ground color and a uniform inset, and cards are the only structural unit.
 
 Screen insets differ by intent and should be normalized: the dashboard uses 20px with a 16px gap between cards, settings uses 16px with 60px of bottom padding to clear the home indicator, and sign-in uses 32px with vertically centered content. The dashboard's 20px/16px pairing is the reference rhythm; sign-in's 32px is the deliberate exception for a single centered form.
 
 Inside a card, padding is a flat 16px and children stack with 12–20px gaps. The queue-health stats break this pattern with a two-up wrap (`w-1/2` per cell, 8px bottom margin) — the only multi-column arrangement in the app, and the right one, since four short number/label pairs read faster paired than stacked.
 
-The spacing scale in practice is 6 / 8 / 12 / 16 / 20 / 32. Sign-in wraps its content in `SafeAreaView` with top and bottom edges; the authenticated screens rely on the navigation stack for top inset and have no explicit bottom-edge handling.
+The spacing scale in practice is 6 / 8 / 12 / 16 / 20 / 32. Sign-in wraps its content in `SafeAreaView` with top and bottom edges; the authenticated screens' `ScrollView`s use `contentInsetAdjustmentBehavior="automatic"`, so the large-title header and the tab bar set their top and bottom insets.
 
 **The Card-Per-Question Rule.** Each card answers exactly one question the creator might have — how much is left, what is next, what went out last, what is connected. Never merge two questions into one card to save vertical space; the scroll is cheap and the scan is not.
 
@@ -253,11 +247,11 @@ This is what makes the panel read as instrumentation rather than as a stack of f
 
 ## Shapes
 
-Soft-rectangular throughout, with radius encoding scale rather than emphasis: 8px for controls (buttons, inputs, banners), 12px for containers (cards), 16px for the largest branded object (the sign-in mark), and fully round for anything that reads as a token (status pills, the avatar).
+Soft-rectangular throughout, with radius encoding scale rather than emphasis: 8px for controls (buttons, inputs, banners), 12px for containers (cards), 16px for the largest branded object (the sign-in mark), and fully round for anything that reads as a token (status pills).
 
-Borders are always exactly 1px and always Hairline, except where a control is reporting an error, in which case the same 1px stroke switches to Destructive. There are no dividers, no separators inside cards, no dashed or double strokes, and no clipping or masking beyond the avatar's circle.
+Borders are always exactly 1px and always Hairline, except where a control is reporting an error, in which case the same 1px stroke switches to Destructive. There are no dividers, no separators inside cards, no dashed or double strokes, and no clipping or masking.
 
-The app contains no icons at all — `lucide-react-native` is installed but never imported. There is no illustration, no imagery, and no empty-state art; empty states are plain sentences in Caption.
+The only icons are the SF Symbols in the tab bar; `lucide-react-native` is installed but never imported. There is no illustration, no imagery, and no empty-state art; empty states are plain sentences in Caption.
 
 **The Radius-Means-Scale Rule.** Radius reports the size of the thing, not its importance. A control is 8px whether it is primary or ghost; a container is 12px whether it holds a stat grid or a single sentence. Never raise a radius to make something feel friendlier.
 
@@ -294,9 +288,9 @@ The structural atom. Everything on an authenticated screen lives in one.
 
 ### Navigation
 
-- **Style:** A native stack with a white bar, Ink 600-weight inline titles, and a Deep Slate Navy tint on interactive bar elements. Content sits on the Ground.
-- **Structure:** Two authenticated screens — Home and Settings — with no tab bar. Settings is reached only by tapping the header avatar.
-- **Known gap:** for two top-level sections iOS expects a tab bar, and titles are inline where a large collapsing title belongs on a top-level screen.
+- **Style:** The native iOS 26 glass tab bar, tinted Deep Slate Navy, with SF Symbol icons (`house`, `photo.on.rectangle`, `list.number`, `gearshape`) that fill when selected. It minimizes on scroll down. Each tab's stack uses the system header: system-styled large titles on tab roots, Ink 600-weight inline titles on drill-ins, and a Deep Slate Navy tint on bar elements. Content sits on the Ground.
+- **Structure:** Four authenticated tabs — Home, Library, Queue and Settings — each with its own native stack, so switching tabs keeps each tab's place. Each tab's root has a large collapsing title; drill-ins use the inline title. Settings is the only route to account things; there is no header avatar.
+- **Constraint:** never set a header background color on the tab stacks. Under native tabs it hides the large title on every tab except the first (iOS 26.3).
 
 ### Status Pill
 

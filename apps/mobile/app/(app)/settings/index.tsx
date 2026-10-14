@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 
-import { trpc } from '../../src/lib/trpc';
-import { useAuth } from '../../src/lib/AuthContext';
-import { Button } from '../../src/components/Button';
-import { Card } from '../../src/components/Card';
-import { TextField } from '../../src/components/TextField';
+import { trpc } from '../../../src/lib/trpc';
+import { useAuth } from '../../../src/lib/AuthContext';
+import { Button } from '../../../src/components/Button';
+import { Card } from '../../../src/components/Card';
+import { TextField } from '../../../src/components/TextField';
 
 /**
  * Settings screen — edit display name, view account info, sign out, and a
@@ -80,6 +80,7 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
       className="flex-1 bg-slate-50"
       contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
       keyboardShouldPersistTaps="handled"

@@ -25,7 +25,13 @@
     "web": {
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-secure-store", "expo-web-browser", "./plugins/withPodDeploymentTarget"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-web-browser",
+      "./plugins/withPodDeploymentTarget",
+      "expo-video"
+    ],
     "experiments": {
       "typedRoutes": false
     },
