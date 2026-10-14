@@ -27,11 +27,11 @@ export function connectionLabel(
   status: string | null | undefined,
 ): {
   text: string;
-  tone: 'ok' | 'warn' | 'bad' | 'muted';
+  tone: 'ok' | 'warn' | 'critical' | 'muted';
 } {
   if (!configured) return { text: 'Unavailable', tone: 'muted' };
   if (status === 'ACTIVE') return { text: 'Connected', tone: 'ok' };
-  if (status === 'NEEDS_RECONNECT') return { text: 'Reconnect needed', tone: 'bad' };
+  if (status === 'NEEDS_RECONNECT') return { text: 'Reconnect needed', tone: 'critical' };
   if (status === 'PAUSED') return { text: 'Paused', tone: 'warn' };
   return { text: 'Not connected', tone: 'muted' };
 }
