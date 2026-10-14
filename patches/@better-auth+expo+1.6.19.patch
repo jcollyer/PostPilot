@@ -1,0 +1,20 @@
+diff --git a/node_modules/@better-auth/expo/dist/client.js b/node_modules/@better-auth/expo/dist/client.js
+index 7d9e23d..67003e5 100644
+--- a/node_modules/@better-auth/expo/dist/client.js
++++ b/node_modules/@better-auth/expo/dist/client.js
+@@ -331,7 +331,14 @@ const expoClient = (opts) => {
+ 					const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
+ 					const result = await Browser.openAuthSessionAsync(proxyURL, to, opts?.webBrowserOptions);
+ 					if (result.type !== "success") return;
+-					const cookie = new URL(result.url).searchParams.get("cookie");
++					const resultURL = new URL(result.url);
++					const oauthError = resultURL.searchParams.get("error");
++					if (oauthError) {
++						const err = new Error(resultURL.searchParams.get("error_description") || oauthError);
++						err.code = oauthError;
++						throw err;
++					}
++					const cookie = resultURL.searchParams.get("cookie");
+ 					if (!cookie) return;
+ 					const toSetCookie = getSetCookie(cookie, storage.getItem(cookieName) ?? void 0);
+ 					await storage.setItem(cookieName, toSetCookie);

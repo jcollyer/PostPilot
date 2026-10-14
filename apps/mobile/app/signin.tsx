@@ -41,7 +41,8 @@ export default function SignInScreen() {
    * auth session, then stores the session cookie from the deep-link return.
    * A cancelled sheet resolves without an error, so confirm a session exists
    * before leaving this screen. A failure the server sends back through the
-   * sheet (e.g. `account_not_linked`) is thrown by the plugin, not returned.
+   * sheet (e.g. `account_not_linked`) is thrown, not returned — only because
+   * of our patch; see patches/@better-auth+expo+*.patch.
    */
   async function handleGoogle() {
     setError(null);
