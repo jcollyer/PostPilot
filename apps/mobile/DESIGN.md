@@ -251,7 +251,7 @@ Soft-rectangular throughout, with radius encoding scale rather than emphasis: 8p
 
 Borders are always exactly 1px and always Hairline, except where a control is reporting an error, in which case the same 1px stroke switches to Destructive. There are no dividers, no separators inside cards, no dashed or double strokes, and no clipping or masking.
 
-The only icons are the SF Symbols in the tab bar; `lucide-react-native` is installed but never imported. There is no illustration, no imagery, and no empty-state art; empty states are plain sentences in Caption.
+Icons are SF Symbols only: the tab bar's, and the `Disclosure` chevron (`chevron.right` via `expo-symbols`, tinted the system `tertiaryLabel`) on rows that navigate. `lucide-react-native` is installed but never imported. There is no illustration, no imagery, and no empty-state art; empty states are plain sentences in Caption.
 
 **The Radius-Means-Scale Rule.** Radius reports the size of the thing, not its importance. A control is 8px whether it is primary or ghost; a container is 12px whether it holds a stat grid or a single sentence. Never raise a radius to make something feel friendlier.
 

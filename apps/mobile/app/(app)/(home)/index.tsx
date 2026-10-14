@@ -2,9 +2,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
-import { ChevronRight } from 'lucide-react-native';
-import { cssInterop } from 'nativewind';
 
+import { Disclosure } from '../../../src/components/Disclosure';
 import { trpc } from '../../../src/lib/trpc';
 import {
   buildHomeModel,
@@ -44,10 +43,6 @@ const TONE_LABEL: Record<HomeTone, string> = {
   warn: 'text-signal-warn',
   ok: 'text-ink',
 };
-
-// Lets the chevron take its color from a token class instead of a hex prop.
-// lucide stands in until an SF Symbol package is part of the native build.
-cssInterop(ChevronRight, { className: { target: 'style', nativeStyleToProp: { color: true } } });
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -136,7 +131,7 @@ function ProblemCard({ problem, onPress }: { problem: HomeProblemCard; onPress: 
         <Text className="text-[15px] font-semibold leading-5 text-ink">{problem.title}</Text>
         <Text className="text-[13px] leading-[18px] text-ink-tertiary">{problem.detail}</Text>
       </View>
-      <ChevronRight size={18} strokeWidth={2.25} className="text-ink-quiet" />
+      <Disclosure />
     </Pressable>
   );
 }
@@ -180,7 +175,7 @@ function NextPostSection({
               {nextPost.platform} · {nextPost.when}
             </Text>
           </View>
-          <ChevronRight size={18} strokeWidth={2.25} className="text-ink-quiet" />
+          <Disclosure />
         </Pressable>
       ) : (
         <View className="rounded-xl border border-hairline bg-surface p-4">
