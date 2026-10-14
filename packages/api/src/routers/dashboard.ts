@@ -1,4 +1,5 @@
 import { getConnectionOverview } from '@postpilot/connectors';
+import type { Prisma } from '@postpilot/db';
 import { computeQueueHealth } from '@postpilot/notifications';
 import { ensureQueue } from '@postpilot/queue';
 
@@ -53,33 +54,49 @@ export const dashboardRouter = router({
         ? new Date(health.estimatedEmptyDate.getTime() - RECOMMEND_UPLOAD_LEAD_DAYS * 86_400_000)
         : null;
 
-    const [nextTask, lastTask, readyVideos, connections] = await Promise.all([
-      ctx.prisma.publishTask.findFirst({
-        where: {
-          queueItem: { queueId: queue.id },
-          status: 'SCHEDULED',
-          scheduledAt: { gte: new Date() },
-        },
-        orderBy: { scheduledAt: 'asc' },
-        select: {
-          platform: true,
-          scheduledAt: true,
-          queueItem: queueItemMediaSelect,
-        },
-      }),
-      ctx.prisma.publishTask.findFirst({
-        where: { queueItem: { queueId: queue.id }, status: 'PUBLISHED' },
-        orderBy: { publishedAt: 'desc' },
-        select: {
-          platform: true,
-          publishedAt: true,
-          platformPostUrl: true,
-          queueItem: queueItemMediaSelect,
-        },
-      }),
-      ctx.prisma.video.count({ where: { userId: ctx.userId, status: 'READY' } }),
-      getConnectionOverview(ctx.userId),
-    ]);
+    // No time window: a failure counts until it is retried, skipped or
+    // republished. Skipping leaves the FAILED task in place as history, so
+    // skipped and canceled items are excluded here instead.
+    const failedWhere = {
+      queueItem: { queueId: queue.id, status: { notIn: ['SKIPPED', 'CANCELED'] } },
+      status: 'FAILED',
+    } satisfies Prisma.PublishTaskWhereInput;
+
+    const [nextTask, lastTask, readyVideos, connections, failedCount, latestFailed] =
+      await Promise.all([
+        ctx.prisma.publishTask.findFirst({
+          where: {
+            queueItem: { queueId: queue.id },
+            status: 'SCHEDULED',
+            scheduledAt: { gte: new Date() },
+          },
+          orderBy: { scheduledAt: 'asc' },
+          select: {
+            platform: true,
+            scheduledAt: true,
+            queueItem: queueItemMediaSelect,
+          },
+        }),
+        ctx.prisma.publishTask.findFirst({
+          where: { queueItem: { queueId: queue.id }, status: 'PUBLISHED' },
+          orderBy: { publishedAt: 'desc' },
+          select: {
+            platform: true,
+            publishedAt: true,
+            platformPostUrl: true,
+            queueItem: queueItemMediaSelect,
+          },
+        }),
+        ctx.prisma.video.count({ where: { userId: ctx.userId, status: 'READY' } }),
+        getConnectionOverview(ctx.userId),
+        ctx.prisma.publishTask.count({ where: failedWhere }),
+        // PublishTask has no failedAt column; the last update is when it failed.
+        ctx.prisma.publishTask.findFirst({
+          where: failedWhere,
+          orderBy: { updatedAt: 'desc' },
+          select: { platform: true, updatedAt: true, queueItem: queueItemMediaSelect },
+        }),
+      ]);
 
     return {
       queueStatus: queue.status,
@@ -109,6 +126,16 @@ export const dashboardRouter = router({
           }
         : null,
       connections,
+      failures: {
+        count: failedCount,
+        latest: latestFailed
+          ? {
+              title: mediaTitle(latestFailed.queueItem),
+              platform: latestFailed.platform,
+              failedAt: latestFailed.updatedAt,
+            }
+          : null,
+      },
     };
   }),
 });
