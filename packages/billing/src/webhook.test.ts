@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
  * The webhook is the only writer of plan state, so its failure modes are all
@@ -69,6 +69,10 @@ beforeEach(() => {
   retrieve.mockResolvedValue(subscription());
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe('applyEvent', () => {
   it('entitles the plan matching the subscription price', async () => {
     const result = await applyEvent(event('customer.subscription.created', subscription()));
@@ -96,6 +100,11 @@ describe('applyEvent', () => {
   });
 
   it('is idempotent across duplicate deliveries', async () => {
+    // The mocked user never persists planSelectedAt, so both deliveries stamp
+    // it; freeze the clock so a millisecond tick between them can't differ.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-10-13T12:00:00Z'));
+
     await applyEvent(event('customer.subscription.updated', subscription()));
     const first = lastUpdate();
     await applyEvent(event('customer.subscription.updated', subscription()));
