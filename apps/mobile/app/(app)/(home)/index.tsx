@@ -1,14 +1,14 @@
 import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
 
-import { Card } from '../../src/components/Card';
-import { trpc } from '../../src/lib/trpc';
-import { getFirstName } from '../../src/lib/format';
+import { Card } from '../../../src/components/Card';
+import { trpc } from '../../../src/lib/trpc';
+import { getFirstName } from '../../../src/lib/format';
 import {
   connectionLabel,
   fmtDate,
   fmtDateTime,
   PLATFORM_LABEL,
-} from '../../src/lib/dashboard-format';
+} from '../../../src/lib/dashboard-format';
 
 /**
  * Mobile home = read-only monitor. Mirrors the web dashboard: queue health,
@@ -32,6 +32,7 @@ export default function HomeScreen() {
 
   return (
     <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
       className="flex-1 bg-slate-50"
       contentContainerStyle={{ padding: 20, gap: 16 }}
       refreshControl={
