@@ -1,161 +1,192 @@
-import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import { ChevronRight } from 'lucide-react-native';
+import { cssInterop } from 'nativewind';
 
-import { Card } from '../../../src/components/Card';
 import { trpc } from '../../../src/lib/trpc';
-import { getFirstName } from '../../../src/lib/format';
 import {
-  connectionLabel,
-  fmtDate,
-  fmtDateTime,
-  PLATFORM_LABEL,
-} from '../../../src/lib/dashboard-format';
+  buildHomeModel,
+  type HomeNextPost,
+  type HomeProblemCard,
+  type HomeTarget,
+  type HomeTone,
+  type HomeVerdict,
+} from '../../../src/models/home';
 
 /**
- * Mobile home = read-only monitor. Mirrors the web dashboard: queue health,
- * next/last post, and connection status. Heavier management lives in the web
- * app; this screen is for checking in at a glance.
+ * Home = the glanceable monitor. One verdict line answers "is it still
+ * posting?", problem cards appear only when something is wrong, then the next
+ * post. Read-only: every card taps through to the tab that owns the problem.
+ * All derivation lives in the Home model; this screen only maps it to views.
  */
-export default function HomeScreen() {
-  const me = trpc.user.me.useQuery();
-  const overview = trpc.dashboard.overview.useQuery();
 
-  if (overview.isLoading && !overview.data) {
+const TARGET_HREF: Record<HomeTarget, '/queue' | '/settings'> = {
+  queue: '/queue',
+  settings: '/settings',
+};
+
+const TARGET_HINT: Record<HomeTarget, string> = {
+  queue: 'Opens the Queue tab',
+  settings: 'Opens the Settings tab',
+};
+
+const TONE_DOT: Record<HomeTone, string> = {
+  critical: 'bg-signal-critical',
+  warn: 'bg-signal-warn',
+  ok: 'bg-signal-ok',
+};
+
+// A healthy verdict stays ink; only problems take their status color.
+const TONE_LABEL: Record<HomeTone, string> = {
+  critical: 'text-signal-critical',
+  warn: 'text-signal-warn',
+  ok: 'text-ink',
+};
+
+// Lets the chevron take its color from a token class instead of a hex prop.
+// lucide stands in until an SF Symbol package is part of the native build.
+cssInterop(ChevronRight, { className: { target: 'style', nativeStyleToProp: { color: true } } });
+
+export default function HomeScreen() {
+  const router = useRouter();
+  const overview = trpc.dashboard.overview.useQuery();
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    try {
+      await overview.refetch();
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  if (overview.isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
+      <View className="flex-1 items-center justify-center bg-ground">
         <ActivityIndicator size="large" color="#2d3f63" />
       </View>
     );
   }
 
-  const d = overview.data;
-  const greeting = getFirstName(me.data?.name, me.data?.email);
+  const model = overview.data ? buildHomeModel(overview.data, new Date()) : null;
+  const open = (target: HomeTarget) => router.navigate(TARGET_HREF[target]);
 
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
-      className="flex-1 bg-slate-50"
+      className="flex-1 bg-ground"
       contentContainerStyle={{ padding: 20, gap: 16 }}
-      refreshControl={
-        <RefreshControl refreshing={overview.isFetching} onRefresh={() => overview.refetch()} />
-      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View className="flex-row items-center justify-between">
-        <Text className="text-2xl font-semibold text-slate-900">Hello {greeting}</Text>
-        <Text
-          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-            d?.queueStatus === 'PAUSED'
-              ? 'bg-amber-100 text-amber-800'
-              : 'bg-emerald-100 text-emerald-800'
-          }`}
-        >
-          {d?.queueStatus === 'PAUSED' ? 'Paused' : 'Active'}
-        </Text>
-      </View>
+      {model ? (
+        <>
+          <VerdictLine verdict={model.verdict} />
 
-      {/* Queue health */}
-      <Card className="p-4">
-        <Text className="mb-3 text-sm font-semibold text-slate-900">Queue health</Text>
-        <View className="flex-row flex-wrap">
-          <Stat label="Videos left" value={String(d?.health.remaining ?? 0)} />
-          <Stat
-            label="Days of content"
-            value={
-              d?.health.daysRemaining != null ? `≈ ${Math.round(d.health.daysRemaining)}` : '—'
-            }
+          {model.problems.map((problem) => (
+            <ProblemCard key={problem.key} problem={problem} onPress={() => open(problem.target)} />
+          ))}
+
+          <NextPostSection
+            nextPost={model.nextPost}
+            onPress={() => model.nextPost && open(model.nextPost.target)}
           />
-          <Stat label="Empty ~" value={fmtDate(d?.health.estimatedEmptyDate)} />
-          <Stat label="Upload by" value={fmtDate(d?.health.recommendedUploadBy)} />
-        </View>
-        {d && d.health.postsPerDay <= 0 ? (
-          <Text className="mt-3 text-xs text-slate-500">
-            Add a posting schedule in the web app to project coverage.
-          </Text>
-        ) : d && d.health.remaining === 0 ? (
-          <Text className="mt-3 text-xs text-amber-700">
-            Your queue is empty — upload more videos to keep posting.
-          </Text>
-        ) : null}
-      </Card>
-
-      {/* Next / Last */}
-      <Card className="p-4">
-        <Text className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-          Next scheduled post
+        </>
+      ) : (
+        <Text className="text-sm text-ink-tertiary">
+          Couldn’t reach PostPilot. Pull down to try again.
         </Text>
-        {d?.nextPost ? (
-          <PostRow
-            title={d.nextPost.title}
-            sub={`${PLATFORM_LABEL[d.nextPost.platform]} · ${fmtDateTime(d.nextPost.scheduledAt)}`}
-          />
-        ) : (
-          <Text className="text-sm text-slate-500">Nothing scheduled yet</Text>
-        )}
-      </Card>
-
-      <Card className="p-4">
-        <Text className="mb-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-          Last published
-        </Text>
-        {d?.lastPublished ? (
-          <PostRow
-            title={d.lastPublished.title}
-            sub={`${PLATFORM_LABEL[d.lastPublished.platform]} · ${fmtDateTime(d.lastPublished.publishedAt)}`}
-          />
-        ) : (
-          <Text className="text-sm text-slate-500">Nothing published yet</Text>
-        )}
-      </Card>
-
-      {/* Connections */}
-      <Card className="p-4">
-        <Text className="mb-2 text-sm font-semibold text-slate-900">Connected accounts</Text>
-        <View className="gap-2">
-          {d?.connections.map((c) => {
-            const badge = connectionLabel(c.configured, c.connection?.status);
-            return (
-              <View key={c.platform} className="flex-row items-center justify-between">
-                <Text className="text-sm text-slate-700">{PLATFORM_LABEL[c.platform]}</Text>
-                <Text className={`text-xs font-medium ${toneClass(badge.tone)}`}>{badge.text}</Text>
-              </View>
-            );
-          })}
-        </View>
-      </Card>
-
-      <Text className="text-center text-xs text-slate-400">
-        Manage your queue and schedule in the PostPilot web app.
-      </Text>
+      )}
     </ScrollView>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function VerdictLine({ verdict }: { verdict: HomeVerdict }) {
   return (
-    <View className="mb-2 w-1/2">
-      <Text className="text-xl font-semibold text-slate-900">{value}</Text>
-      <Text className="text-xs text-slate-500">{label}</Text>
+    <View
+      accessible
+      accessibilityRole="header"
+      accessibilityLabel={verdict.copy}
+      className="flex-row items-start gap-2.5 pb-1"
+    >
+      {/* Optically centred on the first line of the 22pt label. */}
+      <View className={`mt-[9px] h-2 w-2 rounded-full ${TONE_DOT[verdict.tone]}`} />
+      <Text className="flex-1 text-[22px] leading-7 text-ink-secondary">
+        <Text className={`font-semibold ${TONE_LABEL[verdict.tone]}`}>{verdict.label}</Text>
+        {` · ${verdict.detail}`}
+      </Text>
     </View>
   );
 }
 
-function PostRow({ title, sub }: { title: string | null; sub: string }) {
+function ProblemCard({ problem, onPress }: { problem: HomeProblemCard; onPress: () => void }) {
   return (
-    <View>
-      <Text className="text-sm font-medium text-slate-900">{title ?? 'Untitled'}</Text>
-      <Text className="text-xs text-slate-500">{sub}</Text>
-    </View>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${problem.title}. ${problem.detail}`}
+      accessibilityHint={TARGET_HINT[problem.target]}
+      className="min-h-[44px] flex-row items-center gap-3 rounded-xl border border-hairline bg-surface p-4 active:opacity-70"
+    >
+      {/* Sits on the title's first line, not the middle of the block. */}
+      <View className={`mt-1.5 h-2 w-2 self-start rounded-full ${TONE_DOT[problem.tone]}`} />
+      <View className="flex-1 gap-0.5">
+        <Text className="text-[15px] font-semibold leading-5 text-ink">{problem.title}</Text>
+        <Text className="text-[13px] leading-[18px] text-ink-tertiary">{problem.detail}</Text>
+      </View>
+      <ChevronRight size={18} strokeWidth={2.25} className="text-ink-quiet" />
+    </Pressable>
   );
 }
 
-function toneClass(tone: 'ok' | 'warn' | 'bad' | 'muted'): string {
-  switch (tone) {
-    case 'ok':
-      return 'text-emerald-700';
-    case 'warn':
-      return 'text-amber-700';
-    case 'bad':
-      return 'text-red-700';
-    default:
-      return 'text-slate-400';
-  }
+function NextPostSection({
+  nextPost,
+  onPress,
+}: {
+  nextPost: HomeNextPost | null;
+  onPress: () => void;
+}) {
+  return (
+    <View className="mt-2 gap-2">
+      <Text accessibilityRole="header" className="px-1 text-[13px] font-semibold text-ink-tertiary">
+        Next post
+      </Text>
+      {nextPost ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Next post: ${nextPost.title}, ${nextPost.platform}, ${nextPost.when}`}
+          accessibilityHint={TARGET_HINT[nextPost.target]}
+          className="flex-row items-center gap-3 rounded-xl border border-hairline bg-surface p-3 active:opacity-70"
+        >
+          <View className="h-16 w-16 overflow-hidden rounded-lg bg-ground">
+            {nextPost.thumbnailUrl ? (
+              <Image
+                source={{ uri: nextPost.thumbnailUrl }}
+                style={{ width: '100%', height: '100%' }}
+                contentFit="cover"
+                transition={150}
+                accessibilityIgnoresInvertColors
+              />
+            ) : null}
+          </View>
+          <View className="flex-1 gap-0.5">
+            <Text numberOfLines={2} className="text-[15px] font-semibold leading-5 text-ink">
+              {nextPost.title}
+            </Text>
+            <Text className="text-[13px] leading-[18px] text-ink-tertiary">
+              {nextPost.platform} · {nextPost.when}
+            </Text>
+          </View>
+          <ChevronRight size={18} strokeWidth={2.25} className="text-ink-quiet" />
+        </Pressable>
+      ) : (
+        <View className="rounded-xl border border-hairline bg-surface p-4">
+          <Text className="text-[13px] text-ink-tertiary">Nothing scheduled yet.</Text>
+        </View>
+      )}
+    </View>
+  );
 }
