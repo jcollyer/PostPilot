@@ -44,3 +44,6 @@ next-env.d.ts
 expo-env.d.ts
 
 .trigger
+
+# Claude Code agent worktrees (local, disposable)
+.claude/worktrees/
