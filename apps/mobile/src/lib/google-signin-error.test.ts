@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { googleSignInErrorMessage } from './google-signin-error';
 
-/** The shape @better-auth/expo throws when the auth sheet returns `?error=<code>`. */
+/** The shape our @better-auth/expo patch throws when the auth sheet returns `?error=<code>`. */
 function oauthError(code: string, description?: string) {
   return Object.assign(new Error(description ?? code), { code });
 }
@@ -14,9 +14,16 @@ describe('googleSignInErrorMessage', () => {
     expect(message).toMatch(/verif/i);
   });
 
+  it('stays quiet when the user declines on the consent screen, like a cancel', () => {
+    expect(googleSignInErrorMessage(oauthError('access_denied'))).toBeNull();
+    expect(
+      googleSignInErrorMessage(oauthError('access_denied', 'The user denied access.')),
+    ).toBeNull();
+  });
+
   it('uses the provider description for other OAuth errors', () => {
-    expect(googleSignInErrorMessage(oauthError('access_denied', 'The user denied access.'))).toBe(
-      'The user denied access.',
+    expect(googleSignInErrorMessage(oauthError('server_error', 'Google is unavailable.'))).toBe(
+      'Google is unavailable.',
     );
   });
 
