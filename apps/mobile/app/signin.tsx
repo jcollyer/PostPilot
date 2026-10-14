@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 
 import { authClient } from '../src/lib/auth-client';
+import { googleSignInErrorMessage } from '../src/lib/google-signin-error';
 import { Button } from '../src/components/Button';
 import { TextField } from '../src/components/TextField';
 
@@ -39,7 +40,9 @@ export default function SignInScreen() {
    * Google via Better Auth's browser-redirect flow: the Expo plugin opens an
    * auth session, then stores the session cookie from the deep-link return.
    * A cancelled sheet resolves without an error, so confirm a session exists
-   * before leaving this screen.
+   * before leaving this screen. A failure the server sends back through the
+   * sheet (e.g. `account_not_linked`) is thrown, not returned — only because
+   * of our patch; see patches/@better-auth+expo+*.patch.
    */
   async function handleGoogle() {
     setError(null);
@@ -52,11 +55,13 @@ export default function SignInScreen() {
         errorCallbackURL: '/signin',
       });
       if (error) {
-        setError(error.message ?? 'Could not sign in with Google.');
+        setError(googleSignInErrorMessage(error));
         return;
       }
       const { data } = await authClient.getSession();
       if (data?.session) router.replace('/');
+    } catch (err) {
+      setError(googleSignInErrorMessage(err));
     } finally {
       setGooglePending(false);
     }
