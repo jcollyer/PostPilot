@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { buildHomeModel, type HomeOverview } from './home';
 
 const DAY = 86_400_000;
-// Midday UTC keeps the formatted dates on the same calendar day in any US/EU zone.
+// Every fixture date sits at midday UTC, so formatted dates hold in any zone from UTC-11 to UTC+11 (CI runs in UTC).
 const NOW = new Date('2026-10-14T12:00:00Z');
 const daysFromNow = (n: number) => new Date(NOW.getTime() + n * DAY);
 
@@ -46,7 +46,7 @@ function overview(overrides: Partial<HomeOverview> = {}): HomeOverview {
     readyVideos: 3,
     nextPost: {
       platform: 'TIKTOK',
-      scheduledAt: new Date('2026-10-15T16:00:00Z'),
+      scheduledAt: new Date('2026-10-15T12:00:00Z'),
       title: 'Morning routine',
       thumbnailUrl: 'https://cdn.example.com/thumb.jpg',
     },
@@ -86,7 +86,8 @@ describe('buildHomeModel — verdict', () => {
           remaining: 46,
           postsPerDay: 2,
           daysRemaining: 22.6,
-          estimatedEmptyDate: daysFromNow(22.6),
+          // Whole days from midday NOW, so the formatted date can't shift with the runner's time zone.
+          estimatedEmptyDate: daysFromNow(22),
           recommendedUploadBy: daysFromNow(8.6),
         },
       }),
