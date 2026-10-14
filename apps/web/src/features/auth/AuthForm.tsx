@@ -91,10 +91,11 @@ export function AuthForm({ hasGoogle, initialMode = 'signin' }: AuthFormProps) {
       });
       if (error) {
         // Better Auth returns 403 when the email isn't verified yet and
-        // re-sends the verification link automatically.
+        // re-sends the verification link (sendOnSignIn; at most one per
+        // minute per address, see server/verification-cooldown.ts).
         if (error.status === 403) {
           setNotice(
-            "Your email isn't verified yet. We've sent a fresh verification link — check your inbox.",
+            "Your email isn't verified yet. We've emailed you a verification link — check your inbox.",
           );
         } else {
           setError(error.message ?? 'Invalid email or password.');
