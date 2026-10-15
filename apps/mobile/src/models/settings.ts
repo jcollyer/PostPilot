@@ -1,6 +1,6 @@
 import { formatBytes } from '@postpilot/types';
 
-import { connectionLabel, PLATFORM_LABEL } from '../lib/dashboard-format';
+import { connectionLabel, fmtLongDate, PLATFORM_LABEL } from '../lib/dashboard-format';
 import type { RouterOutputs } from '../lib/trpc';
 
 /**
@@ -38,7 +38,6 @@ export interface AppVersion {
 }
 
 export interface SettingsConnectionRow {
-  key: string;
   platform: SettingsConnections[number]['platform'];
   name: string;
   status: string;
@@ -116,7 +115,6 @@ function connectionRows(
       // and colours the same here as everywhere else in the app.
       const { text, tone } = connectionLabel(c.configured, c.connection?.status);
       return {
-        key: c.platform,
         platform: c.platform,
         name: PLATFORM_LABEL[c.platform] ?? c.platform,
         status: text,
@@ -166,15 +164,6 @@ function meter(ratio: number, over: boolean): Pick<SettingsUsage, 'ratio' | 'ton
     ratio: Math.min(Math.max(ratio, 0), 1),
     tone: over ? 'critical' : ratio >= NEAR_LIMIT ? 'warn' : 'normal',
   };
-}
-
-/** "Nov 3, 2026": a renewal can be a year out, so the year is shown. */
-function fmtLongDate(d: Date | string): string {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(d));
 }
 
 // --- About -----------------------------------------------------------------

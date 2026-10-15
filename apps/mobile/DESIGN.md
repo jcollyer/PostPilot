@@ -146,7 +146,7 @@ A cool, low-saturation palette: one navy tint against a six-step slate ink ramp,
 
 ### Primary
 
-- **Deep Slate Navy** (`#2d3f63`): The single tint. Primary button fills, the sign-in mark, link and nav-tint text, the tab bar's selected item, and every loading spinner. It marks interactivity and brand presence — nothing else. Its restraint is what makes a green "Connected" or a red "Reconnect needed" read instantly.
+- **Deep Slate Navy** (`#2d3f63`): The single tint. Primary button fills, the sign-in mark, link and nav-tint text, the tab bar's selected item, and every loading spinner. It marks interactivity and brand presence — nothing else. Its restraint is what makes an amber "Paused" or a red "Needs reconnect" read instantly.
 - **Navy Wash** (`#dbe2ef`): The tint at surface strength. The correct choice for any tinted container that needs to belong to the navy without shouting.
 
 ### Neutral
@@ -251,7 +251,7 @@ Soft-rectangular throughout, with radius encoding scale rather than emphasis: 8p
 
 Borders are always exactly 1px and always Hairline, except where a control is reporting an error, in which case the same 1px stroke switches to Destructive. There are no dividers, no separators inside cards, no dashed or double strokes, and no clipping or masking. The one exception is an **inset-grouped list** (the Queue's sections): a hairline-bounded surface holding many rows, where a 1px Hairline rule between rows starts at the text, clear of the thumbnail, as native iOS lists do. A card holds one answer; a grouped list holds many rows, and the rule is what keeps them scannable.
 
-Icons are SF Symbols only: the tab bar's, and the `Disclosure` chevron (`chevron.right` via `expo-symbols`, tinted the system `tertiaryLabel`; `chevron.down` while a row is expanded in place) on rows that navigate or expand. No other icon set is installed. The one exception is `PlatformGlyphs`: small monochrome TikTok, Instagram and YouTube marks drawn as SVG, because SF Symbols has no brand marks. They are tinted the system `secondaryLabel`, never brand colour, since they say where a post goes and not how it is doing. There is no illustration, no imagery, and no empty-state art; empty states are plain sentences in Caption.
+Icons are SF Symbols only: the tab bar's, and the `Disclosure` chevron (`chevron.right` via `expo-symbols`, tinted the system `tertiaryLabel`; `chevron.down` while a row is expanded in place) on rows that navigate or expand, and the outbound mark (`arrow.up.right`, same tint) on rows that open a web page in the in-app browser. No other icon set is installed. The one exception is `PlatformGlyphs`: small monochrome TikTok, Instagram and YouTube marks drawn as SVG, because SF Symbols has no brand marks. They are tinted the system `secondaryLabel`, never brand colour, since they say where a post goes and not how it is doing. There is no illustration, no imagery, and no empty-state art; empty states are plain sentences in Caption.
 
 **The Radius-Means-Scale Rule.** Radius reports the size of the thing, not its importance. A control is 8px whether it is primary or ghost; a container is 12px whether it holds a stat grid or a single sentence. Never raise a radius to make something feel friendlier.
 
@@ -298,7 +298,7 @@ The signature component. A fully rounded 12px chip carrying the queue's own stat
 
 ### Connection Row
 
-The second signature pattern: a platform name in 14px Ink Secondary, right-aligned against a 12px status word colored by tone — Signal OK for connected, Signal Critical for reconnect-needed, Signal Warn for paused, Ink Quiet for unavailable. The status is *text only*; there is no dot, badge, or icon carrying the meaning.
+The second signature pattern: a platform name, right-aligned against a status word colored by tone — Signal Critical for "Needs reconnect", Signal Warn for "Paused", Ink Tertiary for "Not connected". A healthy "Active" stays Ink Secondary rather than Signal OK, per the Status-Only Saturation Rule: a screen with nothing wrong shows no saturated color. The status is *text only*; there is no dot, badge, or icon carrying the meaning.
 
 **The Tone-Comes-From-Data Rule.** Connection and queue states are colored by the `tone` value that `connectionLabel` returns, never by a literal chosen at the call site. Adding a state means extending that function, so a status can never be styled two different ways in two different places.
 

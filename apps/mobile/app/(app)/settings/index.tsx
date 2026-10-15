@@ -34,7 +34,8 @@ import {
 
 const APP_VERSION = {
   version: Constants.expoConfig?.version ?? null,
-  build: Constants.expoConfig?.ios?.buildNumber ?? null,
+  // The installed binary's CFBundleVersion; the config's is only set in release builds.
+  build: Constants.platform?.ios?.buildNumber ?? Constants.expoConfig?.ios?.buildNumber ?? null,
 };
 
 const CONNECTION_TONE: Record<SettingsConnectionRow['tone'], string> = {
@@ -43,6 +44,12 @@ const CONNECTION_TONE: Record<SettingsConnectionRow['tone'], string> = {
   warn: 'text-signal-warn',
   critical: 'text-signal-critical',
   muted: 'text-ink-tertiary',
+};
+
+const USAGE_TONE: Record<SettingsUsage['tone'], string> = {
+  normal: 'text-ink-tertiary',
+  warn: 'text-signal-warn',
+  critical: 'text-signal-critical',
 };
 
 const METER_FILL: Record<SettingsUsage['tone'], string> = {
@@ -125,7 +132,7 @@ export default function SettingsScreen() {
       <Section title="Connected accounts">
         {model.connections ? (
           model.connections.map((row, i) => (
-            <ConnectionRow key={row.key} row={row} first={i === 0} />
+            <ConnectionRow key={row.platform} row={row} first={i === 0} />
           ))
         ) : (
           <Unavailable loading={connections.isLoading} what="your connections" />
@@ -172,6 +179,7 @@ export default function SettingsScreen() {
           <ActionRow
             label="Delete Account"
             destructive
+            navigates
             hint="Opens a screen to confirm deleting your account"
             onPress={() => router.push('/settings/delete-account')}
           />
@@ -328,9 +336,7 @@ function UsageRow({ usage }: { usage: SettingsUsage }) {
         <View className="flex-row items-baseline justify-between gap-4">
           <Text className="text-[17px] text-ink">{usage.label}</Text>
           <Text
-            className={`text-[15px] ${
-              usage.tone === 'normal' ? 'text-ink-tertiary' : CONNECTION_TONE[usage.tone]
-            }`}
+            className={`text-[15px] ${USAGE_TONE[usage.tone]}`}
             style={{ fontVariant: ['tabular-nums'] }}
           >
             {usage.copy}
@@ -352,12 +358,15 @@ function ActionRow({
   onPress,
   hint,
   destructive = false,
+  navigates = false,
   first = false,
 }: {
   label: string;
   onPress: () => void;
   hint?: string;
   destructive?: boolean;
+  /** Pushes a screen, so it carries the chevron. */
+  navigates?: boolean;
   first?: boolean;
 }) {
   return (
@@ -372,7 +381,7 @@ function ActionRow({
         <Text className={`text-[17px] ${destructive ? 'text-signal-critical' : 'text-primary'}`}>
           {label}
         </Text>
-        {destructive ? <Disclosure /> : null}
+        {navigates ? <Disclosure /> : null}
       </Pressable>
     </>
   );

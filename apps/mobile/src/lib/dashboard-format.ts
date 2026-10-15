@@ -4,6 +4,16 @@ export function fmtDate(d: Date | string | null | undefined): string {
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(new Date(d));
 }
 
+/** Date with its year, like "Nov 3, 2026", for dates that can be months out. */
+export function fmtLongDate(d: Date | string | null | undefined): string {
+  if (!d) return '—';
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date(d));
+}
+
 /** Date + time like "Mon, Jun 23, 9:00 AM". */
 export function fmtDateTime(d: Date | string | null | undefined): string {
   if (!d) return '—';
