@@ -21,6 +21,7 @@ import {
   type QueueItemConfirm,
   type QueueItemPlatformRow,
 } from '../../../src/models/queue-item';
+import { CONNECTIONS_HREF } from '../../../src/models/settings';
 
 /**
  * Queue item sheet: one item's per-platform status, full errors and View post
@@ -92,7 +93,7 @@ export default function QueueItemSheetScreen() {
     switch (action.kind) {
       case 'reconnect':
         router.back();
-        router.navigate('/settings');
+        router.navigate(CONNECTIONS_HREF);
         return;
       case 'publishNow':
         return confirmFirst(action.confirm, () =>
