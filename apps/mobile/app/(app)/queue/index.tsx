@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 
 import { Disclosure } from '../../../src/components/Disclosure';
+import { Cell, Rule } from '../../../src/components/GroupedCell';
 import { PlatformGlyphs } from '../../../src/components/PlatformGlyphs';
 import { StatusLine } from '../../../src/components/StatusLine';
 import { trpc } from '../../../src/lib/trpc';
@@ -32,8 +33,7 @@ import {
  * Queue model; this screen only maps it to views.
  *
  * A queue runs to hundreds of items, so the list is virtualized: each section
- * is drawn as an inset-grouped list out of per-row cells rather than one
- * container around all of its rows.
+ * is drawn as an inset-grouped list out of per-row cells.
  */
 
 export default function QueueScreen() {
@@ -162,7 +162,6 @@ export default function QueueScreen() {
             first={index === 0 && section.key !== 'skipped'}
             last={index === section.data.length - 1 && !section.footer}
           >
-            {/* Rules live inside the cells: a separate 1pt separator cell leaves seams. */}
             {index > 0 ? <Rule inset /> : section.key === 'skipped' ? <Rule /> : null}
             <Row row={item} onPress={() => router.push(`/queue/${item.id}`)} />
           </Cell>
@@ -192,45 +191,6 @@ export default function QueueScreen() {
       />
     </>
   );
-}
-
-/**
- * One slice of an inset-grouped list: a hairline-bounded surface whose top
- * and bottom round off only at the ends of its group.
- */
-function Cell({
-  first = false,
-  last = false,
-  children,
-}: {
-  first?: boolean;
-  last?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <View
-      className="border-hairline bg-surface"
-      // Every edge spelled out: a cell must draw no top or bottom rule unless it
-      // ends its group, or adjacent cells stack into visible seams.
-      style={{
-        borderLeftWidth: 1,
-        borderRightWidth: 1,
-        borderTopWidth: first ? 1 : 0,
-        borderBottomWidth: last ? 1 : 0,
-        borderTopLeftRadius: first ? 12 : 0,
-        borderTopRightRadius: first ? 12 : 0,
-        borderBottomLeftRadius: last ? 12 : 0,
-        borderBottomRightRadius: last ? 12 : 0,
-      }}
-    >
-      {children}
-    </View>
-  );
-}
-
-/** A row-to-row rule; inset ones start at the text, like a native list. */
-function Rule({ inset = false }: { inset?: boolean }) {
-  return <View className={`h-px bg-hairline ${inset ? 'ml-[64px]' : ''}`} />;
 }
 
 function Row({ row, onPress }: { row: QueueRow; onPress: () => void }) {
