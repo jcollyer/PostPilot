@@ -13,6 +13,7 @@ import {
   type HomeTarget,
   type HomeTone,
 } from '../../../src/models/home';
+import { CONNECTIONS_HREF } from '../../../src/models/settings';
 
 /**
  * Home = the glanceable monitor. One verdict line answers "is it still
@@ -21,9 +22,9 @@ import {
  * All derivation lives in the Home model; this screen only maps it to views.
  */
 
-const TARGET_HREF: Record<HomeTarget, '/queue' | '/settings'> = {
+const TARGET_HREF: Record<HomeTarget, string> = {
   queue: '/queue',
-  settings: '/settings',
+  settings: CONNECTIONS_HREF,
 };
 
 const TARGET_HINT: Record<HomeTarget, string> = {

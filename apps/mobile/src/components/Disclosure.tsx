@@ -20,3 +20,21 @@ export function Disclosure({ open = false }: { open?: boolean }) {
     />
   );
 }
+
+/**
+ * The trailing arrow on a row that leaves the app for the web, in the same
+ * colour as the chevron so the two read as one family. iOS only.
+ */
+export function OutboundMark() {
+  if (Platform.OS !== 'ios') return null;
+  return (
+    <SymbolView
+      name="arrow.up.right"
+      size={13}
+      weight="semibold"
+      tintColor={PlatformColor('tertiaryLabel')}
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+    />
+  );
+}
