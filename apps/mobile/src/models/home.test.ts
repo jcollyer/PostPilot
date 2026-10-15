@@ -52,6 +52,7 @@ function overview(overrides: Partial<HomeOverview> = {}): HomeOverview {
     },
     lastPublished: null,
     connections: [conn('TIKTOK', 'ACTIVE'), conn('INSTAGRAM', 'ACTIVE'), conn('YOUTUBE', null)],
+    failures: { count: 0, latest: null },
     ...overrides,
   };
 }
@@ -321,6 +322,90 @@ describe('buildHomeModel — connection cards', () => {
 
     expect(model.verdict.state).toBe('running');
     expect(model.problems).toHaveLength(1);
+  });
+});
+
+/** `count` failed posts, the latest a TikTok post that failed yesterday. */
+function failures(count: number): HomeOverview['failures'] {
+  return {
+    count,
+    latest: { title: 'Morning routine', platform: 'TIKTOK', failedAt: daysFromNow(-1) },
+  };
+}
+
+describe('buildHomeModel — failed posts', () => {
+  it('failures alone → Needs attention', () => {
+    const model = buildHomeModel(overview({ failures: failures(2) }), NOW);
+
+    expect(model.verdict).toMatchObject({
+      state: 'needs-attention',
+      tone: 'critical',
+      copy: 'Needs attention · 2 posts failed to publish',
+    });
+  });
+
+  it('shows a card naming the latest failure, linking to Queue', () => {
+    const model = buildHomeModel(overview({ failures: failures(2) }), NOW);
+
+    expect(model.problems).toEqual([
+      {
+        kind: 'failures',
+        key: 'failures',
+        tone: 'critical',
+        title: '2 posts failed to publish',
+        detail: expect.stringMatching(/^Latest: Morning routine · TikTok · .*Oct 13/),
+        target: 'queue',
+      },
+    ]);
+  });
+
+  it('uses the singular for one failure', () => {
+    const model = buildHomeModel(overview({ failures: failures(1) }), NOW);
+
+    expect(model.verdict.copy).toBe('Needs attention · 1 post failed to publish');
+    expect(model.problems[0]).toMatchObject({ title: '1 post failed to publish' });
+  });
+
+  it('falls back to Untitled for the latest failure', () => {
+    const base = failures(1);
+    const model = buildHomeModel(
+      overview({ failures: { ...base, latest: { ...base.latest!, title: null } } }),
+      NOW,
+    );
+
+    expect(model.problems[0]!.detail).toMatch(/^Latest: Untitled · TikTok · /);
+  });
+
+  it('still shows the card if the latest failure is missing', () => {
+    const model = buildHomeModel(overview({ failures: { count: 1, latest: null } }), NOW);
+
+    expect(model.problems).toEqual([
+      expect.objectContaining({ kind: 'failures', detail: 'See the Queue for details.' }),
+    ]);
+  });
+
+  it('failures + paused → Needs attention, with the Paused card still shown', () => {
+    const model = buildHomeModel(overview({ queueStatus: 'PAUSED', failures: failures(2) }), NOW);
+
+    expect(model.verdict.state).toBe('needs-attention');
+    expect(model.problems.map((p) => p.kind)).toEqual(['failures', 'queue-paused']);
+  });
+
+  it('reconnect + failures → the verdict names the reconnect, both get cards', () => {
+    const model = buildHomeModel(
+      overview({ connections: [conn('TIKTOK', 'NEEDS_RECONNECT')], failures: failures(2) }),
+      NOW,
+    );
+
+    expect(model.verdict.copy).toBe('Needs attention · TikTok needs reconnecting');
+    expect(model.problems.map((p) => p.kind)).toEqual(['connection', 'failures']);
+  });
+
+  it('shows no failures card when nothing has failed', () => {
+    const model = buildHomeModel(overview({ failures: { count: 0, latest: null } }), NOW);
+
+    expect(model.problems).toEqual([]);
+    expect(model.verdict.state).toBe('running');
   });
 });
 

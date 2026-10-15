@@ -5,9 +5,9 @@ import type { RouterOutputs } from '../lib/trpc';
  * Home screen model: everything the glanceable monitor shows, derived from
  * `dashboard.overview` plus `now`. The screen only maps this to components.
  *
- * Verdict precedence (worst wins): Needs attention > Paused > Running low >
- * Running. Outranked queue problems still surface as cards so nothing hides
- * behind a milder verdict.
+ * Verdict precedence (worst wins): Needs attention (a reconnect, else failed
+ * posts) > Paused > Running low > Running. Outranked queue problems still
+ * surface as cards so nothing hides behind a milder verdict.
  */
 
 export type HomeOverview = RouterOutputs['dashboard']['overview'];
@@ -25,7 +25,7 @@ export interface HomeVerdict {
 }
 
 export interface HomeProblemCard {
-  kind: 'connection' | 'queue-paused' | 'running-low';
+  kind: 'connection' | 'failures' | 'queue-paused' | 'running-low';
   key: string;
   tone: Exclude<HomeTone, 'ok'>;
   title: string;
@@ -59,6 +59,7 @@ export function buildHomeModel(overview: HomeOverview, now: Date): HomeModel {
       : [];
   });
   const reconnect = troubled.filter((c) => c.tone === 'critical');
+  const failures = overview.failures;
   const paused = overview.queueStatus === 'PAUSED';
   const low = runningLow(health, now);
 
@@ -72,16 +73,18 @@ export function buildHomeModel(overview: HomeOverview, now: Date): HomeModel {
             reconnect.length === 1 ? 'needs' : 'need'
           } reconnecting`,
         )
-      : paused
-        ? makeVerdict('paused', 'warn', 'Paused', 'nothing will post until you resume')
-        : low
-          ? makeVerdict('running-low', 'warn', 'Running low', low.verdict)
-          : makeVerdict(
-              'running',
-              'ok',
-              'Running',
-              `posting through ${fmtDate(health.estimatedEmptyDate)} (~${days(health.daysRemaining)} of content)`,
-            );
+      : failures.count > 0
+        ? makeVerdict('needs-attention', 'critical', 'Needs attention', failedPosts(failures.count))
+        : paused
+          ? makeVerdict('paused', 'warn', 'Paused', 'nothing will post until you resume')
+          : low
+            ? makeVerdict('running-low', 'warn', 'Running low', low.verdict)
+            : makeVerdict(
+                'running',
+                'ok',
+                'Running',
+                `posting through ${fmtDate(health.estimatedEmptyDate)} (~${days(health.daysRemaining)} of content)`,
+              );
 
   const problems: HomeProblemCard[] = troubled.map(({ platform, name, tone }) => ({
     kind: 'connection',
@@ -98,6 +101,21 @@ export function buildHomeModel(overview: HomeOverview, now: Date): HomeModel {
         }),
     target: 'settings',
   }));
+
+  if (failures.count > 0) {
+    // `latest` is only null if the task changed state between the two queries.
+    const latest = failures.latest;
+    problems.push({
+      kind: 'failures',
+      key: 'failures',
+      tone: 'critical',
+      title: failedPosts(failures.count),
+      detail: latest
+        ? `Latest: ${latest.title ?? 'Untitled'} · ${platformName(latest.platform)} · ${fmtDateTime(latest.failedAt)}`
+        : 'See the Queue for details.',
+      target: 'queue',
+    });
+  }
 
   if (paused && verdict.state !== 'paused') {
     problems.push({
@@ -175,6 +193,10 @@ function makeVerdict(
 
 function platformName(platform: string): string {
   return PLATFORM_LABEL[platform] ?? platform;
+}
+
+function failedPosts(count: number): string {
+  return `${count} ${count === 1 ? 'post' : 'posts'} failed to publish`;
 }
 
 function days(n: number | null): string {
