@@ -14,13 +14,14 @@ import { Image } from 'expo-image';
 import { Stack, useRouter } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 
-import { PLATFORM_LABEL } from '../lib/dashboard-format';
 import { trpc } from '../lib/trpc';
 import {
   buildLibraryModel,
+  librarySections,
   searchQuery,
   type LibraryFolderRow,
   type LibraryMediaRow,
+  type LibrarySection,
   type LibrarySource,
   type LibraryStatusTone,
 } from '../models/library';
@@ -40,14 +41,11 @@ import { PlatformGlyphs } from './PlatformGlyphs';
 const PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 300;
 
-type Section =
-  | { key: 'folders'; data: LibraryFolderRow[] }
-  | { key: 'media'; data: LibraryMediaRow[] };
-
 const TONE_TEXT: Record<LibraryStatusTone, string> = {
   critical: 'text-signal-critical',
   warn: 'text-signal-warn',
   muted: 'text-ink-tertiary',
+  neutral: 'text-ink-secondary',
 };
 
 export function LibraryBrowser({
@@ -146,43 +144,37 @@ export function LibraryBrowser({
   }
 
   const model = buildLibraryModel(source, connections.data ?? [], new Date());
-  const sections: Section[] = [];
-  if (model.folders.length > 0) sections.push({ key: 'folders', data: model.folders });
-  if (model.media.length > 0) sections.push({ key: 'media', data: model.media });
 
   return (
     <>
       {header}
-      <SectionList<LibraryFolderRow | LibraryMediaRow, Section>
+      <SectionList<LibraryFolderRow | LibraryMediaRow, LibrarySection>
         contentInsetAdjustmentBehavior="automatic"
         keyboardDismissMode="on-drag"
         className="flex-1 bg-ground"
         contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40 }}
         refreshControl={refreshControl}
         stickySectionHeadersEnabled={false}
-        sections={sections}
+        sections={librarySections(model)}
         keyExtractor={(row) => row.id}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
-        // Folders then media, as two groups with the system's section gap between.
-        renderSectionHeader={({ section }) =>
-          section.key === 'media' && model.folders.length > 0 ? <View className="h-7" /> : null
-        }
+        renderSectionHeader={({ section }) => (section.gapAbove ? <View className="h-7" /> : null)}
         renderItem={({ item, index, section }) => (
           <Cell first={index === 0} last={index === section.data.length - 1}>
             {index > 0 ? <Rule inset /> : null}
-            {section.key === 'folders' ? (
+            {item.kind === 'folder' ? (
               <FolderRow
-                folder={item as LibraryFolderRow}
+                folder={item}
                 onPress={() =>
                   router.push({
                     pathname: '/library/[folderId]',
-                    params: { folderId: item.id, name: (item as LibraryFolderRow).name },
+                    params: { folderId: item.id, name: item.name },
                   })
                 }
               />
             ) : (
-              <MediaRow row={item as LibraryMediaRow} />
+              <MediaRow row={item} />
             )}
           </Cell>
         )}
@@ -234,18 +226,10 @@ function FolderRow({ folder, onPress }: { folder: LibraryFolderRow; onPress: () 
 }
 
 function MediaRow({ row }: { row: LibraryMediaRow }) {
-  const platforms = row.platforms.map((p) => PLATFORM_LABEL[p] ?? p).join(', ');
   return (
     <View
       accessible
-      accessibilityLabel={[
-        row.title,
-        row.status.label,
-        row.length?.label,
-        platforms && `Posts to ${platforms}`,
-      ]
-        .filter(Boolean)
-        .join('. ')}
+      accessibilityLabel={row.accessibilityLabel}
       className="min-h-[68px] flex-row items-center gap-3 px-4 py-2.5"
     >
       {/* Portrait, because the library is short-form vertical video. */}

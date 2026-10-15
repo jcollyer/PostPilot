@@ -1,4 +1,5 @@
 import type { RouterOutputs } from '../lib/trpc';
+import { platformName } from './queue';
 
 /**
  * Library screen model: one level of the creator's media library, derived from
@@ -25,13 +26,16 @@ export type LibrarySource =
   | { kind: 'search'; query: string; pages: LibrarySearchPage[] };
 
 export interface LibraryFolderRow {
+  kind: 'folder';
   id: string;
   name: string;
 }
 
-export type LibraryStatusTone = 'critical' | 'warn' | 'muted';
+/** `neutral` is a settled item; `muted` is one still in flight. */
+export type LibraryStatusTone = 'critical' | 'warn' | 'muted' | 'neutral';
 
 export interface LibraryMediaRow {
+  kind: 'media';
   id: string;
   title: string;
   thumbnailUrl: string | null;
@@ -40,6 +44,8 @@ export interface LibraryMediaRow {
   platforms: Platform[];
   /** "0:45" for a video, "3 slides" for a carousel, nothing for a photo. */
   length: { kind: 'duration' | 'slides'; label: string } | null;
+  /** The whole row as VoiceOver reads it. */
+  accessibilityLabel: string;
 }
 
 export interface LibraryModel {
@@ -62,7 +68,7 @@ export function buildLibraryModel(
     source.kind === 'folder'
       ? [...(source.pages[0]?.folders ?? [])]
           .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-          .map((f) => ({ id: f.id, name: f.name }))
+          .map((f) => ({ kind: 'folder' as const, id: f.id, name: f.name }))
       : [];
   const items: LibraryMedia[] =
     source.kind === 'folder'
@@ -80,6 +86,26 @@ export function buildLibraryModel(
   return { folders, media, empty };
 }
 
+/** One inset-grouped list to draw, in order. */
+export type LibrarySection =
+  | { key: 'folders'; data: LibraryFolderRow[]; gapAbove: false }
+  | { key: 'media'; data: LibraryMediaRow[]; gapAbove: boolean };
+
+/**
+ * Folders, then media, as two groups; each shows only when it has rows, and
+ * media keeps a section gap from the folders above it.
+ */
+export function librarySections(model: LibraryModel): LibrarySection[] {
+  const sections: LibrarySection[] = [];
+  if (model.folders.length > 0) {
+    sections.push({ key: 'folders', data: model.folders, gapAbove: false });
+  }
+  if (model.media.length > 0) {
+    sections.push({ key: 'media', data: model.media, gapAbove: model.folders.length > 0 });
+  }
+  return sections;
+}
+
 /** The query a search bar's text stands for; null means browse instead. */
 export function searchQuery(text: string): string | null {
   const q = text.trim();
@@ -89,22 +115,35 @@ export function searchQuery(text: string): string | null {
 // --- Rows ------------------------------------------------------------------
 
 function mediaRow(item: LibraryMedia, connected: Platform[], now: Date): LibraryMediaRow {
+  const title = mediaTitle(item);
+  const status = mediaStatus(item, now);
+  const platforms = item.targetPlatforms.length > 0 ? item.targetPlatforms : connected;
+  const length = mediaLength(item);
   return {
+    kind: 'media',
     id: item.id,
-    title: mediaTitle(item),
+    title,
     thumbnailUrl: item.thumbnailUrl,
-    status: mediaStatus(item, now),
-    platforms: item.targetPlatforms.length > 0 ? item.targetPlatforms : connected,
-    length: mediaLength(item),
+    status,
+    platforms,
+    length,
+    accessibilityLabel: [
+      title,
+      status.label,
+      length?.label,
+      platforms.length > 0 && `Posts to ${platforms.map(platformName).join(', ')}`,
+    ]
+      .filter(Boolean)
+      .join('. '),
   };
 }
 
-export function mediaTitle(item: LibraryMedia): string {
+function mediaTitle(item: LibraryMedia): string {
   return item.title?.trim() || item.originalFilename || 'Untitled';
 }
 
 /** The status ladder above, for one item. */
-export function mediaStatus(item: LibraryMedia, now: Date): LibraryMediaRow['status'] {
+function mediaStatus(item: LibraryMedia, now: Date): LibraryMediaRow['status'] {
   if (item.status === 'FAILED') return { label: 'Upload failed', tone: 'critical' };
   if (item.status === 'UPLOADING' || item.status === 'PROCESSING') {
     return { label: 'Processing…', tone: 'muted' };
@@ -112,9 +151,11 @@ export function mediaStatus(item: LibraryMedia, now: Date): LibraryMediaRow['sta
   if (item.mediaType === 'VIDEO' && item.tiktokNeedsInput) {
     return { label: 'Needs TikTok details', tone: 'warn' };
   }
-  if (item.inQueue) return { label: 'In queue', tone: 'muted' };
-  if (item.postedAt) return { label: `Posted ${ago(new Date(item.postedAt), now)}`, tone: 'muted' };
-  return { label: 'Ready', tone: 'muted' };
+  if (item.inQueue) return { label: 'In queue', tone: 'neutral' };
+  if (item.postedAt) {
+    return { label: `Posted ${ago(new Date(item.postedAt), now)}`, tone: 'neutral' };
+  }
+  return { label: 'Ready', tone: 'neutral' };
 }
 
 function mediaLength(item: LibraryMedia): LibraryMediaRow['length'] {

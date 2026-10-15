@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLibraryModel, EMPTY_LIBRARY, searchQuery, type LibraryMedia } from './library';
+import {
+  buildLibraryModel,
+  EMPTY_LIBRARY,
+  librarySections,
+  searchQuery,
+  type LibraryMedia,
+} from './library';
 import {
   connections,
   folder,
@@ -102,6 +108,24 @@ describe('buildLibraryModel — searching', () => {
   });
 });
 
+describe('librarySections', () => {
+  it('draws folders, then media with a gap above it', () => {
+    const sections = librarySections(browse([video('v1')]));
+    expect(sections.map((s) => [s.key, s.data.length, s.gapAbove])).toEqual([
+      ['folders', 1, false],
+      ['media', 1, true],
+    ]);
+  });
+
+  it('drops an empty group, and media alone needs no gap', () => {
+    expect(librarySections(browse([video('v1')], [])).map((s) => [s.key, s.gapAbove])).toEqual([
+      ['media', false],
+    ]);
+    expect(librarySections(browse([])).map((s) => s.key)).toEqual(['folders']);
+    expect(librarySections(browse([], []))).toEqual([]);
+  });
+});
+
 describe('searchQuery', () => {
   it('trims, and treats blank text as browsing', () => {
     expect(searchQuery('  beach ')).toBe('beach');
@@ -137,7 +161,7 @@ describe('media row status (first match wins)', () => {
 
   it('In queue outranks Posted', () => {
     const row = onlyRow(video('v', { inQueue: true, postedAt: hoursAgo(5) }));
-    expect(row.status).toEqual({ label: 'In queue', tone: 'muted' });
+    expect(row.status).toEqual({ label: 'In queue', tone: 'neutral' });
   });
 
   it.each([
@@ -146,12 +170,12 @@ describe('media row status (first match wins)', () => {
     [hoursAgo(3), 'Posted 3h ago'],
     [hoursAgo(24 * 2 + 5), 'Posted 2d ago'],
   ])('posted at %s reads %s', (postedAt, label) => {
-    expect(onlyRow(video('v', { postedAt })).status).toEqual({ label, tone: 'muted' });
+    expect(onlyRow(video('v', { postedAt })).status).toEqual({ label, tone: 'neutral' });
   });
 
   it('otherwise Ready', () => {
-    expect(onlyRow(video('v')).status).toEqual({ label: 'Ready', tone: 'muted' });
-    expect(onlyRow(image('i')).status).toEqual({ label: 'Ready', tone: 'muted' });
+    expect(onlyRow(video('v')).status).toEqual({ label: 'Ready', tone: 'neutral' });
+    expect(onlyRow(image('i')).status).toEqual({ label: 'Ready', tone: 'neutral' });
   });
 
   it('photos follow the same ladder', () => {
@@ -219,5 +243,13 @@ describe('media row length', () => {
 
   it('a single photo has no length', () => {
     expect(onlyRow(image('i')).length).toBeNull();
+  });
+});
+
+describe('media row accessibility label', () => {
+  it('reads title, status, length and platforms as one sentence', () => {
+    expect(onlyRow(video('v', { title: 'Morning routine' })).accessibilityLabel).toBe(
+      'Morning routine. Ready. 0:45. Posts to TikTok, Instagram',
+    );
   });
 });
