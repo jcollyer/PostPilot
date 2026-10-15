@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 
 import { Disclosure } from '../../../src/components/Disclosure';
 import { PlatformGlyphs } from '../../../src/components/PlatformGlyphs';
@@ -27,8 +27,9 @@ import {
  * Queue = the queue in sections. A status line and the schedule up top, then
  * Needs attention (only when something does), Up next, Published and a
  * collapsed Skipped. Pause/Resume sits in the nav bar and acts at once: it is
- * reversible, so it never asks. Rows carry no buttons. All derivation lives in
- * the Queue model; this screen only maps it to views.
+ * reversible, so it never asks. Rows carry no buttons: tapping one opens its
+ * item sheet (`[itemId]`), where the actions live. All derivation lives in the
+ * Queue model; this screen only maps it to views.
  *
  * A queue runs to hundreds of items, so the list is virtualized: each section
  * is drawn as an inset-grouped list out of per-row cells rather than one
@@ -36,6 +37,7 @@ import {
  */
 
 export default function QueueScreen() {
+  const router = useRouter();
   const utils = trpc.useUtils();
   const queue = trpc.queue.get.useQuery();
   const schedules = trpc.queue.listSchedules.useQuery();
@@ -162,7 +164,7 @@ export default function QueueScreen() {
           >
             {/* Rules live inside the cells: a separate 1pt separator cell leaves seams. */}
             {index > 0 ? <Rule inset /> : section.key === 'skipped' ? <Rule /> : null}
-            <Row row={item} />
+            <Row row={item} onPress={() => router.push(`/queue/${item.id}`)} />
           </Cell>
         )}
         renderSectionFooter={({ section }) =>
@@ -231,13 +233,15 @@ function Rule({ inset = false }: { inset?: boolean }) {
   return <View className={`h-px bg-hairline ${inset ? 'ml-[64px]' : ''}`} />;
 }
 
-function Row({ row }: { row: QueueRow }) {
+function Row({ row, onPress }: { row: QueueRow; onPress: () => void }) {
   const critical = row.tone === 'critical';
   return (
-    <View
-      accessible
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
       accessibilityLabel={`${row.title}. ${row.meta}`}
-      className="min-h-[68px] flex-row items-center gap-3 px-4 py-2.5"
+      accessibilityHint="Shows its status and actions"
+      className="min-h-[68px] flex-row items-center gap-3 px-4 py-2.5 active:opacity-60"
     >
       {/* Portrait, because the queue is short-form vertical video. */}
       <View className="h-12 w-9 overflow-hidden rounded-md bg-ground">
@@ -268,6 +272,7 @@ function Row({ row }: { row: QueueRow }) {
           <PlatformGlyphs platforms={row.platforms} />
         </View>
       </View>
-    </View>
+      <Disclosure />
+    </Pressable>
   );
 }

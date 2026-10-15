@@ -1,72 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildQueueModel, queueSections, type QueueData, type QueueSchedules } from './queue';
-
-const HOUR = 3_600_000;
-// Fixture dates sit at midday UTC, so formatted dates hold in any zone from UTC-11 to UTC+11 (CI runs in UTC).
-const NOW = new Date('2026-10-14T12:00:00Z');
-const hoursFromNow = (n: number) => new Date(NOW.getTime() + n * HOUR);
-
-type Item = QueueData['items'][number];
-type Task = Item['tasks'][number];
-type Schedule = QueueSchedules[number];
-
-function task(overrides: Partial<Task> = {}): Task {
-  return {
-    id: `task_${Math.random().toString(36).slice(2)}`,
-    platform: 'TIKTOK',
-    status: 'SCHEDULED',
-    scheduledAt: hoursFromNow(24),
-    publishedAt: null,
-    postUrl: null,
-    lastError: null,
-    needsConnection: false,
-    ...overrides,
-  };
-}
-
-function item(id: string, overrides: Partial<Item> = {}): Item {
-  return {
-    id,
-    position: 1,
-    status: 'PENDING',
-    scheduledAt: null,
-    postsTo: ['TIKTOK', 'INSTAGRAM'],
-    media: {
-      mediaType: 'VIDEO',
-      id: `video_${id}`,
-      title: `Video ${id}`,
-      originalFilename: `${id}.mp4`,
-      durationSec: 30,
-      thumbnailUrl: `https://cdn.example.com/${id}.jpg`,
-      category: null,
-      isDuplicate: false,
-      targetPlatforms: [],
-    },
-    tasks: [],
-    ...overrides,
-  };
-}
-
-function schedule(overrides: Partial<Schedule> = {}): Schedule {
-  return {
-    id: `sched_${Math.random().toString(36).slice(2)}`,
-    queueId: 'queue_1',
-    name: null,
-    timezone: 'UTC',
-    daysOfWeek: [1, 2, 3, 4, 5],
-    times: ['09:00', '18:00'],
-    platforms: ['TIKTOK'],
-    isActive: true,
-    createdAt: hoursFromNow(-100),
-    updatedAt: hoursFromNow(-100),
-    ...overrides,
-  };
-}
-
-function queue(items: Item[], status: QueueData['status'] = 'ACTIVE'): QueueData {
-  return { status, pausedAt: status === 'PAUSED' ? hoursFromNow(-1) : null, items };
-}
+import { buildQueueModel, queueSections } from './queue';
+import { hoursFromNow, item, NOW, queue, schedule, task, type Schedule } from './queue.fixtures';
 
 const ids = (rows: { id: string }[]) => rows.map((r) => r.id);
 
