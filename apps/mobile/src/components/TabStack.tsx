@@ -7,8 +7,11 @@ import { Stack } from 'expo-router';
  * Never set `headerStyle.backgroundColor` here: under native tabs it hides
  * the large title on every tab except the first (verified on iOS 26.3). The
  * system header already sits on the Ground via `contentStyle`.
+ *
+ * `children` registers the tab's other routes that need their own options,
+ * such as a sheet.
  */
-export function TabStack({ title }: { title: string }) {
+export function TabStack({ title, children }: { title: string; children?: React.ReactNode }) {
   return (
     <Stack
       screenOptions={{
@@ -20,6 +23,7 @@ export function TabStack({ title }: { title: string }) {
       }}
     >
       <Stack.Screen name="index" options={{ title, headerLargeTitle: true }} />
+      {children}
     </Stack>
   );
 }

@@ -16,9 +16,12 @@ import type { RouterOutputs } from '../lib/trpc';
 
 export type QueueData = RouterOutputs['queue']['get'];
 export type QueueSchedules = RouterOutputs['queue']['listSchedules'];
-type QueueItem = QueueData['items'][number];
-type QueueTask = QueueItem['tasks'][number];
-type Platform = QueueItem['postsTo'][number];
+export type QueueItem = QueueData['items'][number];
+export type QueueTask = QueueItem['tasks'][number];
+export type Platform = QueueItem['postsTo'][number];
+
+/** Which section an item belongs in; the item sheet's actions follow from it. */
+export type QueueItemState = 'attention' | 'upNext' | 'published' | 'skipped';
 
 /** How many published items show before "Show more". */
 export const PUBLISHED_CAP = 5;
@@ -65,12 +68,13 @@ export function buildQueueModel(
   const completed: QueueItem[] = [];
   const skipped: QueueItem[] = [];
 
-  for (const item of queue.items) {
-    if (item.status === 'SKIPPED') skipped.push(item);
-    else if (problemTasks(item).length > 0) attention.push(item);
-    else if (item.status === 'COMPLETED') completed.push(item);
-    else active.push(item);
-  }
+  const bySection: Record<QueueItemState, QueueItem[]> = {
+    attention,
+    upNext: active,
+    published: completed,
+    skipped,
+  };
+  for (const item of queue.items) bySection[queueItemState(item)].push(item);
 
   completed.sort((a, b) => latestPublishedAt(b) - latestPublishedAt(a));
   const publishedRows = completed.map(publishedRow);
@@ -92,6 +96,14 @@ export function buildQueueModel(
       rows: skipped.map((item) => row(item, 'Skipped', 'muted', item.postsTo)),
     },
   };
+}
+
+/** The section rules above, for one item. */
+export function queueItemState(item: QueueItem): QueueItemState {
+  if (item.status === 'SKIPPED') return 'skipped';
+  if (problemTasks(item).length > 0) return 'attention';
+  if (item.status === 'COMPLETED') return 'published';
+  return 'upNext';
 }
 
 // --- Sections --------------------------------------------------------------
@@ -170,7 +182,7 @@ function row(
 ): QueueRow {
   return {
     id: item.id,
-    title: item.media.title ?? item.media.originalFilename ?? 'Untitled',
+    title: itemTitle(item),
     thumbnailUrl: item.media.thumbnailUrl,
     meta,
     tone,
@@ -219,7 +231,11 @@ function publishedRow(item: QueueItem): QueueRow {
   return row(item, latest ? `Posted ${fmtDateTime(new Date(latest))}` : 'Posted', 'muted', platforms);
 }
 
-function problemTasks(item: QueueItem): QueueTask[] {
+export function itemTitle(item: QueueItem): string {
+  return item.media.title ?? item.media.originalFilename ?? 'Untitled';
+}
+
+export function problemTasks(item: QueueItem): QueueTask[] {
   return item.tasks.filter((t) => t.status === 'FAILED' || t.status === 'HELD');
 }
 
@@ -240,7 +256,7 @@ function shortError(error: string | null): string {
   return `${cut.slice(0, space > 0 ? space : SHORT_ERROR_MAX).trimEnd()}…`;
 }
 
-function platformName(platform: string): string {
+export function platformName(platform: string): string {
   return PLATFORM_LABEL[platform] ?? platform;
 }
 
