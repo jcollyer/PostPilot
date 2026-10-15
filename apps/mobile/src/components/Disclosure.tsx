@@ -2,15 +2,16 @@ import { Platform, PlatformColor } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
 /**
- * The trailing chevron on a row that navigates. Drawn as the SF Symbol in the
- * system's own disclosure colour, so it matches native list rows and adapts to
- * dark mode. iOS only: SF Symbols don't exist on Android.
+ * The trailing chevron on a row that navigates or expands. Drawn as the SF
+ * Symbol in the system's own disclosure colour, so it matches native list rows
+ * and adapts to dark mode. `open` points it down, for a row that expands in
+ * place. iOS only: SF Symbols don't exist on Android.
  */
-export function Disclosure() {
+export function Disclosure({ open = false }: { open?: boolean }) {
   if (Platform.OS !== 'ios') return null;
   return (
     <SymbolView
-      name="chevron.right"
+      name={open ? 'chevron.down' : 'chevron.right'}
       size={14}
       weight="semibold"
       tintColor={PlatformColor('tertiaryLabel')}

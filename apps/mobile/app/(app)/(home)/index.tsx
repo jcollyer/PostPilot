@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 
 import { Disclosure } from '../../../src/components/Disclosure';
+import { StatusLine } from '../../../src/components/StatusLine';
 import { trpc } from '../../../src/lib/trpc';
 import {
   buildHomeModel,
@@ -11,7 +12,6 @@ import {
   type HomeProblemCard,
   type HomeTarget,
   type HomeTone,
-  type HomeVerdict,
 } from '../../../src/models/home';
 
 /**
@@ -35,13 +35,6 @@ const TONE_DOT: Record<HomeTone, string> = {
   critical: 'bg-signal-critical',
   warn: 'bg-signal-warn',
   ok: 'bg-signal-ok',
-};
-
-// A healthy verdict stays ink; only problems take their status color.
-const TONE_LABEL: Record<HomeTone, string> = {
-  critical: 'text-signal-critical',
-  warn: 'text-signal-warn',
-  ok: 'text-ink',
 };
 
 export default function HomeScreen() {
@@ -78,7 +71,9 @@ export default function HomeScreen() {
     >
       {model ? (
         <>
-          <VerdictLine verdict={model.verdict} />
+          <View className="pb-1">
+            <StatusLine {...model.verdict} />
+          </View>
 
           {model.problems.map((problem) => (
             <ProblemCard key={problem.key} problem={problem} onPress={() => open(problem.target)} />
@@ -95,24 +90,6 @@ export default function HomeScreen() {
         </Text>
       )}
     </ScrollView>
-  );
-}
-
-function VerdictLine({ verdict }: { verdict: HomeVerdict }) {
-  return (
-    <View
-      accessible
-      accessibilityRole="header"
-      accessibilityLabel={verdict.copy}
-      className="flex-row items-start gap-2.5 pb-1"
-    >
-      {/* Optically centred on the first line of the 22pt label. */}
-      <View className={`mt-[9px] h-2 w-2 rounded-full ${TONE_DOT[verdict.tone]}`} />
-      <Text className="flex-1 text-[22px] leading-7 text-ink-secondary">
-        <Text className={`font-semibold ${TONE_LABEL[verdict.tone]}`}>{verdict.label}</Text>
-        {` · ${verdict.detail}`}
-      </Text>
-    </View>
   );
 }
 
