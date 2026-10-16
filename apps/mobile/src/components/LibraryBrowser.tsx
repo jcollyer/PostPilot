@@ -34,14 +34,16 @@ import { PlatformGlyphs } from './PlatformGlyphs';
  * lists. A folder row pushes another level (`/library/[folderId]`), so the
  * back button is the breadcrumb. The root also carries the header search bar;
  * a query swaps the level for a flat search across every folder. Media rows
- * show thumbnails only (videos never play here) and do nothing on tap yet.
+ * show thumbnails only (videos never play here); one pushes the item's detail
+ * (`/library/item/[mediaId]`).
  * All derivation lives in the Library model; this only maps it to views.
  */
 
 const PAGE_SIZE = 30;
 const SEARCH_DEBOUNCE_MS = 300;
 
-const TONE_TEXT: Record<LibraryStatusTone, string> = {
+/** A Library status's text colour, shared by the row and the item detail. */
+export const TONE_TEXT: Record<LibraryStatusTone, string> = {
   critical: 'text-signal-critical',
   warn: 'text-signal-warn',
   muted: 'text-ink-tertiary',
@@ -174,7 +176,15 @@ export function LibraryBrowser({
                 }
               />
             ) : (
-              <MediaRow row={item} />
+              <MediaRow
+                row={item}
+                onPress={() =>
+                  router.push({
+                    pathname: '/library/item/[mediaId]',
+                    params: { mediaId: item.id, mediaType: item.mediaType, title: item.title },
+                  })
+                }
+              />
             )}
           </Cell>
         )}
@@ -225,12 +235,13 @@ function FolderRow({ folder, onPress }: { folder: LibraryFolderRow; onPress: () 
   );
 }
 
-function MediaRow({ row }: { row: LibraryMediaRow }) {
+function MediaRow({ row, onPress }: { row: LibraryMediaRow; onPress: () => void }) {
   return (
-    <View
-      accessible
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
       accessibilityLabel={row.accessibilityLabel}
-      className="min-h-[68px] flex-row items-center gap-3 px-4 py-2.5"
+      className="min-h-[68px] flex-row items-center gap-3 px-4 py-2.5 active:opacity-60"
     >
       {/* Portrait, because the library is short-form vertical video. */}
       <View className="h-12 w-9 overflow-hidden rounded-md bg-ground">
@@ -260,7 +271,8 @@ function MediaRow({ row }: { row: LibraryMediaRow }) {
           <PlatformGlyphs platforms={row.platforms} />
         </View>
       </View>
-    </View>
+      <Disclosure />
+    </Pressable>
   );
 }
 

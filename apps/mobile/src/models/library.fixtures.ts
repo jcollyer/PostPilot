@@ -1,3 +1,4 @@
+import type { LibraryVideoDetail } from './library-item';
 import type {
   LibraryConnections,
   LibraryFolder,
@@ -7,7 +8,10 @@ import type {
   Platform,
 } from './library';
 
-/** Shared `folder.list` / `media.list` / `connections.overview` fixtures for the Library model tests. */
+/**
+ * Shared `folder.list` / `media.list` / `media.get` / `connections.overview`
+ * fixtures for the Library model tests.
+ */
 
 const HOUR = 3_600_000;
 export const NOW = new Date('2026-10-14T12:00:00Z');
@@ -49,6 +53,28 @@ export function video(id: string, overrides: Partial<Video> = {}): Video {
     tiktokBranded: false,
     createdAt: hoursAgo(1),
     updatedAt: hoursAgo(1),
+    ...overrides,
+  };
+}
+
+/** `media.get` for a video: the list row plus the editor's extra detail. */
+export function videoDetail(id: string, overrides: Partial<LibraryVideoDetail> = {}): LibraryVideoDetail {
+  return {
+    ...video(id),
+    transcript: null,
+    selectedThumbnailId: null,
+    tiktokConnected: false,
+    tiktok: {
+      privacy: null,
+      allowComment: false,
+      allowDuet: false,
+      allowStitch: false,
+      commercialDisclosure: false,
+      brandOrganic: false,
+      brandedContent: false,
+    },
+    platformMeta: [],
+    thumbnails: [],
     ...overrides,
   };
 }

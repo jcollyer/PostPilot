@@ -37,6 +37,8 @@ export type LibraryStatusTone = 'critical' | 'warn' | 'muted' | 'neutral';
 export interface LibraryMediaRow {
   kind: 'media';
   id: string;
+  /** Picks the detail's procedure: `media.get` for a video, else `media.getImage`. */
+  mediaType: LibraryMedia['mediaType'];
   title: string;
   thumbnailUrl: string | null;
   status: { label: string; tone: LibraryStatusTone };
@@ -117,11 +119,12 @@ export function searchQuery(text: string): string | null {
 function mediaRow(item: LibraryMedia, connected: Platform[], now: Date): LibraryMediaRow {
   const title = mediaTitle(item);
   const status = mediaStatus(item, now);
-  const platforms = item.targetPlatforms.length > 0 ? item.targetPlatforms : connected;
+  const platforms = postsTo(item, connected);
   const length = mediaLength(item);
   return {
     kind: 'media',
     id: item.id,
+    mediaType: item.mediaType,
     title,
     thumbnailUrl: item.thumbnailUrl,
     status,
@@ -138,12 +141,13 @@ function mediaRow(item: LibraryMedia, connected: Platform[], now: Date): Library
   };
 }
 
-function mediaTitle(item: LibraryMedia): string {
+/** The title, falling back to the filename. */
+export function mediaTitle(item: LibraryMedia): string {
   return item.title?.trim() || item.originalFilename || 'Untitled';
 }
 
 /** The status ladder above, for one item. */
-function mediaStatus(item: LibraryMedia, now: Date): LibraryMediaRow['status'] {
+export function mediaStatus(item: LibraryMedia, now: Date): LibraryMediaRow['status'] {
   if (item.status === 'FAILED') return { label: 'Upload failed', tone: 'critical' };
   if (item.status === 'UPLOADING' || item.status === 'PROCESSING') {
     return { label: 'Processing…', tone: 'muted' };
@@ -168,8 +172,13 @@ function mediaLength(item: LibraryMedia): LibraryMediaRow['length'] {
   return null;
 }
 
+/** Where an item posts: its target, or every connected platform for a default (empty) one. */
+export function postsTo(item: LibraryMedia, connected: Platform[]): Platform[] {
+  return item.targetPlatforms.length > 0 ? item.targetPlatforms : connected;
+}
+
 /** Platforms with a live connection: what a default target posts to. */
-function connectedPlatforms(connections: LibraryConnections): Platform[] {
+export function connectedPlatforms(connections: LibraryConnections): Platform[] {
   return connections.filter((c) => c.connection?.status === 'ACTIVE').map((c) => c.platform);
 }
 
