@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildLibraryItemDetail, type LibraryItemDetail } from './library-item';
+import {
+  TIKTOK_BRANDED_CONTENT_POLICY_URL,
+  TIKTOK_MUSIC_USAGE_CONFIRMATION_URL,
+} from '@postpilot/types';
+
+import {
+  addToQueueOutcome,
+  buildLibraryItemDetail,
+  TIKTOK_PROCESSING_NOTICE,
+  type LibraryItemDetail,
+} from './library-item';
 import { connections, hoursAgo, image, NOW, videoDetail } from './library.fixtures';
 
 const LIVE = connections(['TIKTOK', 'INSTAGRAM']);
@@ -262,5 +272,202 @@ describe('buildLibraryItemDetail — posts', () => {
 
   it('has no posts for an item never posted', () => {
     expect(buildLibraryItemDetail(videoDetail('v1'), LIVE, NOW).posts).toEqual([]);
+  });
+});
+
+function confirm<K extends Extract<LibraryItemDetail['queue'], { kind: 'add' }>['confirm']['kind']>(
+  detail: LibraryItemDetail,
+  kind: K,
+): Extract<Extract<LibraryItemDetail['queue'], { kind: 'add' }>['confirm'], { kind: K }> {
+  expect(detail.queue.kind).toBe('add');
+  const action = detail.queue as Extract<LibraryItemDetail['queue'], { kind: 'add' }>;
+  expect(action.confirm.kind).toBe(kind);
+  return action.confirm as Extract<typeof action.confirm, { kind: K }>;
+}
+
+describe('buildLibraryItemDetail — add to queue eligibility', () => {
+  it('offers Add to queue for a ready video that isn’t queued', () => {
+    const detail = buildLibraryItemDetail(videoDetail('v1'), LIVE, NOW);
+
+    expect(detail.queue).toMatchObject({ kind: 'add', label: 'Add to queue' });
+  });
+
+  it('offers Add to queue for a ready photo and carousel', () => {
+    expect(buildLibraryItemDetail(image('p1'), LIVE, NOW).queue.kind).toBe('add');
+    expect(buildLibraryItemDetail(image('c1', 3), LIVE, NOW).queue.kind).toBe('add');
+  });
+
+  it('lets a posted, ready, unqueued item go round again', () => {
+    const detail = buildLibraryItemDetail(
+      videoDetail('v1', { postedAt: hoursAgo(200) }),
+      LIVE,
+      NOW,
+    );
+
+    expect(detail.status.label).toBe('Posted 8d ago');
+    expect(detail.queue.kind).toBe('add');
+  });
+
+  it('switches to View in Queue once the item is queued', () => {
+    const detail = buildLibraryItemDetail(videoDetail('v1', { inQueue: true }), LIVE, NOW);
+
+    expect(detail.queue).toEqual({ kind: 'viewInQueue', label: 'View in Queue' });
+  });
+
+  it('disables adding while processing, pointing to the web', () => {
+    for (const status of ['UPLOADING', 'PROCESSING'] as const) {
+      expect(buildLibraryItemDetail(videoDetail('v1', { status }), LIVE, NOW).queue).toEqual({
+        kind: 'disabled',
+        label: 'Add to queue',
+        reason: 'Still processing. Once it’s ready, add it here or on the web.',
+      });
+    }
+  });
+
+  it('disables adding a failed upload, pointing to the web', () => {
+    const detail = buildLibraryItemDetail(
+      image('p1', 1, { status: 'FAILED', cdnUrl: null }),
+      LIVE,
+      NOW,
+    );
+
+    expect(detail.queue).toEqual({
+      kind: 'disabled',
+      label: 'Add to queue',
+      reason: 'The upload failed. Upload it again from PostPilot on the web.',
+    });
+  });
+
+  it('disables adding a video that needs TikTok details, pointing to the web', () => {
+    const detail = buildLibraryItemDetail(videoDetail('v1', { tiktokNeedsInput: true }), LIVE, NOW);
+
+    expect(detail.queue).toEqual({
+      kind: 'disabled',
+      label: 'Add to queue',
+      reason:
+        'TikTok needs a few details first, like who can view it. Add them in PostPilot on the web.',
+    });
+  });
+
+  it('disables adding a video whose file was removed after posting', () => {
+    const detail = buildLibraryItemDetail(
+      videoDetail('v1', { postedAt: hoursAgo(200), sourceDeletedAt: hoursAgo(100) }),
+      LIVE,
+      NOW,
+    );
+
+    expect(detail.queue).toEqual({
+      kind: 'disabled',
+      label: 'Add to queue',
+      reason:
+        'The video file was removed after posting, so it can’t post again. Upload it again from PostPilot on the web.',
+    });
+  });
+});
+
+describe('buildLibraryItemDetail — add to queue confirmation', () => {
+  it('asks a TikTok-bound video for TikTok’s consent in a sheet', () => {
+    const detail = buildLibraryItemDetail(videoDetail('v1'), LIVE, NOW);
+
+    expect(confirm(detail, 'tiktokConsent')).toEqual({
+      kind: 'tiktokConsent',
+      segments: [
+        { text: "By posting, you agree to TikTok's " },
+        { text: 'Music Usage Confirmation', href: TIKTOK_MUSIC_USAGE_CONFIRMATION_URL },
+        { text: '.' },
+      ],
+      branded: false,
+      notice: TIKTOK_PROCESSING_NOTICE,
+      postsTo: 'Posts to TikTok and Instagram',
+    });
+  });
+
+  it('uses the branded declaration for a video disclosing branded content', () => {
+    const detail = buildLibraryItemDetail(
+      videoDetail('v1', { targetPlatforms: ['TIKTOK'], tiktokBranded: true }),
+      LIVE,
+      NOW,
+    );
+
+    expect(confirm(detail, 'tiktokConsent')).toMatchObject({
+      branded: true,
+      postsTo: 'Posts to TikTok',
+      segments: [
+        { text: "By posting, you agree to TikTok's " },
+        { text: 'Branded Content Policy', href: TIKTOK_BRANDED_CONTENT_POLICY_URL },
+        { text: ' and ' },
+        { text: 'Music Usage Confirmation', href: TIKTOK_MUSIC_USAGE_CONFIRMATION_URL },
+        { text: '.' },
+      ],
+    });
+  });
+
+  it('asks a video that skips TikTok in a plain alert naming its platforms', () => {
+    const detail = buildLibraryItemDetail(
+      videoDetail('v1', { title: 'Morning routine', targetPlatforms: ['INSTAGRAM', 'YOUTUBE'] }),
+      LIVE,
+      NOW,
+    );
+
+    expect(confirm(detail, 'alert')).toEqual({
+      kind: 'alert',
+      title: 'Post “Morning routine” to Instagram and YouTube Shorts?',
+      message: 'It goes to the end of your queue.',
+    });
+  });
+
+  it('uses the alert when TikTok is targeted but not connected', () => {
+    const detail = buildLibraryItemDetail(
+      videoDetail('v1', { targetPlatforms: ['TIKTOK'] }),
+      connections(['INSTAGRAM']),
+      NOW,
+    );
+
+    expect(confirm(detail, 'alert').title).toBe('Post “Video v1” to TikTok?');
+  });
+
+  it('asks a photo in a plain alert', () => {
+    const detail = buildLibraryItemDetail(image('p1'), LIVE, NOW);
+
+    expect(confirm(detail, 'alert').title).toBe('Post “Photo p1” to Instagram?');
+  });
+
+  it('names every connected platform for a default target, in a list', () => {
+    const detail = buildLibraryItemDetail(
+      videoDetail('v1'),
+      connections(['INSTAGRAM', 'YOUTUBE']),
+      NOW,
+    );
+
+    expect(confirm(detail, 'alert').title).toBe('Post “Video v1” to Instagram and YouTube Shorts?');
+  });
+
+  it('falls back to "all connected platforms" when nothing is connected', () => {
+    const detail = buildLibraryItemDetail(videoDetail('v1'), connections([]), NOW);
+
+    expect(confirm(detail, 'alert').title).toBe('Post “Video v1” to all connected platforms?');
+  });
+});
+
+describe('addToQueueOutcome', () => {
+  it('is added when the server added the item', () => {
+    expect(addToQueueOutcome({ added: 1, skipped: 0, blocked: 0 })).toEqual({ kind: 'added' });
+    expect(addToQueueOutcome({ added: 1, skipped: 0 })).toEqual({ kind: 'added' });
+  });
+
+  it('explains a server block for missing TikTok details, pointing to the web', () => {
+    expect(addToQueueOutcome({ added: 0, skipped: 1, blocked: 1 })).toEqual({
+      kind: 'refused',
+      title: 'TikTok details needed',
+      message:
+        'TikTok needs a few details before this video can post, like who can view it. Add them in PostPilot on the web, then add it to the queue again.',
+    });
+  });
+
+  it('says so when the server skipped it for another reason', () => {
+    expect(addToQueueOutcome({ added: 0, skipped: 1, blocked: 0 })).toMatchObject({
+      kind: 'refused',
+      title: 'Couldn’t add to queue',
+    });
   });
 });

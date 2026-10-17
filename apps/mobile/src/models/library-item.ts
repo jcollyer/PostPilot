@@ -1,3 +1,9 @@
+import {
+  DEFAULT_TIKTOK_OPTIONS,
+  tiktokConsentSegments,
+  type TikTokConsentSegment,
+} from '@postpilot/types';
+
 import { fmtDateTime } from '../lib/dashboard-format';
 import type { RouterOutputs } from '../lib/trpc';
 import {
@@ -24,6 +30,11 @@ import { platformName } from './queue';
  *   the row and its detail never disagree.
  * - Each platform it was posted to gets a row, with a View post link when the
  *   platform returned one.
+ *
+ * Its one action is Add to queue (see `queueAction`): offered for Ready items
+ * that aren't queued, posted ones included so evergreen content can go round
+ * again; disabled with a reason that points to the web otherwise; and "View in
+ * Queue" once it's queued.
  */
 
 export type LibraryVideoDetail = RouterOutputs['media']['get'];
@@ -70,7 +81,40 @@ export interface LibraryItemDetail {
   /** "#morning #routine", or null when there are none. */
   hashtags: string | null;
   posts: LibraryItemPost[];
+  queue: LibraryQueueAction;
 }
+
+/**
+ * How adding asks first. A video that posts to TikTok needs TikTok's consent
+ * declaration (a sheet, with the policy names as links); anything else is a
+ * plain alert.
+ */
+export type LibraryAddConfirm =
+  | {
+      kind: 'tiktokConsent';
+      /** The declaration, broken into runs so the policy names can be links. */
+      segments: TikTokConsentSegment[];
+      /** The Branded Content Policy wording, for a video that discloses branded content. */
+      branded: boolean;
+      notice: string;
+      /** "Posts to TikTok and YouTube". */
+      postsTo: string;
+    }
+  | { kind: 'alert'; title: string; message: string };
+
+/** The detail's queue action, first match wins. */
+export type LibraryQueueAction =
+  | { kind: 'viewInQueue'; label: string }
+  | { kind: 'disabled'; label: string; reason: string }
+  | { kind: 'add'; label: string; confirm: LibraryAddConfirm };
+
+/** What happened to an add, from `queue.addVideos` / `queue.addImages`'s counts. */
+export type LibraryAddOutcome =
+  | { kind: 'added' }
+  | { kind: 'refused'; title: string; message: string };
+
+export const TIKTOK_PROCESSING_NOTICE =
+  'After you publish, it can take a few minutes for TikTok to finish processing your post before it appears on your profile.';
 
 const PLATFORM_ORDER: Platform[] = ['TIKTOK', 'INSTAGRAM', 'YOUTUBE'];
 
@@ -79,7 +123,8 @@ export function buildLibraryItemDetail(
   connections: LibraryConnections,
   now: Date,
 ): LibraryItemDetail {
-  const platforms = postsTo(item, connectedPlatforms(connections));
+  const connected = connectedPlatforms(connections);
+  const platforms = postsTo(item, connected);
   return {
     id: item.id,
     title: mediaTitle(item),
@@ -105,7 +150,112 @@ export function buildLibraryItemDetail(
         posted: `Posted ${fmtDateTime(post.postedAt)}`,
         postUrl: post.postUrl,
       })),
+    queue: queueAction(item, platforms, connected),
   };
+}
+
+// --- Add to queue ----------------------------------------------------------
+
+const ADD = 'Add to queue';
+
+/**
+ * Whether the item can be added, and how adding asks first. Already queued →
+ * View in Queue. Then the reasons it can't be: upload failed, still
+ * processing, missing TikTok details, or its file was removed after posting.
+ * Everything else is Ready and can be added, posted or not.
+ */
+export function queueAction(
+  item: LibraryItemData,
+  platforms: Platform[],
+  connected: Platform[],
+): LibraryQueueAction {
+  if (item.inQueue) return { kind: 'viewInQueue', label: 'View in Queue' };
+  const disabled = (reason: string): LibraryQueueAction => ({
+    kind: 'disabled',
+    label: ADD,
+    reason,
+  });
+  if (item.status === 'FAILED') {
+    return disabled('The upload failed. Upload it again from PostPilot on the web.');
+  }
+  if (item.status !== 'READY') {
+    return disabled('Still processing. Once it’s ready, add it here or on the web.');
+  }
+  if (item.mediaType === 'VIDEO') {
+    if (item.tiktokNeedsInput) {
+      return disabled(
+        'TikTok needs a few details first, like who can view it. Add them in PostPilot on the web.',
+      );
+    }
+    if (item.sourceDeletedAt) {
+      return disabled(
+        'The video file was removed after posting, so it can’t post again. Upload it again from PostPilot on the web.',
+      );
+    }
+  }
+  return { kind: 'add', label: ADD, confirm: addConfirm(item, platforms, connected) };
+}
+
+function addConfirm(
+  item: LibraryItemData,
+  platforms: Platform[],
+  connected: Platform[],
+): LibraryAddConfirm {
+  const where =
+    platforms.length > 0 ? listOf(platforms.map(platformName)) : 'all connected platforms';
+  // As on the web: TikTok is only posted to, and so only asks, when it's connected.
+  if (item.mediaType === 'VIDEO' && connected.includes('TIKTOK') && platforms.includes('TIKTOK')) {
+    const branded = item.tiktokBranded;
+    return {
+      kind: 'tiktokConsent',
+      segments: tiktokConsentSegments({
+        ...DEFAULT_TIKTOK_OPTIONS,
+        commercialDisclosure: branded,
+        brandedContent: branded,
+      }),
+      branded,
+      notice: TIKTOK_PROCESSING_NOTICE,
+      postsTo: `Posts to ${where}`,
+    };
+  }
+  return {
+    kind: 'alert',
+    title: `Post “${mediaTitle(item)}” to ${where}?`,
+    message: 'It goes to the end of your queue.',
+  };
+}
+
+/**
+ * Reads an add's counts. The server skips rather than throws: a video that
+ * targets TikTok without its details (set on the web after this screen loaded)
+ * comes back `blocked`, and one already queued or no longer ready comes back
+ * plainly skipped.
+ */
+export function addToQueueOutcome(res: {
+  added: number;
+  skipped: number;
+  blocked?: number;
+}): LibraryAddOutcome {
+  if (res.added > 0) return { kind: 'added' };
+  if ((res.blocked ?? 0) > 0) {
+    return {
+      kind: 'refused',
+      title: 'TikTok details needed',
+      message:
+        'TikTok needs a few details before this video can post, like who can view it. Add them in PostPilot on the web, then add it to the queue again.',
+    };
+  }
+  return {
+    kind: 'refused',
+    title: 'Couldn’t add to queue',
+    message: 'It may already be queued or no longer ready. The screen now shows where it stands.',
+  };
+}
+
+/** "TikTok", "TikTok and Instagram", "TikTok, Instagram and YouTube". */
+function listOf(names: string[]): string {
+  if (names.length <= 1) return names.join('');
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 // --- Preview ---------------------------------------------------------------

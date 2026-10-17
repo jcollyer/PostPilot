@@ -9,12 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
+import { Button } from '../../../../src/components/Button';
 import { TONE_TEXT } from '../../../../src/components/LibraryBrowser';
 import { LibraryItemPreview } from '../../../../src/components/LibraryItemPreview';
 import { PlatformGlyphs } from '../../../../src/components/PlatformGlyphs';
 import { trpc } from '../../../../src/lib/trpc';
+import { useAddToQueue } from '../../../../src/lib/use-add-to-queue';
 import {
   buildLibraryItemDetail,
   type LibraryItemDetail,
@@ -28,6 +30,10 @@ import {
  * inline video, or a slide pager), then the item's read-only details and a
  * View post link per platform it went out to. All derivation lives in the
  * Library item model.
+ *
+ * Its one action, Add to queue, sits under the status. A TikTok-bound video
+ * asks for TikTok's consent in a sheet (`/library/add-to-queue/<mediaId>`);
+ * anything else asks in a plain alert.
  */
 
 export default function LibraryItemScreen() {
@@ -115,11 +121,80 @@ export default function LibraryItemScreen() {
           </Text>
         </View>
 
+        <QueueAction detail={detail} mediaType={mediaType} />
+
         <Details detail={detail} />
         <Words detail={detail} />
         {detail.posts.length > 0 ? <Posts posts={detail.posts} /> : null}
       </ScrollView>
     </>
+  );
+}
+
+/** Add to queue, disabled with its reason, or View in Queue once it's queued. */
+function QueueAction({
+  detail,
+  mediaType,
+}: {
+  detail: LibraryItemDetail;
+  mediaType: 'VIDEO' | 'IMAGE' | 'CAROUSEL';
+}) {
+  const router = useRouter();
+  const { add, isPending } = useAddToQueue();
+  const action = detail.queue;
+
+  function onPress() {
+    switch (action.kind) {
+      case 'viewInQueue':
+        router.navigate('/queue');
+        return;
+      case 'disabled':
+        return;
+      case 'add': {
+        const { confirm } = action;
+        if (confirm.kind === 'tiktokConsent') {
+          router.push({
+            pathname: '/library/add-to-queue/[mediaId]',
+            params: { mediaId: detail.id },
+          });
+          return;
+        }
+        Alert.alert(confirm.title, confirm.message, [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: action.label,
+            isPreferred: true,
+            onPress: () => add({ id: detail.id, mediaType }),
+          },
+        ]);
+      }
+    }
+  }
+
+  return (
+    <View className="mt-5 gap-2">
+      <Button
+        variant={action.kind === 'viewInQueue' ? 'outline' : 'primary'}
+        disabled={action.kind === 'disabled'}
+        loading={isPending}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={action.label}
+        accessibilityHint={
+          action.kind === 'disabled'
+            ? action.reason
+            : action.kind === 'viewInQueue'
+              ? 'Opens the Queue tab'
+              : undefined
+        }
+        accessibilityState={{ disabled: action.kind === 'disabled', busy: isPending }}
+      >
+        {action.label}
+      </Button>
+      {action.kind === 'disabled' ? (
+        <Text className="text-[13px] leading-[18px] text-ink-tertiary">{action.reason}</Text>
+      ) : null}
+    </View>
   );
 }
 
