@@ -19,6 +19,7 @@ import { trpc } from '../../../../src/lib/trpc';
 import { useAddToQueue } from '../../../../src/lib/use-add-to-queue';
 import {
   buildLibraryItemDetail,
+  queueEntryId,
   type LibraryItemDetail,
   type LibraryItemPost,
 } from '../../../../src/models/library-item';
@@ -33,7 +34,8 @@ import {
  *
  * Its one action, Add to queue, sits under the status. A TikTok-bound video
  * asks for TikTok's consent in a sheet (`/library/add-to-queue/<mediaId>`);
- * anything else asks in a plain alert.
+ * anything else asks in a plain alert. Once it's queued, the action is View in
+ * Queue, which opens its sheet over the Queue tab (`/queue/<itemId>`).
  */
 
 export default function LibraryItemScreen() {
@@ -131,7 +133,11 @@ export default function LibraryItemScreen() {
   );
 }
 
-/** Add to queue, disabled with its reason, or View in Queue once it's queued. */
+/**
+ * Add to queue, disabled with its reason, or View in Queue once it's queued.
+ * View in Queue opens the item's sheet over the Queue list, or just the list
+ * if its entry can't be found.
+ */
 function QueueAction({
   detail,
   mediaType,
@@ -142,11 +148,24 @@ function QueueAction({
   const router = useRouter();
   const { add, isPending } = useAddToQueue();
   const action = detail.queue;
+  // Loaded while it's queued, so View in Queue knows which sheet to open.
+  const queue = trpc.queue.get.useQuery(undefined, { enabled: action.kind === 'viewInQueue' });
+
+  async function viewInQueue() {
+    const data = queue.data ?? (await queue.refetch()).data;
+    const itemId = data ? queueEntryId(data, { id: detail.id, mediaType }) : null;
+    if (!itemId) {
+      router.navigate('/queue');
+      return;
+    }
+    // With its anchor, so the Queue list sits under the sheet.
+    router.navigate({ pathname: '/queue/[itemId]', params: { itemId } }, { withAnchor: true });
+  }
 
   function onPress() {
     switch (action.kind) {
       case 'viewInQueue':
-        router.navigate('/queue');
+        void viewInQueue();
         return;
       case 'disabled':
         return;
@@ -184,7 +203,7 @@ function QueueAction({
           action.kind === 'disabled'
             ? action.reason
             : action.kind === 'viewInQueue'
-              ? 'Opens the Queue tab'
+              ? 'Opens it in the Queue tab'
               : undefined
         }
         accessibilityState={{ disabled: action.kind === 'disabled', busy: isPending }}

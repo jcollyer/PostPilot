@@ -8,10 +8,12 @@ import {
 import {
   addToQueueOutcome,
   buildLibraryItemDetail,
+  queueEntryId,
   TIKTOK_PROCESSING_NOTICE,
   type LibraryItemDetail,
 } from './library-item';
 import { connections, hoursAgo, image, NOW, videoDetail } from './library.fixtures';
+import { item as queueItem, queue } from './queue.fixtures';
 
 const LIVE = connections(['TIKTOK', 'INSTAGRAM']);
 
@@ -469,5 +471,37 @@ describe('addToQueueOutcome', () => {
       kind: 'refused',
       title: 'Couldn’t add to queue',
     });
+  });
+});
+
+describe('queueEntryId', () => {
+  const photo = (id: string, mediaType: 'IMAGE' | 'CAROUSEL') =>
+    queueItem(`qi_${id}`, {
+      media: { ...queueItem('x').media, mediaType, id, targetPlatforms: ['INSTAGRAM'] },
+    });
+  const entries = queue([
+    queueItem('qi_v1', { media: { ...queueItem('x').media, id: 'v1' } }),
+    queueItem('qi_v2', { media: { ...queueItem('x').media, id: 'v2' } }),
+    photo('p1', 'IMAGE'),
+    photo('c1', 'CAROUSEL'),
+  ]);
+
+  it('finds a video’s entry by its video id', () => {
+    expect(queueEntryId(entries, { id: 'v2', mediaType: 'VIDEO' })).toBe('qi_v2');
+  });
+
+  it('finds a photo’s or carousel’s entry by its image id', () => {
+    expect(queueEntryId(entries, { id: 'p1', mediaType: 'IMAGE' })).toBe('qi_p1');
+    expect(queueEntryId(entries, { id: 'c1', mediaType: 'CAROUSEL' })).toBe('qi_c1');
+  });
+
+  it('is null when the item isn’t in the queue', () => {
+    expect(queueEntryId(entries, { id: 'v9', mediaType: 'VIDEO' })).toBeNull();
+    expect(queueEntryId(queue([]), { id: 'v1', mediaType: 'VIDEO' })).toBeNull();
+  });
+
+  it('never matches a video id against an image entry, or the other way round', () => {
+    expect(queueEntryId(entries, { id: 'p1', mediaType: 'VIDEO' })).toBeNull();
+    expect(queueEntryId(entries, { id: 'v1', mediaType: 'IMAGE' })).toBeNull();
   });
 });

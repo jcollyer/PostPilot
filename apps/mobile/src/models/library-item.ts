@@ -15,7 +15,7 @@ import {
   type LibraryMediaRow,
   type Platform,
 } from './library';
-import { platformName } from './queue';
+import { platformName, type QueueData } from './queue';
 
 /**
  * Library item detail model: one media item as its detail screen shows it,
@@ -34,7 +34,8 @@ import { platformName } from './queue';
  * Its one action is Add to queue (see `queueAction`): offered for Ready items
  * that aren't queued, posted ones included so evergreen content can go round
  * again; disabled with a reason that points to the web otherwise; and "View in
- * Queue" once it's queued.
+ * Queue" once it's queued, which opens its queue entry's sheet (see
+ * `queueEntryId`).
  */
 
 export type LibraryVideoDetail = RouterOutputs['media']['get'];
@@ -250,6 +251,23 @@ export function addToQueueOutcome(res: {
     title: 'Couldn’t add to queue',
     message: 'It may already be queued or no longer ready. The screen now shows where it stands.',
   };
+}
+
+/**
+ * The id of a Library item's entry in `queue.get`, for View in Queue to open
+ * its sheet. A queue entry is a video or an image (a photo or carousel), so a
+ * video matches by its video id and anything else by its image id. Null when
+ * it's not there, such as when it was removed since the detail loaded.
+ */
+export function queueEntryId(
+  queue: QueueData,
+  item: { id: string; mediaType: 'VIDEO' | 'IMAGE' | 'CAROUSEL' },
+): string | null {
+  const isVideo = item.mediaType === 'VIDEO';
+  const entry = queue.items.find(
+    ({ media }) => (media.mediaType === 'VIDEO') === isVideo && media.id === item.id,
+  );
+  return entry?.id ?? null;
 }
 
 /** "TikTok", "TikTok and Instagram", "TikTok, Instagram and YouTube". */
