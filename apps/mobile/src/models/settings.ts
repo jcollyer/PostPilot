@@ -1,4 +1,4 @@
-import { formatBytes } from '@postpilot/types';
+import { formatBytes, updateProfileSchema } from '@postpilot/types';
 
 import { connectionLabel, fmtLongDate, PLATFORM_LABEL } from '../lib/dashboard-format';
 import type { RouterOutputs } from '../lib/trpc';
@@ -98,6 +98,39 @@ export function buildSettingsModel(input: SettingsInput): SettingsModel {
         { key: 'web', label: 'Open PostPilot on the web', url: `${origin}/home` },
       ],
     },
+  };
+}
+
+// --- Edit name -------------------------------------------------------------
+
+/** The longest name `user.updateProfile` accepts. */
+export const NAME_MAX_LENGTH = 80;
+
+export interface NameDraft {
+  /** What Save sends: the draft, trimmed as the server trims it. */
+  name: string;
+  /** Save is enabled only for a valid name that differs from the saved one. */
+  canSave: boolean;
+  /** The line under the field; `over` when the draft is too long. */
+  note: { text: string; tone: 'normal' | 'over' };
+}
+
+/**
+ * The Edit Name screen's draft against the saved name. Validity comes from
+ * `updateProfileSchema` itself (1–80 characters once trimmed), so the screen
+ * and the server can't disagree about what Save may send.
+ */
+export function nameDraft(draft: string, saved: string | null | undefined): NameDraft {
+  const name = draft.trim();
+  const valid = updateProfileSchema.safeParse({ name }).success;
+  const over = name.length - NAME_MAX_LENGTH;
+  return {
+    name,
+    canSave: valid && name !== (saved?.trim() ?? ''),
+    note:
+      over > 0
+        ? { text: `${over} ${over === 1 ? 'character' : 'characters'} too long`, tone: 'over' }
+        : { text: `Up to ${NAME_MAX_LENGTH} characters.`, tone: 'normal' },
   };
 }
 

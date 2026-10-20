@@ -34,6 +34,11 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
             const cookie = authClient.getCookie();
             return cookie ? { Cookie: cookie } : {};
           },
+          // Send only the cookie above. Otherwise iOS also applies its own
+          // cookie jar, whose session cookie (stored from an earlier response)
+          // replaces ours and outlives sign-out, so every query 401s after
+          // signing back in. The auth client omits credentials the same way.
+          fetch: (url, options) => fetch(url, { ...options, credentials: 'omit' }),
         }),
       ],
     });
