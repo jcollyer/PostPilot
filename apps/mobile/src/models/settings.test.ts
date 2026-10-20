@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildSettingsModel,
+  NAME_MAX_LENGTH,
+  nameDraft,
   versionString,
   webOrigin,
   type SettingsBilling,
@@ -272,6 +274,49 @@ describe('buildSettingsModel — about', () => {
       { key: 'terms', label: 'Terms', url: `${WEB}/terms` },
       { key: 'web', label: 'Open PostPilot on the web', url: `${WEB}/home` },
     ]);
+  });
+});
+
+describe('nameDraft', () => {
+  it('saves a changed name, trimmed', () => {
+    expect(nameDraft('  Sam Maker ', 'Sam Creator')).toMatchObject({
+      name: 'Sam Maker',
+      canSave: true,
+    });
+  });
+
+  it('allows exactly 1 and 80 characters', () => {
+    expect(nameDraft('S', 'Sam').canSave).toBe(true);
+    expect(nameDraft('x'.repeat(NAME_MAX_LENGTH), 'Sam').canSave).toBe(true);
+  });
+
+  it('blocks an empty or blank name', () => {
+    expect(nameDraft('', 'Sam').canSave).toBe(false);
+    expect(nameDraft('   ', 'Sam').canSave).toBe(false);
+  });
+
+  it('blocks a name over 80 characters and says by how much', () => {
+    expect(nameDraft('x'.repeat(81), 'Sam')).toMatchObject({
+      canSave: false,
+      note: { text: '1 character too long', tone: 'over' },
+    });
+    expect(nameDraft('x'.repeat(83), 'Sam').note.text).toBe('3 characters too long');
+  });
+
+  it('ignores surrounding spaces when counting', () => {
+    expect(nameDraft(` ${'x'.repeat(80)} `, 'Sam').canSave).toBe(true);
+  });
+
+  it('blocks a name that matches the saved one', () => {
+    expect(nameDraft('Sam Creator ', 'Sam Creator').canSave).toBe(false);
+  });
+
+  it('allows setting a first name when none is saved', () => {
+    expect(nameDraft('Sam', null).canSave).toBe(true);
+  });
+
+  it('states the limit otherwise', () => {
+    expect(nameDraft('Sam', 'Sam').note).toEqual({ text: 'Up to 80 characters.', tone: 'normal' });
   });
 });
 

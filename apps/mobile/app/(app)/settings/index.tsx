@@ -121,7 +121,13 @@ export default function SettingsScreen() {
       <Section title="Account">
         {model.account ? (
           <>
-            <ValueRow first label="Name" value={model.account.name} />
+            <ValueRow
+              first
+              label="Name"
+              value={model.account.name}
+              hint="Opens a screen to edit your name"
+              onPress={() => router.push('/settings/edit-name')}
+            />
             <ValueRow label="Email" value={model.account.email} />
           </>
         ) : (
@@ -242,28 +248,50 @@ function ValueRow({
   label,
   value,
   first = false,
+  hint,
+  onPress,
 }: {
   label: string;
   value: string;
   first?: boolean;
+  hint?: string;
+  /** Pushes an edit screen, so the row carries the chevron. */
+  onPress?: () => void;
 }) {
-  return (
+  const body = (
     <>
-      {first ? null : <Rule />}
-      <View
-        accessible
-        accessibilityLabel={`${label}, ${value}`}
-        className="min-h-[44px] flex-row items-center justify-between gap-4 px-4 py-2.5"
-      >
-        <Text className="text-[17px] text-ink">{label}</Text>
+      <Text className="text-[17px] text-ink">{label}</Text>
+      <View className="shrink flex-row items-center gap-2">
         <Text
           numberOfLines={1}
-          selectable
+          selectable={!onPress}
           className="shrink text-right text-[17px] text-ink-tertiary"
         >
           {value}
         </Text>
+        {onPress ? <Disclosure /> : null}
       </View>
+    </>
+  );
+  const className = 'min-h-[44px] flex-row items-center justify-between gap-4 px-4 py-2.5';
+  return (
+    <>
+      {first ? null : <Rule />}
+      {onPress ? (
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`${label}, ${value}`}
+          accessibilityHint={hint}
+          className={`${className} active:opacity-60`}
+        >
+          {body}
+        </Pressable>
+      ) : (
+        <View accessible accessibilityLabel={`${label}, ${value}`} className={className}>
+          {body}
+        </View>
+      )}
     </>
   );
 }
