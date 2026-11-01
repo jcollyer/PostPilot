@@ -47,7 +47,8 @@ export default function DeleteAccountScreen() {
           This can’t be undone
         </Text>
         <Text className="text-[15px] leading-5 text-ink-secondary">
-          All your account data will be permanently deleted. Type your account email to confirm.
+          Your account, media library and all associated data will be permanently deleted, and any
+          paid plan is canceled immediately. Type your account email to confirm.
         </Text>
       </View>
 

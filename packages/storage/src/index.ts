@@ -13,6 +13,7 @@ export { getS3Client } from './client';
 export {
   extensionFor,
   extensionForMime,
+  userPrefix,
   videoPrefix,
   sourceKey,
   coverKey,

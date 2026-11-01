@@ -21,5 +21,8 @@ export {
   type CheckoutParams,
 } from './checkout';
 
+// Account deletion
+export { cancelAllSubscriptions } from './cancel';
+
 // Webhooks — the only writer of plan state
 export { handleWebhookEvent, applyEvent, isSignatureError, type WebhookResult } from './webhook';

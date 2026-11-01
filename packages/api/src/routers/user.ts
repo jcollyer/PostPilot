@@ -1,5 +1,7 @@
 import { TRPCError } from '@trpc/server';
 
+import { cancelAllSubscriptions, isBillingConfigured } from '@postpilot/billing';
+import { deletePrefix, isStorageConfigured, userPrefix } from '@postpilot/storage';
 import {
   deleteAccountSchema,
   updateProfileSchema,
@@ -63,6 +65,18 @@ export const userRouter = router({
    * single `user.delete` atomically removes the entire ownership graph —
    * including all Session rows, which invalidates every signed-in device.
    *
+   * The two things outside the database go first, in order, so a failure
+   * stops before anything is lost and the user can simply try again:
+   *
+   *  1. Stripe — every running subscription is canceled. Otherwise a paying
+   *     creator keeps being charged for an account that no longer exists.
+   *  2. Storage — everything under `users/<id>/` is removed. Once the rows are
+   *     gone nothing points at those objects, so a failure after the row
+   *     delete would strand them in R2 for good; before it, a retry finds them.
+   *
+   * A retry after a partial failure is safe: there are no live subscriptions
+   * left to cancel and the prefix listing simply comes back shorter.
+   *
    * Safety: the caller must pass `confirmEmail` matching the user's current
    * email exactly (case-insensitive). The UI also gates this behind a typed
    * confirmation modal.
@@ -74,7 +88,7 @@ export const userRouter = router({
   deleteAccount: protectedProcedure.input(deleteAccountSchema).mutation(async ({ ctx, input }) => {
     const user = await ctx.prisma.user.findUnique({
       where: { id: ctx.userId },
-      select: { id: true, email: true },
+      select: { id: true, email: true, stripeCustomerId: true },
     });
 
     if (!user) {
@@ -89,6 +103,43 @@ export const userRouter = router({
         code: 'BAD_REQUEST',
         message: "The email you typed doesn't match the account email.",
       });
+    }
+
+    if (user.stripeCustomerId) {
+      if (isBillingConfigured()) {
+        try {
+          const canceled = await cancelAllSubscriptions(user.stripeCustomerId);
+          if (canceled > 0) {
+            console.log(`[user] canceled ${canceled} subscription(s): userId=${user.id}`);
+          }
+        } catch (err) {
+          console.error(`[user] failed to cancel subscriptions for userId=${user.id}:`, err);
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message:
+              "We couldn't cancel your subscription, so your account was not deleted. Please try again.",
+          });
+        }
+      } else {
+        console.warn(
+          `[user] billing is not configured — not canceling subscriptions for userId=${user.id}`,
+        );
+      }
+    }
+
+    if (isStorageConfigured()) {
+      try {
+        await deletePrefix(userPrefix(user.id));
+      } catch (err) {
+        console.error(`[user] failed to delete storage for userId=${user.id}:`, err);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message:
+            "We couldn't remove your media, so your account was not deleted. Please try again.",
+        });
+      }
+    } else {
+      console.warn(`[user] storage is not configured — not deleting media for userId=${user.id}`);
     }
 
     await ctx.prisma.user.delete({ where: { id: user.id } });
