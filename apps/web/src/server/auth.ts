@@ -2,10 +2,9 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { nextCookies } from 'better-auth/next-js';
 import { expo } from '@better-auth/expo';
-import { Resend } from 'resend';
-
 import { prisma } from '@postpilot/db';
 
+import { sendEmail } from './send-email';
 import { claimVerificationEmailSlot } from './verification-cooldown';
 
 /**
@@ -27,27 +26,6 @@ import { claimVerificationEmailSlot } from './verification-cooldown';
  */
 
 const APP_SCHEME = process.env.MOBILE_APP_SCHEME ?? 'postpilot';
-const EMAIL_FROM = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
-
-const resend = process.env.AUTH_RESEND_KEY ? new Resend(process.env.AUTH_RESEND_KEY) : null;
-
-/**
- * Send a transactional email through Resend. If no key is configured (e.g. a
- * fresh local clone) we log the link instead of throwing, so verification
- * never hard-blocks local development.
- */
-async function sendEmail(opts: { to: string; subject: string; html: string }): Promise<void> {
-  if (!resend) {
-    console.warn(`[auth] AUTH_RESEND_KEY not set — would send "${opts.subject}" to ${opts.to}`);
-    return;
-  }
-  await resend.emails.send({
-    from: EMAIL_FROM,
-    to: opts.to,
-    subject: opts.subject,
-    html: opts.html,
-  });
-}
 
 function emailLayout(heading: string, body: string, cta: { href: string; label: string }): string {
   return `
