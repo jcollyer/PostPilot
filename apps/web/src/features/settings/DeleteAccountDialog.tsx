@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ACCOUNT_DELETION_GRACE_DAYS, accountDeletionDate } from '@postpilot/types';
 
 interface Props {
   open: boolean;
@@ -25,8 +26,10 @@ interface Props {
 }
 
 /**
- * Confirmation modal for permanently deleting an account. The user must type
- * their exact email (compared case-insensitively) before the destructive
+ * Confirmation modal for deleting an account. The account is deactivated at
+ * once and purged after ACCOUNT_DELETION_GRACE_DAYS; the copy gives the date so
+ * the creator knows how long they have to change their mind. The user must
+ * type their exact email (compared case-insensitively) before the destructive
  * action is enabled.
  */
 export function DeleteAccountDialog({
@@ -44,6 +47,9 @@ export function DeleteAccountDialog({
   }, [open]);
 
   const isMatch = value.trim().toLowerCase() === expectedEmail.trim().toLowerCase();
+  const purgeDate = accountDeletionDate(new Date()).toLocaleDateString(undefined, {
+    dateStyle: 'long',
+  });
 
   return (
     <Dialog
@@ -64,8 +70,14 @@ export function DeleteAccountDialog({
         <DialogHeader>
           <DialogTitle className="text-destructive">Delete your account?</DialogTitle>
           <DialogDescription>
-            This permanently deletes your account, your media library and all associated data, and
-            cancels any paid plan immediately. This action cannot be undone.
+            Your account is deactivated right away: you&rsquo;re signed out everywhere, your
+            platforms are disconnected, nothing more is published, and any paid plan won&rsquo;t
+            renew.
+          </DialogDescription>
+          <DialogDescription>
+            After {ACCOUNT_DELETION_GRACE_DAYS} days, on{' '}
+            <span className="text-foreground font-semibold">{purgeDate}</span>, your account and
+            media library are permanently deleted. Sign in before then to restore it.
           </DialogDescription>
         </DialogHeader>
 

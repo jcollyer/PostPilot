@@ -6,7 +6,8 @@ import { useAuth } from '../../src/lib/AuthContext';
 
 /**
  * Route group for the authenticated app shell. Guests are redirected to the
- * sign-in screen; signed-in users get the native iOS tab bar with four tabs,
+ * sign-in screen, and an account scheduled for deletion to the restore screen;
+ * everyone else gets the native iOS tab bar with four tabs,
  * each owning its own stack so switching tabs keeps every tab's place.
  */
 export default function AppLayout() {
@@ -22,6 +23,11 @@ export default function AppLayout() {
 
   if (!session) {
     return <Redirect href="/signin" />;
+  }
+
+  // A deleted account in its grace period can sign in, but only to restore.
+  if (session.user.deletionScheduledFor) {
+    return <Redirect href="/restore-account" />;
   }
 
   return (

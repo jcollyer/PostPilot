@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import { ACCOUNT_DELETION_GRACE_DAYS } from '@postpilot/types';
+
 import { SiteFooter } from '@/features/marketing/SiteFooter';
 import { SiteHeader } from '@/features/marketing/SiteHeader';
 
@@ -12,7 +14,7 @@ export const metadata: Metadata = {
  * /privacy — public privacy policy linked from the marketing footer.
  */
 export default function PrivacyPage() {
-  const lastUpdated = 'July 13, 2026';
+  const lastUpdated = 'November 1, 2026';
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -114,7 +116,10 @@ export default function PrivacyPage() {
                 for YouTube connections (such as your channel name and recent upload titles used to
                 generate captions) is refreshed at least every 7 days and deleted when it is no longer
                 needed. Video files are stored temporarily to enable publishing and are removed once
-                they are no longer needed.
+                they are no longer needed. When you delete your account, platform access is revoked
+                immediately and your remaining account data and media are kept for{' '}
+                {ACCOUNT_DELETION_GRACE_DAYS} days so you can restore the account, then permanently
+                deleted.
               </p>
               <p>
                 <strong>How to delete your data or revoke access.</strong> You can remove your data

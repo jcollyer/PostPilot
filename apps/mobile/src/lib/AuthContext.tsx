@@ -13,11 +13,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export interface MobileSession {
   session: { id: string; userId: string; expiresAt: string | Date };
-  user: { id: string; email: string; name?: string | null; image?: string | null };
+  user: {
+    id: string;
+    email: string;
+    name?: string | null;
+    image?: string | null;
+    /** Set while the account is scheduled for deletion; it can only restore. */
+    deletionScheduledFor?: string | Date | null;
+  };
 }
 
 export function useAuth() {
-  const { data, isPending } = authClient.useSession();
+  const { data, isPending, refetch } = authClient.useSession();
 
   return {
     /** `{ session, user }` when signed in, otherwise null. */
@@ -26,6 +33,10 @@ export function useAuth() {
     isLoading: isPending,
     signOut: async () => {
       await authClient.signOut();
+    },
+    /** Re-read the session from the server, e.g. after restoring the account. */
+    refresh: async () => {
+      await refetch();
     },
   };
 }

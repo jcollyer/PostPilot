@@ -46,6 +46,15 @@ export const auth = betterAuth({
 
   database: prismaAdapter(prisma, { provider: 'postgresql' }),
 
+  // Exposed on the session user so the app layouts and the tRPC gate can send
+  // an account scheduled for deletion to the restore screen without a second
+  // query. `input: false` keeps it out of sign-up and update-user payloads.
+  user: {
+    additionalFields: {
+      deletionScheduledFor: { type: 'date', required: false, input: false },
+    },
+  },
+
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: true,

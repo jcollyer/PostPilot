@@ -16,7 +16,8 @@ import { TRPCProvider } from '../src/lib/TRPCProvider';
  *         Stack       — navigation
  *
  * The `(app)` group owns the authenticated screens and guards itself.
- * `/signin` sits outside the group so it's reachable while signed out.
+ * `/signin` sits outside the group so it's reachable while signed out, and
+ * `/restore-account` so an account scheduled for deletion can reach it.
  */
 export default function RootLayout() {
   return (
@@ -26,6 +27,7 @@ export default function RootLayout() {
           <StatusBar style="dark" />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="signin" />
+            <Stack.Screen name="restore-account" />
             <Stack.Screen name="(app)" />
           </Stack>
         </TRPCProvider>

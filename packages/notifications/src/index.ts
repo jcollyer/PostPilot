@@ -5,6 +5,9 @@ export { dispatchPending, type DispatchResult } from './dispatcher';
 export { createNotification } from './notify';
 export { computeQueueHealth, runQueueHealthChecks, type QueueHealth } from './queue-health';
 
+// Transactional mail outside the alert pipeline (account lifecycle notices)
+export { sendEmail } from './channels';
+
 // Config / routing
 export {
   channelsFor,

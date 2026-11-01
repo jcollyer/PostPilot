@@ -36,7 +36,12 @@ export async function processPending(params?: {
 }): Promise<ProcessResult[]> {
   const limit = params?.limit ?? 5;
   const staleBefore = new Date(Date.now() - STALE_RUNNING_MS);
-  const scope = params?.userId ? { userId: params.userId } : {};
+  // Accounts scheduled for deletion are skipped: their media is on its way out,
+  // and processing it would only spend OpenAI credit on nobody.
+  const scope = {
+    ...(params?.userId ? { userId: params.userId } : {}),
+    user: { deletionScheduledFor: null },
+  };
 
   // A stranded RUNNING row (killed before it could set COMPLETED/FAILED) is only
   // eligible to be reclaimed while it's stale — i.e. no longer plausibly still

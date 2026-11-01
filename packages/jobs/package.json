@@ -9,6 +9,7 @@
     "clean": "rm -rf node_modules .turbo .trigger"
   },
   "dependencies": {
+    "@postpilot/accounts": "*",
     "@postpilot/ai-pipeline": "*",
     "@postpilot/connectors": "*",
     "@postpilot/db": "*",

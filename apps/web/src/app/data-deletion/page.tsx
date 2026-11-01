@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 
+import { ACCOUNT_DELETION_GRACE_DAYS } from '@postpilot/types';
+
 import { SiteFooter } from '@/features/marketing/SiteFooter';
 import { SiteHeader } from '@/features/marketing/SiteHeader';
 
@@ -14,7 +16,7 @@ export const metadata: Metadata = {
  * Review for the Instagram integration; linked from the marketing footer.
  */
 export default function DataDeletionPage() {
-  const lastUpdated = 'July 6, 2026';
+  const lastUpdated = 'November 1, 2026';
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -36,10 +38,15 @@ export default function DataDeletionPage() {
               <h2 className="text-xl font-semibold tracking-tight">Delete your account in the app</h2>
               <p>
                 The fastest way is to do it yourself. Sign in and go to{' '}
-                <span className="text-foreground font-medium">Settings → Delete account</span>. This
-                permanently removes your account, your uploaded videos, your queue and schedule, and
-                the access tokens for any connected platforms. The action is immediate and cannot be
-                undone.
+                <span className="text-foreground font-medium">Settings → Delete account</span>. Your
+                account is deactivated immediately: you&rsquo;re signed out, the access tokens for
+                every connected platform are revoked and deleted, publishing stops, and any paid plan
+                stops renewing. We keep your account and uploaded media for{' '}
+                {ACCOUNT_DELETION_GRACE_DAYS} days in case you change your mind &mdash; sign in
+                during that time to restore it &mdash; and then permanently delete your account, your
+                uploaded videos, and your queue and schedule. We email you when you delete the account
+                and again a week before it is permanently deleted. If you need it removed sooner,
+                email us as described below.
               </p>
             </div>
 

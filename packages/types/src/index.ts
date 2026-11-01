@@ -1,6 +1,7 @@
 export * from './schemas';
 export * from './domain';
 export * from './media';
+export * from './account';
 export * from './plans';
 export * from './folder';
 export * from './queue';
