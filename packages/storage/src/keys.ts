@@ -35,8 +35,13 @@ export function extensionForMime(mimeType: string | null | undefined): string {
   }
 }
 
+/** Everything a user owns in storage — removed in one sweep on account deletion. */
+export function userPrefix(userId: string): string {
+  return `users/${userId}`;
+}
+
 export function videoPrefix(userId: string, videoId: string): string {
-  return `users/${userId}/videos/${videoId}`;
+  return `${userPrefix(userId)}/videos/${videoId}`;
 }
 
 export function sourceKey(userId: string, videoId: string, ext: string): string {

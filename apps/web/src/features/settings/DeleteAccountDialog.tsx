@@ -64,8 +64,8 @@ export function DeleteAccountDialog({
         <DialogHeader>
           <DialogTitle className="text-destructive">Delete your account?</DialogTitle>
           <DialogDescription>
-            This permanently deletes your account and all associated data. This action cannot be
-            undone.
+            This permanently deletes your account, your media library and all associated data, and
+            cancels any paid plan immediately. This action cannot be undone.
           </DialogDescription>
         </DialogHeader>
 
