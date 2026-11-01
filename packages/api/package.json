@@ -13,6 +13,7 @@
     "clean": "rm -rf node_modules .turbo"
   },
   "dependencies": {
+    "@postpilot/accounts": "*",
     "@postpilot/billing": "*",
     "@postpilot/connectors": "*",
     "@postpilot/db": "*",

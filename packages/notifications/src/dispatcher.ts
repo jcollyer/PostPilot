@@ -56,6 +56,7 @@ export async function dispatchPending(opts?: { limit?: number }): Promise<Dispat
         select: {
           email: true,
           phoneNumber: true,
+          deletionScheduledFor: true,
           devices: { select: { expoPushToken: true } },
           notificationPrefs: { select: { type: true, channel: true, enabled: true } },
         },
@@ -67,6 +68,14 @@ export async function dispatchPending(opts?: { limit?: number }): Promise<Dispat
 
   for (const n of notifications) {
     result.processed++;
+
+    // An account scheduled for deletion gets no alerts. Deleting suppresses
+    // what was pending then; this catches anything raised since.
+    if (n.user.deletionScheduledFor) {
+      await prisma.notification.update({ where: { id: n.id }, data: { status: 'SUPPRESSED' } });
+      result.suppressed++;
+      continue;
+    }
 
     // Respect an explicit throttle window.
     if (n.throttledUntil && n.throttledUntil.getTime() > now) continue;

@@ -14,7 +14,7 @@ export const updateProfileSchema = z.object({
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
-/** Payload for permanently deleting the signed-in user's account. */
+/** Payload for deleting the signed-in user's account (purged after a grace period). */
 export const deleteAccountSchema = z.object({
   // Must match the account email exactly (checked case-insensitively on the
   // server). Acts as a typed confirmation guard against accidental deletes.

@@ -53,6 +53,19 @@ model User {
   // "profile has data" marker (CreatorProfile can still be empty/absent).
   creatorOnboardingCompletedAt DateTime?
 
+  // --- Account deletion -----------------------------------------------------
+  // Deleting an account is a soft delete: the account is deactivated at once
+  // (sessions revoked, platforms disconnected, queue paused, plan set not to
+  // renew) and purged — rows and every stored file — once
+  // `deletionScheduledFor` passes. Signing in before then offers a restore,
+  // which clears all three. Non-null `deletionScheduledFor` is the flag every
+  // gate checks; Better Auth exposes it on the session user for that reason.
+  deletionRequestedAt    DateTime?
+  deletionScheduledFor   DateTime?
+  // When the "last chance to restore" email went out, so the daily sweep
+  // sends it once.
+  deletionReminderSentAt DateTime?
+
   // --- Plan + billing -------------------------------------------------------
   // The plan enforcement reads. Set by the Stripe webhook, never by the
   // post-checkout redirect — a redirect can be dropped or forged, a webhook is
@@ -96,6 +109,8 @@ model User {
   creatorProfile      CreatorProfile?
   usageSnapshots      UsageSnapshot[]
 
+  // Drives the account-deletion sweep.
+  @@index([deletionScheduledFor])
   @@map("user")
 }
 

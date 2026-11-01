@@ -14,6 +14,8 @@ import { getServerSession } from '@/server/session';
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const session = await getServerSession();
   if (!session?.user) redirect('/signin');
+  // A deleted account in its grace period can sign in, but only to restore.
+  if (session.user.deletionScheduledFor) redirect('/restore');
 
   return (
     <div className="app-theme bg-background text-foreground flex min-h-dvh flex-col">

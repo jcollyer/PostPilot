@@ -22,6 +22,10 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ platform: s
   if (!session?.user) {
     return NextResponse.redirect(new URL('/', origin));
   }
+  // Deletion disconnected every platform; reconnecting waits for a restore.
+  if (session.user.deletionScheduledFor) {
+    return NextResponse.redirect(new URL('/restore', origin));
+  }
 
   const platform = parsePlatform(platformParam);
   if (!platform) {

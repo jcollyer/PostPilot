@@ -1,14 +1,13 @@
 import { TRPCError } from '@trpc/server';
 
-import { cancelAllSubscriptions, isBillingConfigured } from '@postpilot/billing';
-import { deletePrefix, isStorageConfigured, userPrefix } from '@postpilot/storage';
+import { requestAccountDeletion, restoreAccount } from '@postpilot/accounts';
 import {
   deleteAccountSchema,
   updateProfileSchema,
   updateStorageSettingsSchema,
 } from '@postpilot/types';
 
-import { protectedProcedure, publicProcedure, router } from '../trpc';
+import { pendingDeletionProcedure, protectedProcedure, publicProcedure, router } from '../trpc';
 
 const userSelect = {
   id: true,
@@ -59,36 +58,20 @@ export const userRouter = router({
     ),
 
   /**
-   * Permanently delete the signed-in user and all of their data.
-   *
-   * Every User relation in the schema declares `onDelete: Cascade`, so a
-   * single `user.delete` atomically removes the entire ownership graph —
-   * including all Session rows, which invalidates every signed-in device.
-   *
-   * The two things outside the database go first, in order, so a failure
-   * stops before anything is lost and the user can simply try again:
-   *
-   *  1. Stripe — every running subscription is canceled. Otherwise a paying
-   *     creator keeps being charged for an account that no longer exists.
-   *  2. Storage — everything under `users/<id>/` is removed. Once the rows are
-   *     gone nothing points at those objects, so a failure after the row
-   *     delete would strand them in R2 for good; before it, a retry finds them.
-   *
-   * A retry after a partial failure is safe: there are no live subscriptions
-   * left to cancel and the prefix listing simply comes back shorter.
+   * Delete the signed-in user's account: deactivated now, purged after the
+   * grace period. See requestAccountDeletion for what "deactivated" covers.
    *
    * Safety: the caller must pass `confirmEmail` matching the user's current
    * email exactly (case-insensitive). The UI also gates this behind a typed
    * confirmation modal.
    *
-   * The session cookie on the client is not cleared by this mutation — the
-   * caller is responsible for triggering sign-out afterwards so the now
-   * invalid cookie is removed.
+   * Every session row is removed, but the cookie on the client is not cleared
+   * by this mutation — the caller signs out afterwards to drop it.
    */
   deleteAccount: protectedProcedure.input(deleteAccountSchema).mutation(async ({ ctx, input }) => {
     const user = await ctx.prisma.user.findUnique({
       where: { id: ctx.userId },
-      select: { id: true, email: true, stripeCustomerId: true },
+      select: { id: true, email: true },
     });
 
     if (!user) {
@@ -105,47 +88,36 @@ export const userRouter = router({
       });
     }
 
-    if (user.stripeCustomerId) {
-      if (isBillingConfigured()) {
-        try {
-          const canceled = await cancelAllSubscriptions(user.stripeCustomerId);
-          if (canceled > 0) {
-            console.log(`[user] canceled ${canceled} subscription(s): userId=${user.id}`);
-          }
-        } catch (err) {
-          console.error(`[user] failed to cancel subscriptions for userId=${user.id}:`, err);
-          throw new TRPCError({
-            code: 'INTERNAL_SERVER_ERROR',
-            message:
-              "We couldn't cancel your subscription, so your account was not deleted. Please try again.",
-          });
-        }
-      } else {
-        console.warn(
-          `[user] billing is not configured — not canceling subscriptions for userId=${user.id}`,
-        );
-      }
+    try {
+      const { scheduledFor } = await requestAccountDeletion(user.id, { client: ctx.prisma });
+      return { success: true as const, scheduledFor };
+    } catch (err) {
+      console.error(`[user] failed to delete account for userId=${user.id}:`, err);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: "We couldn't delete your account. Nothing was changed — please try again.",
+      });
     }
+  }),
 
-    if (isStorageConfigured()) {
-      try {
-        await deletePrefix(userPrefix(user.id));
-      } catch (err) {
-        console.error(`[user] failed to delete storage for userId=${user.id}:`, err);
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message:
-            "We couldn't remove your media, so your account was not deleted. Please try again.",
-        });
-      }
-    } else {
-      console.warn(`[user] storage is not configured — not deleting media for userId=${user.id}`);
-    }
+  /**
+   * Whether the signed-in account is scheduled for deletion, and when. Open to
+   * pending accounts: it is what the restore screen reads.
+   */
+  deletionStatus: pendingDeletionProcedure.query(async ({ ctx }) => {
+    const user = await ctx.prisma.user.findUnique({
+      where: { id: ctx.userId },
+      select: { email: true, deletionScheduledFor: true },
+    });
+    return { email: user?.email ?? null, scheduledFor: user?.deletionScheduledFor ?? null };
+  }),
 
-    await ctx.prisma.user.delete({ where: { id: user.id } });
-
-    console.log(`[user] account deleted: userId=${user.id}`);
-
-    return { success: true as const };
+  /**
+   * Cancel a scheduled deletion. The queue stays paused and platforms stay
+   * disconnected; the creator resumes and reconnects when ready.
+   */
+  restoreAccount: pendingDeletionProcedure.mutation(async ({ ctx }) => {
+    const restored = await restoreAccount(ctx.userId, { client: ctx.prisma });
+    return { restored };
   }),
 });

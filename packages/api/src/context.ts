@@ -12,6 +12,8 @@ export interface SessionLike {
     email?: string | null;
     name?: string | null;
     image?: string | null;
+    /** Set while the account is scheduled for deletion; see User.deletionScheduledFor. */
+    deletionScheduledFor?: Date | string | null;
   } | null;
   expires?: string;
 }
