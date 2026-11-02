@@ -190,9 +190,17 @@ export function queueAction(
     }
     if (item.sourceDeletedAt) {
       return disabled(
-        'The video file was removed after posting, so it can’t post again. Upload it again from PostPilot on the web.',
+        'The video file was removed to free up space, so it can’t post again. Upload it again from PostPilot on the web.',
       );
     }
+  } else if (item.sourceDeletedAt) {
+    return disabled(
+      'The photo was removed to free up space, so it can’t post again. Upload it again from PostPilot on the web.',
+    );
+  } else if (item.removedSlides > 0) {
+    return disabled(
+      'A photo in this carousel was removed to free up space. Take it out of the carousel in PostPilot on the web to post the rest.',
+    );
   }
   return { kind: 'add', label: ADD, confirm: addConfirm(item, platforms, connected) };
 }
@@ -293,7 +301,7 @@ function videoPreview(video: LibraryVideoDetail): LibraryItemPreview {
 function unplayable(video: LibraryVideoDetail): string | null {
   if (video.status === 'FAILED') return 'The upload failed, so there’s nothing to play.';
   if (video.status !== 'READY') return 'Plays once processing finishes.';
-  if (video.sourceDeletedAt) return 'The video file was removed after posting.';
+  if (video.sourceDeletedAt) return 'The video file was removed to free up space.';
   if (!video.cdnUrl) return 'There’s nothing to play yet.';
   return null;
 }

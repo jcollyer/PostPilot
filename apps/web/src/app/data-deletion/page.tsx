@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { ACCOUNT_DELETION_GRACE_DAYS } from '@postpilot/types';
+import { ACCOUNT_DELETION_GRACE_DAYS, INACTIVE_MEDIA_PURGE_DAYS } from '@postpilot/types';
 
 import { SiteFooter } from '@/features/marketing/SiteFooter';
 import { SiteHeader } from '@/features/marketing/SiteHeader';
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
  * Review for the Instagram integration; linked from the marketing footer.
  */
 export default function DataDeletionPage() {
-  const lastUpdated = 'November 1, 2026';
+  const lastUpdated = 'November 2, 2026';
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -86,6 +86,11 @@ export default function DataDeletionPage() {
                 tokens for every connected platform. Content you already published to Instagram,
                 TikTok, or YouTube stays on those platforms — you control that from within each
                 platform. If you only need certain posts removed from a platform, delete them there.
+              </p>
+              <p>
+                Separately, if a free account is inactive for {INACTIVE_MEDIA_PURGE_DAYS} days, we
+                delete its uploaded videos and photos after two email warnings. The account itself
+                is kept, with its settings, captions, and post history.
               </p>
             </div>
 

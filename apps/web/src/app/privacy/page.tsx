@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { ACCOUNT_DELETION_GRACE_DAYS } from '@postpilot/types';
+import { ACCOUNT_DELETION_GRACE_DAYS, INACTIVE_MEDIA_PURGE_DAYS } from '@postpilot/types';
 
 import { SiteFooter } from '@/features/marketing/SiteFooter';
 import { SiteHeader } from '@/features/marketing/SiteHeader';
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
  * /privacy — public privacy policy linked from the marketing footer.
  */
 export default function PrivacyPage() {
-  const lastUpdated = 'November 1, 2026';
+  const lastUpdated = 'November 2, 2026';
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -119,7 +119,9 @@ export default function PrivacyPage() {
                 they are no longer needed. When you delete your account, platform access is revoked
                 immediately and your remaining account data and media are kept for{' '}
                 {ACCOUNT_DELETION_GRACE_DAYS} days so you can restore the account, then permanently
-                deleted.
+                deleted. If a free account is inactive for {INACTIVE_MEDIA_PURGE_DAYS} days, we
+                delete its uploaded videos and photos after warning you twice by email; the account
+                itself is kept, and signing in before then is all it takes to keep your media.
               </p>
               <p>
                 <strong>How to delete your data or revoke access.</strong> You can remove your data

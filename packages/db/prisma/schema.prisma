@@ -68,6 +68,20 @@ model User {
   // sends it once.
   deletionReminderSentAt DateTime?
 
+  // --- Inactivity ------------------------------------------------------------
+  // A free account inactive for INACTIVE_MEDIA_PURGE_DAYS has its uploaded
+  // media removed (the account itself is kept), after two emails. Activity is
+  // a sign-in, any authenticated API call, an upload or a successful publish;
+  // it is written at most once a day per user, and every write clears both
+  // warning stamps so the next inactive stretch warns afresh. See
+  // @postpilot/accounts' inactivity module.
+  lastActiveAt                 DateTime  @default(now())
+  // When the first warning (INACTIVE_MEDIA_WARNING_DAYS) and the final one
+  // (INACTIVE_MEDIA_FINAL_WARNING_DAYS) went out. Stamped only once the send
+  // succeeds; the purge waits for both.
+  inactivityWarningSentAt      DateTime?
+  inactivityFinalWarningSentAt DateTime?
+
   // --- Plan + billing -------------------------------------------------------
   // The plan enforcement reads. Set by the Stripe webhook, never by the
   // post-checkout redirect — a redirect can be dropped or forged, a webhook is
@@ -541,7 +555,8 @@ model Video {
   postedPosts Json?
 
   // When the source file was removed from R2 by the retention job (see
-  // User.deleteSourceAfterPublish). Non-null means `storageKey` no longer
+  // User.deleteSourceAfterPublish) or the inactive free account purge (see
+  // User.lastActiveAt). Non-null means `storageKey` no longer
   // points at a real object: the video can't be re-published or re-run through
   // the AI pipeline, but its metadata, thumbnails and post history remain. The
   // key is deliberately left in place as a record of what was stored.
@@ -700,6 +715,14 @@ model Image {
   // task; powers the "Posted" badge and per-platform post links on /media.
   postedAt    DateTime?
   postedPosts Json?
+
+  // When the source file was removed from R2 — today only by the inactive
+  // free account purge. Same contract as Video.sourceDeletedAt: `storageKey`
+  // and `cdnUrl` are left as a record but no longer point at a real object.
+  // The photo is its own thumbnail, so the library shows a placeholder; it
+  // can't be posted or re-run through the AI pipeline, and neither can any
+  // carousel it is a slide of until that slide is taken out.
+  sourceDeletedAt DateTime?
 
   uploadSessionId String?
 

@@ -1,5 +1,5 @@
 import { appBaseUrl } from '@postpilot/billing';
-import { ACCOUNT_DELETION_REMINDER_DAYS } from '@postpilot/types';
+import { ACCOUNT_DELETION_REMINDER_DAYS, INACTIVE_MEDIA_PURGE_DAYS } from '@postpilot/types';
 
 /**
  * Account-lifecycle emails. Transactional, so they go straight to Resend rather
@@ -66,6 +66,52 @@ export function deletionReminderEmail(user: Recipient, scheduledFor: Date): Acco
       `${appBaseUrl()}/signin`,
       '',
       "If you meant to leave, there's nothing you need to do.",
+      '',
+      '— PostPilot',
+    ].join('\n'),
+  };
+}
+
+/**
+ * Sent INACTIVE_MEDIA_WARNING_DAYS into an inactive stretch on a free account,
+ * about a month before its media is removed.
+ */
+export function inactivityWarningEmail(user: Recipient, removalDate: Date): AccountEmail {
+  const date = formatDate(removalDate, user.timezone);
+  return {
+    subject: `Your PostPilot media will be deleted on ${date}`,
+    text: [
+      greeting(user.name),
+      '',
+      `You haven't used PostPilot in a while. To keep storage costs down, free accounts that stay inactive for ${INACTIVE_MEDIA_PURGE_DAYS} days have their uploaded videos and photos deleted. Yours will be deleted on ${date}.`,
+      '',
+      "To keep them, just sign in before then — that's all it takes:",
+      `${appBaseUrl()}/signin`,
+      '',
+      "Your account itself isn't going anywhere. Your settings, captions and post history stay, and you can upload again any time. Paid plans aren't affected.",
+      '',
+      '— PostPilot',
+    ].join('\n'),
+  };
+}
+
+/**
+ * Sent INACTIVE_MEDIA_FINAL_WARNING_DAYS into an inactive stretch, about a week
+ * before the media is removed.
+ */
+export function inactivityFinalWarningEmail(user: Recipient, removalDate: Date): AccountEmail {
+  const date = formatDate(removalDate, user.timezone);
+  return {
+    subject: `Last reminder: your PostPilot media will be deleted on ${date}`,
+    text: [
+      greeting(user.name),
+      '',
+      `This is your last reminder: on ${date}, the videos and photos you've uploaded to PostPilot will be permanently deleted, because your free account has been inactive for ${INACTIVE_MEDIA_PURGE_DAYS} days. This can't be undone.`,
+      '',
+      'To keep them, sign in before then:',
+      `${appBaseUrl()}/signin`,
+      '',
+      "Your account stays either way, with your settings, captions and post history. If you don't need the files, there's nothing you need to do.",
       '',
       '— PostPilot',
     ].join('\n'),

@@ -2,6 +2,7 @@ import { betterAuth } from 'better-auth';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { nextCookies } from 'better-auth/next-js';
 import { expo } from '@better-auth/expo';
+import { recordActivity } from '@postpilot/accounts';
 import { prisma } from '@postpilot/db';
 
 import { sendEmail } from './send-email';
@@ -48,10 +49,29 @@ export const auth = betterAuth({
 
   // Exposed on the session user so the app layouts and the tRPC gate can send
   // an account scheduled for deletion to the restore screen without a second
-  // query. `input: false` keeps it out of sign-up and update-user payloads.
+  // query, and so the tRPC activity check can tell whether today's activity
+  // is already recorded without one either. `input: false` keeps them out of
+  // sign-up and update-user payloads; a new user's `lastActiveAt` comes from
+  // the column default.
   user: {
     additionalFields: {
       deletionScheduledFor: { type: 'date', required: false, input: false },
+      lastActiveAt: { type: 'date', required: false, input: false },
+    },
+  },
+
+  // A sign-in is activity: it keeps a free account's media from the
+  // inactivity purge (see @postpilot/accounts). Never allowed to fail the
+  // sign-in itself.
+  databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          await recordActivity(session.userId).catch((err) => {
+            console.error('[auth] failed to record sign-in activity:', err);
+          });
+        },
+      },
     },
   },
 

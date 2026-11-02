@@ -77,7 +77,7 @@ describe('buildLibraryItemDetail — video playback', () => {
     expect(preview(detail, 'video')).toMatchObject({
       uri: null,
       posterUrl: 'https://cdn.example.com/v1.jpg',
-      unavailable: 'The video file was removed after posting.',
+      unavailable: 'The video file was removed to free up space.',
     });
   });
 
@@ -362,7 +362,33 @@ describe('buildLibraryItemDetail — add to queue eligibility', () => {
       kind: 'disabled',
       label: 'Add to queue',
       reason:
-        'The video file was removed after posting, so it can’t post again. Upload it again from PostPilot on the web.',
+        'The video file was removed to free up space, so it can’t post again. Upload it again from PostPilot on the web.',
+    });
+  });
+
+  it('disables adding a photo whose file was removed', () => {
+    const detail = buildLibraryItemDetail(
+      image('p1', 1, { sourceDeletedAt: hoursAgo(10), removedSlides: 1 }),
+      LIVE,
+      NOW,
+    );
+
+    expect(detail.queue).toEqual({
+      kind: 'disabled',
+      label: 'Add to queue',
+      reason:
+        'The photo was removed to free up space, so it can’t post again. Upload it again from PostPilot on the web.',
+    });
+  });
+
+  it('disables adding a carousel with a removed slide until it is taken out', () => {
+    const detail = buildLibraryItemDetail(image('c1', 3, { removedSlides: 1 }), LIVE, NOW);
+
+    expect(detail.queue).toEqual({
+      kind: 'disabled',
+      label: 'Add to queue',
+      reason:
+        'A photo in this carousel was removed to free up space. Take it out of the carousel in PostPilot on the web to post the rest.',
     });
   });
 });

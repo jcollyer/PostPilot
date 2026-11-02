@@ -87,8 +87,8 @@ export async function processPending(params?: {
   const pending = await prisma.video.findMany({
     where: {
       status: { in: ['READY', 'PROCESSING'] },
-      // The retention sweep removed the source file, so there is nothing left
-      // to download, transcribe or sample frames from.
+      // The retention sweep or the inactivity purge removed the source file,
+      // so there is nothing left to download, transcribe or sample frames from.
       sourceDeletedAt: null,
       ...scope,
       ...aiClaim,
@@ -109,6 +109,8 @@ export async function processPending(params?: {
     const pendingImages = await prisma.image.findMany({
       where: {
         status: { in: ['READY', 'PROCESSING'] },
+        // As for videos: the photo was removed, so there is nothing to read.
+        sourceDeletedAt: null,
         ...scope,
         ...aiClaim,
       },
@@ -126,7 +128,7 @@ export async function processPending(params?: {
 /** Process every still-PENDING video and image in a specific upload session. */
 export async function processUploadSession(uploadSessionId: string): Promise<ProcessResult[]> {
   const pending = await prisma.video.findMany({
-    where: { uploadSessionId, aiStatus: 'PENDING' },
+    where: { uploadSessionId, aiStatus: 'PENDING', sourceDeletedAt: null },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   });
@@ -137,7 +139,7 @@ export async function processUploadSession(uploadSessionId: string): Promise<Pro
   }
 
   const pendingImages = await prisma.image.findMany({
-    where: { uploadSessionId, aiStatus: 'PENDING' },
+    where: { uploadSessionId, aiStatus: 'PENDING', sourceDeletedAt: null },
     orderBy: { createdAt: 'asc' },
     select: { id: true },
   });

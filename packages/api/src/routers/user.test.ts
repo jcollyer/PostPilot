@@ -9,10 +9,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const requestAccountDeletion = vi.fn();
 const restoreAccount = vi.fn();
+const recordActivity = vi.fn();
 
 vi.mock('@postpilot/accounts', () => ({
   requestAccountDeletion: (userId: string, opts: unknown) => requestAccountDeletion(userId, opts),
   restoreAccount: (userId: string, opts: unknown) => restoreAccount(userId, opts),
+  // Stale after a day, as the real one is.
+  isActivityStale: (at: Date | null | undefined) =>
+    !at || Date.now() - at.getTime() >= 24 * 60 * 60 * 1000,
+  recordActivity: (userId: string, opts: unknown) => recordActivity(userId, opts),
 }));
 
 const { userRouter } = await import('./user');
@@ -23,9 +28,9 @@ const prisma = { user: { findUnique } };
 
 const SCHEDULED = new Date('2026-12-31T00:00:00Z');
 
-function caller(deletionScheduledFor: Date | null = null) {
+function caller(deletionScheduledFor: Date | null = null, lastActiveAt: Date = new Date()) {
   return createCallerFactory(userRouter)({
-    session: { user: { id: 'user_1', deletionScheduledFor } },
+    session: { user: { id: 'user_1', deletionScheduledFor, lastActiveAt } },
     headers: undefined,
     prisma: prisma as any,
   });
@@ -35,6 +40,31 @@ beforeEach(() => {
   findUnique.mockReset().mockResolvedValue({ id: 'user_1', email: 'me@example.com' });
   requestAccountDeletion.mockReset().mockResolvedValue({ scheduledFor: SCHEDULED });
   restoreAccount.mockReset().mockResolvedValue(true);
+  recordActivity.mockReset().mockResolvedValue(true);
+});
+
+describe('activity', () => {
+  const lastWeek = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  it('records the first authenticated call of the day', async () => {
+    findUnique.mockResolvedValue({ id: 'user_1', email: 'me@example.com' });
+
+    await caller(null, lastWeek).me();
+
+    expect(recordActivity).toHaveBeenCalledWith('user_1', { client: prisma });
+  });
+
+  it('skips the database when today is already recorded', async () => {
+    await caller().me();
+
+    expect(recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('never fails the request when recording does', async () => {
+    recordActivity.mockRejectedValue(new Error('db blip'));
+
+    await expect(caller(null, lastWeek).me()).resolves.toBeDefined();
+  });
 });
 
 describe('user.deleteAccount', () => {

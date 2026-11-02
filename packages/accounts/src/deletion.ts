@@ -6,11 +6,11 @@ import {
 } from '@postpilot/billing';
 import { disconnectConnection } from '@postpilot/connectors';
 import { prisma as defaultPrisma, type PrismaClient } from '@postpilot/db';
-import { isEmailConfigured, sendEmail } from '@postpilot/notifications';
 import { deletePrefix, isStorageConfigured, userPrefix } from '@postpilot/storage';
 import { ACCOUNT_DELETION_REMINDER_DAYS, accountDeletionDate } from '@postpilot/types';
 
-import { deletionConfirmationEmail, deletionReminderEmail, type AccountEmail } from './emails';
+import { deletionConfirmationEmail, deletionReminderEmail } from './emails';
+import { trySend } from './send';
 
 /**
  * Account deletion as a soft delete with a grace period.
@@ -42,24 +42,6 @@ const userFields = {
   stripeCustomerId: true,
   deletionScheduledFor: true,
 } as const;
-
-/** Send an account email; never throws, reports whether it went. */
-async function trySend(to: string, email: AccountEmail, context: string): Promise<boolean> {
-  if (!isEmailConfigured()) {
-    console.warn(`[accounts] email is not configured — not sending ${context} to ${to}`);
-    return false;
-  }
-  try {
-    await sendEmail({ to, subject: email.subject, text: email.text });
-    return true;
-  } catch (err) {
-    console.error(
-      `[accounts] failed to send ${context}:`,
-      err instanceof Error ? err.message : err,
-    );
-    return false;
-  }
-}
 
 export interface DeletionRequestResult {
   scheduledFor: Date;

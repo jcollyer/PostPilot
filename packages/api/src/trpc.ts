@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
 import { ZodError } from 'zod';
 
+import { isActivityStale, recordActivity } from '@postpilot/accounts';
 import { ACCOUNT_PENDING_DELETION } from '@postpilot/types';
 
 import type { Context } from './context';
@@ -52,9 +53,27 @@ const enforceNotPendingDeletion = t.middleware(({ ctx, next }) => {
   return next();
 });
 
+/**
+ * Authenticated API use is activity: it keeps a free account's media from the
+ * inactivity purge (see @postpilot/accounts). The session user carries
+ * `lastActiveAt`, so all but the first request of a user's day skip the
+ * database entirely. That one write isn't awaited — the request doesn't
+ * depend on it — and if it is lost, the next request simply tries again.
+ */
+const trackActivity = t.middleware(({ ctx, next }) => {
+  const user = ctx.session?.user;
+  if (user?.id && isActivityStale(user.lastActiveAt)) {
+    void recordActivity(user.id, { client: ctx.prisma }).catch((err) => {
+      console.error('[api] failed to record activity:', err);
+    });
+  }
+  return next();
+});
+
 export const protectedProcedure = t.procedure
   .use(enforceUserIsAuthed)
-  .use(enforceNotPendingDeletion);
+  .use(enforceNotPendingDeletion)
+  .use(trackActivity);
 
 /** Signed in, deletion pending or not — for the restore flow only. */
 export const pendingDeletionProcedure = t.procedure.use(enforceUserIsAuthed);

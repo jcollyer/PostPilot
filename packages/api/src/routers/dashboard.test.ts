@@ -35,7 +35,7 @@ const prisma = {
 
 function overview() {
   const caller = createCallerFactory(dashboardRouter)({
-    session: { user: { id: 'user_1' } },
+    session: { user: { id: 'user_1', lastActiveAt: new Date() } },
     headers: undefined,
     prisma: prisma as any,
   });

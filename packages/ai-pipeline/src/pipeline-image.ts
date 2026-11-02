@@ -38,6 +38,16 @@ export async function processImage(imageId: string): Promise<ProcessResult> {
   if (!image) return { videoId: imageId, ok: false, error: 'image not found' };
   if (!image.storageKey) return { videoId: imageId, ok: false, error: 'image has no storage key' };
 
+  // The inactivity purge removed the photo, so there is nothing to download.
+  // The batch queries already filter these out; this is the backstop for a
+  // direct processImage call, marked FAILED like processVideo's.
+  if (image.sourceDeletedAt) {
+    await prisma.image
+      .update({ where: { id: imageId }, data: { aiStatus: 'FAILED' } })
+      .catch(() => {});
+    return { videoId: imageId, ok: false, error: 'source file was removed' };
+  }
+
   // Cheap pre-download guard (see processVideo): fail oversized images before
   // pulling the file down, using the size/dimensions we already have.
   const preReason = checkImageLimits({
