@@ -245,7 +245,7 @@ export function toVideoDto(v: VideoRecord, tiktokConnected = false) {
     // posted) + the latest post per platform, for the "Posted" badge and links.
     postedAt: v.postedAt,
     postedPosts: parsePostedPosts(v.postedPosts),
-    // Set once the retention sweep removed the source file (opt-in, see
+    // Set once the retention sweep removed the source file (see
     // User.deleteSourceAfterPublish). The entry still shows its thumbnail,
     // metadata and post links, but it can't be re-queued or re-processed.
     sourceDeletedAt: v.sourceDeletedAt,

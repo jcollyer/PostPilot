@@ -7,7 +7,7 @@ export {
   type PublishRunResult,
 } from './runner';
 
-// Opt-in source retention (storage cleanup for published videos)
+// Source retention (storage cleanup for published videos)
 export {
   sweepPublishedSources,
   type RetentionSweepResult,

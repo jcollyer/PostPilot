@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { PlanOptions } from '@/features/billing/PlanOptions';
+import { StorageRetentionToggle } from '@/features/onboarding/StorageRetentionToggle';
 import type { BillingPeriod } from '@postpilot/billing';
 import { PLAN_IDS, type PlanId } from '@postpilot/types';
 import { trpc } from '@/lib/trpc/client';
@@ -23,6 +24,9 @@ import { trpc } from '@/lib/trpc/client';
  * account has consciously chosen what it is on. There is always a way through,
  * though — Free is a real choice and needs no payment, so nobody can be trapped
  * here, including when Stripe isn't configured.
+ *
+ * The source-retention toggle sits under the plans because this gate is the
+ * one onboarding step every new account is guaranteed to see.
  *
  * Choosing a paid plan hands off to Stripe Checkout. The plan itself only
  * changes when the webhook confirms it, so abandoning Checkout leaves the
@@ -86,6 +90,10 @@ export function PlanSelection() {
         </DialogHeader>
 
         <PlanOptions plans={PLAN_IDS} pending={pending} canBuy={canBuy} onChoose={choose} />
+
+        {/* New accounts start with source retention on; this is where they're
+            told, next to the storage each plan includes. */}
+        <StorageRetentionToggle />
 
         {!canBuy ? (
           <p className="text-muted-foreground text-center text-xs">
