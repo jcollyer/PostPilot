@@ -7,21 +7,13 @@ import { formatBytes, SOURCE_RETENTION_DAYS } from '@postpilot/types';
 import { trpc } from '@/lib/trpc/client';
 
 /**
- * What the user is storing, plus the opt-in control for removing published
- * source files after the retention window.
- *
- * The switch is off by default and never enabled on their behalf — turning it
- * on eventually deletes their media, so the copy says exactly what goes, what
- * stays, and that it can't be undone. Showing current usage directly above it
- * is what makes the trade concrete.
+ * `user.updateStorageSettings`, flipped optimistically on `user.me` so the
+ * switch feels instant and rolled back on error. Shared by this section and the
+ * onboarding toggle.
  */
-export function StorageSettings() {
+export function useUpdateStorageSettings() {
   const utils = trpc.useUtils();
-  const { data: me, isLoading } = trpc.user.me.useQuery();
-  const { data: usage } = trpc.usage.get.useQuery();
-
-  const update = trpc.user.updateStorageSettings.useMutation({
-    // Flip optimistically so the switch feels instant, rolling back on error.
+  return trpc.user.updateStorageSettings.useMutation({
     onMutate: async ({ deleteSourceAfterPublish }) => {
       await utils.user.me.cancel();
       const prev = utils.user.me.getData();
@@ -33,6 +25,22 @@ export function StorageSettings() {
     },
     onSettled: () => utils.user.me.invalidate(),
   });
+}
+
+/**
+ * What the user is storing, plus the control for removing published source
+ * files after the retention window.
+ *
+ * The switch is on by default for accounts created from 2026-11 on (disclosed
+ * in onboarding) and off for older ones unless they turned it on. Either way
+ * it deletes their media, so the copy says exactly what goes, what stays, and
+ * that it can't be undone. Showing current usage directly above it is what
+ * makes the trade concrete.
+ */
+export function StorageSettings() {
+  const { data: me, isLoading } = trpc.user.me.useQuery();
+  const { data: usage } = trpc.usage.get.useQuery();
+  const update = useUpdateStorageSettings();
 
   if (isLoading) {
     return (

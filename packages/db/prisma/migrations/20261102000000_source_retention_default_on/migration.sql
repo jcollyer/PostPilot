@@ -1,0 +1,12 @@
+-- Storage retention on by default for new accounts.
+--
+-- `user.deleteSourceAfterPublish` was opt-in, so by default a library's R2
+-- storage grew with every upload ever made. New signups now start with it on:
+-- onboarding shows it as a pre-checked toggle, so it is disclosed before any
+-- media is uploaded, and it stays switchable in Settings.
+--
+-- Only the column default changes. Existing rows keep the value they have —
+-- nobody who signed up under the opt-in rule is switched on by this migration.
+-- Better Auth's sign-up only writes the fields it knows about, so new rows
+-- pick up this default rather than an explicit false.
+ALTER TABLE "user" ALTER COLUMN "deleteSourceAfterPublish" SET DEFAULT true;

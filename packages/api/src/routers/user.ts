@@ -42,10 +42,13 @@ export const userRouter = router({
   /**
    * Update the signed-in user's storage retention preference.
    *
-   * Turning this on lets the retention sweep remove source files for videos
-   * published more than SOURCE_RETENTION_DAYS ago. Turning it off stops future
-   * deletions; it cannot restore sources that were already removed, which is
-   * why the UI states that plainly before the first opt-in.
+   * When on, the retention sweep removes source files for videos published
+   * more than SOURCE_RETENTION_DAYS ago. It is on by default for accounts
+   * created from 2026-11 on — onboarding shows it as a pre-checked toggle that
+   * calls this — and older accounts keep what they had. Either way it stays
+   * the user's call in Settings. Turning it off stops future deletions; it
+   * cannot restore sources that were already removed, which is why the UI
+   * says so plainly.
    */
   updateStorageSettings: protectedProcedure
     .input(updateStorageSettingsSchema)

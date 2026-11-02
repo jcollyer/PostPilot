@@ -3,7 +3,7 @@ import { deleteObject, isStorageConfigured } from '@postpilot/storage';
 import { SOURCE_RETENTION_DAYS } from '@postpilot/types';
 
 /**
- * Opt-in source retention.
+ * Source retention.
  *
  * The AI pipeline bills once per video at upload; storage bills every month for
  * as long as the file is held. Left alone a library only grows, so a creator's
@@ -18,9 +18,11 @@ import { SOURCE_RETENTION_DAYS } from '@postpilot/types';
  * now-absent object as a record of what was stored; `sourceDeletedAt` is the
  * flag every other code path checks.
  *
- * This deletes user media, so it is opt-in per user
- * (`User.deleteSourceAfterPublish`) and never runs for anyone who hasn't turned
- * it on.
+ * This deletes user media, so it only runs for users with
+ * `User.deleteSourceAfterPublish` on. That is the default for accounts created
+ * from 2026-11 on — disclosed as a pre-checked toggle in onboarding — while
+ * older accounts keep the opt-in they had. Either way it is the user's to turn
+ * off in Settings.
  */
 
 /**

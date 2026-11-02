@@ -11,6 +11,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import {
+  Archive,
   Check,
   ChevronDown,
   ImagePlus,
@@ -73,7 +74,7 @@ import {
   usePlatformAvatarUrls,
   useTikTokAccount,
 } from './PlatformTargets';
-import type { VideoDto } from './types';
+import { SOURCE_REMOVED_HINT, type VideoDto } from './types';
 import { putObject } from './upload';
 
 const IMAGE_ACCEPT = ACCEPTED_IMAGE_MIME_TYPES.join(',');
@@ -227,8 +228,14 @@ export function EditMetadataPanel({
           />
         </div>
 
-        {/* Preview */}
-        {video.cdnUrl ? (
+        {/* Preview — or, once the retention sweep has removed the original, a
+            note in its place so the missing player isn't a mystery. */}
+        {video.sourceDeletedAt ? (
+          <p className="bg-muted text-muted-foreground flex items-start gap-2 rounded-md border p-3 text-xs">
+            <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {SOURCE_REMOVED_HINT}
+          </p>
+        ) : video.cdnUrl ? (
           <div className="bg-muted overflow-hidden rounded-md border">
             <video
               src={video.cdnUrl}

@@ -2,8 +2,8 @@ import { schedules } from '@trigger.dev/sdk';
 import { sweepPublishedSources } from '@postpilot/publishing';
 
 /**
- * Daily: remove source files for videos that opted-in creators published more
- * than the retention window ago (see User.deleteSourceAfterPublish).
+ * Daily: remove source files for videos that creators with retention on
+ * published more than the retention window ago (see User.deleteSourceAfterPublish).
  *
  * Runs at 03:10 UTC — off the hour, and clear of the noon queue-health check —
  * so a large sweep doesn't contend with publishing work. Anything left over

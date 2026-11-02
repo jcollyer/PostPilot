@@ -41,12 +41,14 @@ model User {
   timezone                     String    @default("UTC")
   // E.164 phone for urgent SMS alerts (opt-in; see Notification).
   phoneNumber                  String?
-  // Opt-in storage retention. When true, a video's source file is removed from
-  // R2 once it has been published for SOURCE_RETENTION_DAYS and has no publish
+  // Storage retention. When true, a video's source file is removed from R2
+  // once it has been published for SOURCE_RETENTION_DAYS and has no publish
   // work still outstanding. The library row, thumbnails, metadata and post
-  // history all survive — only the heavy original goes. Off by default: this
-  // discards the user's media, so it is never enabled on their behalf.
-  deleteSourceAfterPublish     Boolean   @default(false)
+  // history all survive — only the heavy original goes. On by default for
+  // accounts created from 2026-11 on (disclosed as a pre-checked toggle in
+  // onboarding); older accounts keep whatever they had. Always the user's to
+  // change in Settings.
+  deleteSourceAfterPublish     Boolean   @default(true)
   // When the creator-profile onboarding modal was completed or explicitly
   // skipped. Null means "never shown a decision" — the modal keeps
   // appearing. Set on both save and skip, so it's a dismissal marker, not a

@@ -13,6 +13,14 @@ export type MediaItem = RouterOutputs['media']['list']['items'][number];
 /** A video item (all the video-specific fields the cards/dialogs use). */
 export type VideoDto = Extract<MediaItem, { mediaType: 'VIDEO' }>;
 
+/**
+ * Why a video whose source the retention sweep removed (`sourceDeletedAt` set)
+ * can't be played or posted again — the card badge's tooltip and the edit
+ * sheet's note in place of the player.
+ */
+export const SOURCE_REMOVED_HINT =
+  'The original video was removed after posting to free up space. Its thumbnail, caption and post links stay, but it can’t be played or posted again.';
+
 /** A photo or carousel item (Instagram-only). */
 export type ImageDto = Extract<MediaItem, { mediaType: 'IMAGE' | 'CAROUSEL' }>;
 

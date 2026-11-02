@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
+  Archive,
   Check,
   CheckCircle2,
   ExternalLink,
@@ -85,7 +86,13 @@ import { FolderTree } from './FolderTree';
 import { MoveToFolderDialog } from './MoveToFolderDialog';
 import { NewFolderDialog } from './NewFolderDialog';
 import { RenameFolderDialog } from './RenameFolderDialog';
-import type { FolderDto, ImageDto, MediaItem, VideoDto } from './types';
+import {
+  SOURCE_REMOVED_HINT,
+  type FolderDto,
+  type ImageDto,
+  type MediaItem,
+  type VideoDto,
+} from './types';
 import { formatBytes, formatDuration } from './upload';
 
 const STATUS_OPTIONS = mediaStatusSchema.options;
@@ -1444,7 +1451,10 @@ function VideoCard({
 }) {
   const badge = STATUS_BADGE[video.status];
   const duration = formatDuration(video.durationSec);
-  const canPreview = Boolean(video.cdnUrl) && video.status === 'READY';
+  // The retention sweep removed the original after posting: the card keeps its
+  // thumbnail and post links, but there's nothing to play or queue again.
+  const sourceRemoved = Boolean(video.sourceDeletedAt);
+  const canPreview = Boolean(video.cdnUrl) && video.status === 'READY' && !sourceRemoved;
   const aiBusy = video.aiStatus === 'PENDING' || video.aiStatus === 'RUNNING';
   const isQueued = video.inQueue || queued;
 
@@ -1521,6 +1531,14 @@ function VideoCard({
             </span>
           ) : null}
           <PostedBadge postedAt={video.postedAt} postedPosts={video.postedPosts} />
+          {sourceRemoved ? (
+            <span
+              title={SOURCE_REMOVED_HINT}
+              className="flex items-center gap-0.5 rounded bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+            >
+              <Archive className="h-3 w-3" /> Original removed
+            </span>
+          ) : null}
           {needsTiktokInput ? (
             <span
               title="Needs TikTok details before queueing"
@@ -1608,7 +1626,19 @@ function VideoCard({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {video.status === 'READY' ? (
-                needsTiktokInput ? (
+                sourceRemoved ? (
+                  <DropdownMenuItem
+                    disabled
+                    className="cursor-not-allowed"
+                    title={SOURCE_REMOVED_HINT}
+                  >
+                    <Archive className="mr-2 h-4 w-4 shrink-0" />
+                    <span className="flex flex-col">
+                      <span>Add to queue</span>
+                      <span className="text-muted-foreground text-[11px]">Original removed</span>
+                    </span>
+                  </DropdownMenuItem>
+                ) : needsTiktokInput ? (
                   <DropdownMenuItem
                     disabled
                     className="cursor-not-allowed"

@@ -46,8 +46,8 @@ export const AI_METADATA_MAX_VIDEO_DURATION_SEC = 60 * 60;
 
 /**
  * How long a published video's source file is kept before the retention sweep
- * removes it from storage, for creators who opted in via
- * `User.deleteSourceAfterPublish`.
+ * removes it from storage, for creators with `User.deleteSourceAfterPublish`
+ * on.
  *
  * Measured from `postedAt` (the first successful publish to any platform), and
  * only applied once the video has no publish work still outstanding — a video
