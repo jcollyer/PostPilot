@@ -30,6 +30,15 @@ export function formatDayHeading(date: Date | string): string {
   }).format(d);
 }
 
+/** "Thursday, November 12" — a day named in full. */
+export function formatLongDay(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  }).format(date);
+}
+
 /** "9:00 AM" time-only. */
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;

@@ -52,6 +52,32 @@ export const upcomingSchema = z.object({
 });
 export type UpcomingInput = z.infer<typeof upcomingSchema>;
 
+/** Is `tz` an IANA time zone this runtime knows? */
+function isValidTimeZone(tz: string): boolean {
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * One month grid of the queue calendar: `from`/`to` are the grid's first and
+ * last-exclusive instants, and `timeZone` is the viewer's, which decides the
+ * local day each post falls on.
+ */
+export const calendarSchema = z
+  .object({
+    from: z.date(),
+    to: z.date(),
+    timeZone: z.string().refine(isValidTimeZone, 'Unknown time zone'),
+  })
+  .refine((r) => r.from < r.to, 'Range must end after it starts')
+  // A month grid is at most six weeks; a little slack for DST.
+  .refine((r) => r.to.getTime() - r.from.getTime() <= 43 * 86_400_000, 'Range too long');
+export type CalendarInput = z.infer<typeof calendarSchema>;
+
 /** Retry a single failed/held publish task. */
 export const retryPublishSchema = z.object({ taskId: z.string().min(1) });
 export type RetryPublishInput = z.infer<typeof retryPublishSchema>;
