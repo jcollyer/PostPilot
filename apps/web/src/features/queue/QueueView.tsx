@@ -52,6 +52,7 @@ import { trpc } from '@/lib/trpc/client';
 import { QueueItemEditDialog, type QueueEditTarget } from './QueueItemEditDialog';
 import { ScheduleEditor } from './ScheduleEditor';
 import { formatDayHeading, formatSlot, formatTime } from './format';
+import { UpcomingSection } from '@/prototype/queue-calendar/CalendarPrototype';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type QueueItem = RouterOutputs['queue']['get']['items'][number];
@@ -537,12 +538,9 @@ export function QueueView() {
             <ScheduleEditor onChanged={refresh} />
           </section>
 
-          <section>
-            <h2 className="text-sm font-medium">Upcoming posts</h2>
-            <p className="text-muted-foreground mt-1 text-xs">
-              The next slots your schedules produce.
-            </p>
-            <div className="mt-3">
+          {/* PROTOTYPE (ticket #105): heading + calendar button + variants. */}
+          <UpcomingSection
+            list={
               <UpcomingList
                 data={upcoming.data}
                 loading={upcoming.isLoading}
@@ -551,8 +549,8 @@ export function QueueView() {
                   setEditTarget({ mediaId: post.mediaId, mediaType: post.mediaType })
                 }
               />
-            </div>
-          </section>
+            }
+          />
         </aside>
       </div>
 
