@@ -23,3 +23,16 @@ export function accountDeletionDate(requestedAt: Date): Date {
  * restore screen.
  */
 export const ACCOUNT_PENDING_DELETION = 'ACCOUNT_PENDING_DELETION';
+
+/**
+ * Days without activity after which a free account's uploaded media is
+ * removed. The account itself — settings, captions, post history — is kept;
+ * only the stored files go. Paid accounts are never affected.
+ */
+export const INACTIVE_MEDIA_PURGE_DAYS = 180;
+
+/** Days inactive at which the first warning goes out (30 days before the purge). */
+export const INACTIVE_MEDIA_WARNING_DAYS = 150;
+
+/** Days inactive at which the final warning goes out (7 days before the purge). */
+export const INACTIVE_MEDIA_FINAL_WARNING_DAYS = 173;

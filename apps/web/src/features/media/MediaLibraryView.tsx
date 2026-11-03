@@ -87,6 +87,7 @@ import { MoveToFolderDialog } from './MoveToFolderDialog';
 import { NewFolderDialog } from './NewFolderDialog';
 import { RenameFolderDialog } from './RenameFolderDialog';
 import {
+  imageRemovedHint,
   SOURCE_REMOVED_HINT,
   type FolderDto,
   type ImageDto,
@@ -1804,6 +1805,11 @@ function ImageCard({
 }) {
   const badge = STATUS_BADGE[image.status];
   const isCarousel = image.mediaType === 'CAROUSEL';
+  // The inactivity purge removed this photo, or a slide of this carousel: the
+  // card keeps its caption and post links, but it can't be queued until the
+  // removed slide is taken out (or, for slide 1, at all).
+  const photoRemoved = Boolean(image.sourceDeletedAt);
+  const removedHint = imageRemovedHint(image);
   const canPreview = Boolean(image.cdnUrl) && image.status === 'READY';
   const aiBusy = image.aiStatus === 'PENDING' || image.aiStatus === 'RUNNING';
   const isQueued = image.inQueue || queued;
@@ -1861,6 +1867,14 @@ function ImageCard({
               </span>
             ) : null}
             <PostedBadge postedAt={image.postedAt} postedPosts={image.postedPosts} />
+            {removedHint ? (
+              <span
+                title={removedHint}
+                className="flex items-center gap-0.5 rounded bg-slate-600/90 px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                <Archive className="h-3 w-3" /> {photoRemoved ? 'Original removed' : 'Slide removed'}
+              </span>
+            ) : null}
             {aiBusy ? (
               <span
                 title="AI is processing this photo"
@@ -1921,7 +1935,17 @@ function ImageCard({
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {image.status === 'READY' ? (
+              {image.status === 'READY' && removedHint ? (
+                <DropdownMenuItem disabled className="cursor-not-allowed" title={removedHint}>
+                  <Archive className="mr-2 h-4 w-4 shrink-0" />
+                  <span className="flex flex-col">
+                    <span>Add to queue</span>
+                    <span className="text-muted-foreground text-[11px]">
+                      {photoRemoved ? 'Original removed' : 'Slide removed'}
+                    </span>
+                  </span>
+                </DropdownMenuItem>
+              ) : image.status === 'READY' ? (
                 <DropdownMenuItem
                   onClick={onAddToQueue}
                   disabled={isQueued}
@@ -1938,9 +1962,13 @@ function ImageCard({
               <DropdownMenuItem onClick={onEdit} className="cursor-pointer">
                 <Pencil className="mr-2 h-4 w-4" /> Edit details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={onMakeCarousel} className="cursor-pointer">
-                <Layers className="mr-2 h-4 w-4" /> {isCarousel ? 'Edit carousel' : 'Make carousel'}
-              </DropdownMenuItem>
+              {/* A removed photo can't start a carousel; an existing one can
+                  still be edited to take removed slides out. */}
+              {isCarousel || !photoRemoved ? (
+                <DropdownMenuItem onClick={onMakeCarousel} className="cursor-pointer">
+                  <Layers className="mr-2 h-4 w-4" /> {isCarousel ? 'Edit carousel' : 'Make carousel'}
+                </DropdownMenuItem>
+              ) : null}
               {canPreview ? (
                 <DropdownMenuItem onClick={onPreview} className="cursor-pointer">
                   <ImageIcon className="mr-2 h-4 w-4" /> View

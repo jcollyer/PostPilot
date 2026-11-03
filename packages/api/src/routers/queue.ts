@@ -75,6 +75,7 @@ export const queueRouter = router({
             title: true,
             originalFilename: true,
             cdnUrl: true,
+            sourceDeletedAt: true,
             category: { select: { name: true, color: true } },
             isDuplicate: true,
             _count: { select: { carouselItems: true } },
@@ -112,7 +113,8 @@ export const queueRouter = router({
               title: it.image!.title,
               originalFilename: it.image!.originalFilename,
               durationSec: null as number | null,
-              thumbnailUrl: it.image!.cdnUrl,
+              // A removed photo has no thumbnail left (see toImageDto).
+              thumbnailUrl: it.image!.sourceDeletedAt ? null : it.image!.cdnUrl,
               category: it.image!.category,
               isDuplicate: it.image!.isDuplicate,
               // Images are Instagram-only.
@@ -174,8 +176,8 @@ export const queueRouter = router({
         id: { in: input.videoIds },
         userId: ctx.userId,
         status: 'READY',
-        // Its source file was removed after publishing (see the retention
-        // sweep), so there is nothing left to upload. Excluded here rather
+        // Its source file was removed (by the retention sweep or the inactivity
+        // purge), so there is nothing left to upload. Excluded here rather
         // than failing later in the runner, and counted in `skipped` like any
         // other unusable video.
         sourceDeletedAt: null,
@@ -255,13 +257,22 @@ export const queueRouter = router({
   /**
    * Append READY images/carousels to the queue. Images are Instagram-only, so
    * there are no per-platform gates (unlike TikTok on videos); the only skips
-   * are items already queued or not yet ready.
+   * are items already queued, not yet ready, or with a photo removed.
    */
   addImages: protectedProcedure.input(addImagesToQueueSchema).mutation(async ({ ctx, input }) => {
     const queue = await userQueue(ctx.prisma, ctx.userId);
 
     const images = await ctx.prisma.image.findMany({
-      where: { id: { in: input.imageIds }, userId: ctx.userId, status: 'READY' },
+      where: {
+        id: { in: input.imageIds },
+        userId: ctx.userId,
+        status: 'READY',
+        // A removed photo, or a carousel with a removed slide, has nothing to
+        // post; skipped like any other unusable item rather than failing later
+        // in the runner.
+        sourceDeletedAt: null,
+        carouselItems: { none: { child: { sourceDeletedAt: { not: null } } } },
+      },
       select: { id: true },
     });
     const existing = await ctx.prisma.queueItem.findMany({

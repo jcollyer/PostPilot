@@ -1,3 +1,4 @@
+import { recordActivity } from '@postpilot/accounts';
 import { Platform, Prisma, prisma, type PrismaClient } from '@postpilot/db';
 import { getFreshAccessToken, markNeedsReconnect } from '@postpilot/connectors';
 import { getObjectStream } from '@postpilot/storage';
@@ -52,7 +53,7 @@ function loadTask(client: PrismaClient, taskId: string) {
             include: {
               carouselItems: {
                 orderBy: { position: 'asc' },
-                include: { child: { select: { cdnUrl: true } } },
+                include: { child: { select: { cdnUrl: true, sourceDeletedAt: true } } },
               },
             },
           },
@@ -192,7 +193,18 @@ export async function processTask(taskId: string): Promise<PublishRunResult> {
   // On a successful publish, record it on the underlying media so the Media
   // Library can show a "Posted" badge + per-platform post links. Done here so it
   // covers both the scheduled path (publishDueTasks) and "Publish now".
-  if (result.outcome === 'published') await syncMediaPosted(task.queueItemId);
+  if (result.outcome === 'published') {
+    await syncMediaPosted(task.queueItemId);
+    // A successful publish is activity: a creator whose queue is still posting
+    // isn't inactive, whether or not they've signed in lately. At most one
+    // write a day; never allowed to fail the publish.
+    const userId = task.connection?.userId;
+    if (userId) {
+      await recordActivity(userId).catch((err) => {
+        console.error(`[publishing] failed to record activity for userId=${userId}:`, err);
+      });
+    }
+  }
   return result;
 }
 
@@ -276,15 +288,28 @@ async function startPublish(task: TaskWithRelations): Promise<PublishRunResult> 
 
   const { video, image } = task.queueItem;
 
-  // The retention sweep removed this video's source after it published, so
-  // there are no bytes left to send. It shouldn't reach here — the sweep skips
-  // videos with publish work outstanding and the queue won't re-add them — but
-  // a task that was already in flight when the sweep ran would, and handing an
-  // adapter a dead key fails far less clearly than this does.
+  // The retention sweep or the inactivity purge removed this video's source,
+  // so there are no bytes left to send. It rarely reaches here — retention
+  // skips videos with publish work outstanding, a publishing account isn't
+  // inactive, and the queue won't re-add them — but a task already queued when
+  // the file went would, and handing an adapter a dead key fails far less
+  // clearly than this does.
   if (video?.sourceDeletedAt) {
     return failTask(
       task,
-      'the source file was removed after this video published — re-upload it to post again',
+      'the source file for this video was removed — re-upload it to post again',
+      { reject: false },
+    );
+  }
+  // Same for a photo, and for a carousel any one of whose slides is gone:
+  // Instagram takes every slide or none.
+  if (
+    image &&
+    (image.sourceDeletedAt || image.carouselItems.some((ci) => ci.child.sourceDeletedAt))
+  ) {
+    return failTask(
+      task,
+      'a photo in this post was removed — re-upload it, or take it out of the carousel, to post again',
       { reject: false },
     );
   }

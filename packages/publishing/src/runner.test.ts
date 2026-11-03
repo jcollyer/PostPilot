@@ -15,6 +15,7 @@ const publish = vi.fn();
 const poll = vi.fn();
 const updateMany = vi.fn();
 const update = vi.fn();
+const recordActivity = vi.fn();
 
 let task: Record<string, any>;
 
@@ -42,6 +43,10 @@ vi.mock('@postpilot/connectors', () => ({
 
 vi.mock('@postpilot/storage', () => ({
   getObjectStream: async () => ({ stream: { destroy() {} }, contentLength: 1 }),
+}));
+
+vi.mock('@postpilot/accounts', () => ({
+  recordActivity: (userId: string) => recordActivity(userId),
 }));
 
 vi.mock('./adapters', () => ({
@@ -87,6 +92,7 @@ beforeEach(() => {
   task = scheduledTask();
   update.mockResolvedValue({});
   publish.mockResolvedValue({ state: 'PUBLISHED', platformPostId: 'yt_1' });
+  recordActivity.mockResolvedValue(true);
 });
 
 describe('processTask — claiming', () => {
@@ -182,5 +188,58 @@ describe('processTask — claiming', () => {
     expect(publish).not.toHaveBeenCalled();
     expect(poll).toHaveBeenCalledTimes(1);
     expect(result.outcome).toBe('processing');
+  });
+});
+
+describe('processTask — activity and removed media', () => {
+  it('records a successful publish as activity for the account', async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+
+    await processTask('task_1');
+
+    expect(recordActivity).toHaveBeenCalledWith('u1');
+  });
+
+  it('still reports the publish when recording activity fails', async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+    recordActivity.mockRejectedValue(new Error('db blip'));
+
+    const result = await processTask('task_1');
+
+    expect(result.outcome).toBe('published');
+  });
+
+  it('does not record activity for a publish that did not happen', async () => {
+    updateMany.mockResolvedValue({ count: 0 });
+
+    await processTask('task_1');
+
+    expect(recordActivity).not.toHaveBeenCalled();
+  });
+
+  it('fails a carousel with a removed slide instead of handing Instagram a dead URL', async () => {
+    updateMany.mockResolvedValue({ count: 1 });
+    task = {
+      ...scheduledTask(),
+      platform: 'INSTAGRAM',
+      queueItem: {
+        videoId: null,
+        imageId: 'img_1',
+        video: null,
+        image: {
+          cdnUrl: 'https://cdn.test/1.jpg',
+          sourceDeletedAt: null,
+          carouselItems: [
+            { child: { cdnUrl: 'https://cdn.test/2.jpg', sourceDeletedAt: new Date() } },
+          ],
+        },
+      },
+    };
+
+    const result = await processTask('task_1');
+
+    expect(publish).not.toHaveBeenCalled();
+    expect(result.outcome).toBe('failed');
+    expect(update.mock.calls.at(-1)![0].data.lastError).toMatch(/was removed/);
   });
 });

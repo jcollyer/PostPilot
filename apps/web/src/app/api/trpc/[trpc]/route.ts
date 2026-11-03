@@ -25,6 +25,7 @@ async function resolveSession(req: NextRequest): Promise<SessionLike | null> {
       name: result.user.name ?? null,
       image: result.user.image ?? null,
       deletionScheduledFor: result.user.deletionScheduledFor ?? null,
+      lastActiveAt: result.user.lastActiveAt ?? null,
     },
     expires:
       result.session.expiresAt instanceof Date

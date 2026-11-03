@@ -289,7 +289,14 @@ export const IMAGE_INCLUDE = {
     orderBy: { position: 'asc' },
     include: {
       child: {
-        select: { id: true, cdnUrl: true, status: true, width: true, height: true },
+        select: {
+          id: true,
+          cdnUrl: true,
+          status: true,
+          width: true,
+          height: true,
+          sourceDeletedAt: true,
+        },
       },
     },
   },
@@ -305,24 +312,30 @@ async function ownedImage(prisma: PrismaClient, userId: string, imageId: string)
 
 /** Map an Image row to a client DTO, discriminated from videos by `mediaType`. */
 export function toImageDto(img: ImageRecord) {
+  // A photo the inactivity purge removed is its own thumbnail, so unlike a
+  // removed video there is nothing left to show. Its URL is withheld rather
+  // than handed to clients as a broken image; every view already falls back
+  // to a placeholder for a photo with no URL.
   const childSlides = img.carouselItems.map((ci) => ({
     id: ci.child.id,
-    cdnUrl: ci.child.cdnUrl,
+    cdnUrl: ci.child.sourceDeletedAt ? null : ci.child.cdnUrl,
+    sourceDeletedAt: ci.child.sourceDeletedAt,
   }));
   const isCarousel = childSlides.length > 0;
+  const cdnUrl = img.sourceDeletedAt ? null : img.cdnUrl;
   return {
     mediaType: (isCarousel ? 'CAROUSEL' : 'IMAGE') as 'CAROUSEL' | 'IMAGE',
     id: img.id,
     status: img.status,
     aiStatus: img.aiStatus,
-    cdnUrl: img.cdnUrl,
+    cdnUrl,
     originalFilename: img.originalFilename,
     mimeType: img.mimeType,
     fileSize: img.fileSize !== null && img.fileSize !== undefined ? Number(img.fileSize) : null,
     width: img.width,
     height: img.height,
     // The image is its own thumbnail; a carousel shows its slide-1 (own) file.
-    thumbnailUrl: img.cdnUrl,
+    thumbnailUrl: cdnUrl,
     title: img.title,
     caption: img.caption,
     hashtags: img.hashtags,
@@ -343,6 +356,14 @@ export function toImageDto(img: ImageRecord) {
     // urls, in order, for the stacked-preview visual and the builder.
     slideCount: 1 + childSlides.length,
     carouselChildren: childSlides,
+    // Set once the inactivity purge removed this photo (see
+    // Image.sourceDeletedAt). The entry keeps its caption and post links but
+    // can't be posted, previewed or used as a carousel slide again.
+    sourceDeletedAt: img.sourceDeletedAt,
+    // Slides (this photo included) whose file is gone. A carousel can't post
+    // while any are; taking a removed slide out makes it postable again.
+    removedSlides:
+      (img.sourceDeletedAt ? 1 : 0) + childSlides.filter((c) => c.sourceDeletedAt).length,
     createdAt: img.createdAt,
     updatedAt: img.updatedAt,
   };
@@ -782,6 +803,8 @@ export const mediaRouter = router({
         userId: ctx.userId,
         folderId: input.folderId ?? null,
         status: 'READY',
+        // A removed photo can't be a slide (see setCarouselItems).
+        sourceDeletedAt: null,
       };
       if (input.search) {
         const q = input.search;
@@ -808,7 +831,7 @@ export const mediaRouter = router({
   setCarouselItems: protectedProcedure
     .input(setCarouselItemsSchema)
     .mutation(async ({ ctx, input }) => {
-      await ownedImage(ctx.prisma, ctx.userId, input.imageId);
+      const parent = await ownedImage(ctx.prisma, ctx.userId, input.imageId);
 
       // De-dupe, drop the parent if it snuck into its own child list, preserve order.
       const childIds = [...new Set(input.childImageIds)].filter((id) => id !== input.imageId);
@@ -816,12 +839,21 @@ export const mediaRouter = router({
       if (childIds.length > 0) {
         const owned = await ctx.prisma.image.findMany({
           where: { id: { in: childIds }, userId: ctx.userId },
-          select: { id: true },
+          select: { id: true, sourceDeletedAt: true },
         });
         if (owned.length !== childIds.length) {
           throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'One or more selected photos could not be found.',
+          });
+        }
+        // A removed photo can't be posted, so it can't be added as a slide.
+        // Slides already in the carousel that were removed since are dropped
+        // by leaving them out of the list, which is how a creator fixes one.
+        if (parent.sourceDeletedAt || owned.some((img) => img.sourceDeletedAt)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'A removed photo can’t be part of a carousel. Upload it again to use it.',
           });
         }
       }

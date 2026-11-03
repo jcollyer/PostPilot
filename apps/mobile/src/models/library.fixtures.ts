@@ -84,6 +84,7 @@ export function image(id: string, slideCount = 1, overrides: Partial<Image> = {}
   const children = Array.from({ length: slideCount - 1 }, (_, i) => ({
     id: `${id}_slide${i + 2}`,
     cdnUrl: `https://cdn.example.com/${id}_${i + 2}.jpg`,
+    sourceDeletedAt: null,
   }));
   return {
     mediaType: slideCount > 1 ? 'CAROUSEL' : 'IMAGE',
@@ -111,6 +112,8 @@ export function image(id: string, slideCount = 1, overrides: Partial<Image> = {}
     inQueue: false,
     slideCount,
     carouselChildren: children,
+    sourceDeletedAt: null,
+    removedSlides: 0,
     createdAt: hoursAgo(1),
     updatedAt: hoursAgo(1),
     ...overrides,

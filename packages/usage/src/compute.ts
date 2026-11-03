@@ -52,10 +52,10 @@ function toNumber(value: bigint | number | null | undefined): number {
 /**
  * Live usage for one user.
  *
- * Videos with `sourceDeletedAt` set are excluded from byte totals — the
- * retention sweep removed those files, so counting them would hide exactly the
- * saving retention exists to produce. They stay in `videoCount` because the
- * library entry is still there.
+ * Videos and images with `sourceDeletedAt` set are excluded from byte totals —
+ * the retention sweep or the inactivity purge removed those files, so counting
+ * them would hide exactly the saving those exist to produce. They stay in
+ * `videoCount` and `imageCount` because the library entry is still there.
  *
  * Derived objects (thumbnail candidates, covers) are not counted: no size is
  * recorded for them, and at five JPEGs per video they sit well under 1% of a
@@ -65,7 +65,7 @@ function toNumber(value: bigint | number | null | undefined): number {
 export async function computeUsage(userId: string, client?: PrismaClient): Promise<Usage> {
   const prisma = client ?? defaultPrisma;
 
-  const [videoBytesAgg, videoCount, videosWithSource, videosProcessed, imageAgg] =
+  const [videoBytesAgg, videoCount, videosWithSource, videosProcessed, imageAgg, imageCount] =
     await Promise.all([
       prisma.video.aggregate({
         where: { userId, sourceDeletedAt: null },
@@ -74,12 +74,15 @@ export async function computeUsage(userId: string, client?: PrismaClient): Promi
       prisma.video.count({ where: { userId } }),
       prisma.video.count({ where: { userId, sourceDeletedAt: null } }),
       prisma.video.count({ where: { userId, aiStatus: 'COMPLETED' } }),
-      prisma.image.aggregate({ where: { userId }, _sum: { fileSize: true }, _count: true }),
+      prisma.image.aggregate({
+        where: { userId, sourceDeletedAt: null },
+        _sum: { fileSize: true },
+      }),
+      prisma.image.count({ where: { userId } }),
     ]);
 
   const videoBytes = toNumber(videoBytesAgg._sum.fileSize);
   const imageBytes = toNumber(imageAgg._sum.fileSize);
-  const imageCount = imageAgg._count;
 
   return {
     storageBytes: videoBytes + imageBytes,

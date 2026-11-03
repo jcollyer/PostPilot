@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Instagram, Layers, Loader2 } from 'lucide-react';
+import { Archive, Instagram, Layers, Loader2 } from 'lucide-react';
 
 import { PillAvatar } from '@/components/PlatformGlyph';
 import { Button } from '@/components/ui/button';
@@ -29,7 +29,7 @@ import {
   usePlatformAccountLabels,
   usePlatformAvatarUrls,
 } from './PlatformTargets';
-import type { ImageDto } from './types';
+import { imageRemovedHint, type ImageDto } from './types';
 
 /**
  * Edit-details panel for a photo / carousel. Deliberately simpler than the video
@@ -103,6 +103,11 @@ export function ImageEditPanel({
         (u): u is string => Boolean(u),
       )
     : [image.thumbnailUrl].filter((u): u is string => Boolean(u));
+  // Removed photos have no URL, so they drop out of `slides` above; this says
+  // why, in place of what's missing.
+  const removedHint = imageRemovedHint(detail.data ?? image);
+  const photoRemoved = Boolean((detail.data ?? image).sourceDeletedAt);
+  const slideCount = detail.data?.slideCount ?? image.slideCount;
 
   const save = async () => {
     await updateMetadata.mutateAsync({
@@ -148,6 +153,12 @@ export function ImageEditPanel({
       <div className="flex-1 space-y-4 overflow-y-auto p-6">
         {/* Preview + Make carousel */}
         <div className="space-y-2">
+          {removedHint ? (
+            <p className="bg-muted text-muted-foreground flex items-start gap-2 rounded-md border p-3 text-xs">
+              <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {removedHint}
+            </p>
+          ) : null}
           <div className="bg-muted relative overflow-hidden rounded-md border">
             {slides[0] ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -159,7 +170,7 @@ export function ImageEditPanel({
             ) : null}
             {isCarousel ? (
               <span className="absolute left-2 top-2 flex items-center gap-1 rounded bg-black/70 px-1.5 py-0.5 text-[11px] font-medium text-white">
-                <Layers className="h-3 w-3" /> {slides.length} slides
+                <Layers className="h-3 w-3" /> {slideCount} slides
               </span>
             ) : null}
           </div>
@@ -183,12 +194,12 @@ export function ImageEditPanel({
                 Edit
               </button>
             </div>
-          ) : (
+          ) : isCarousel || !photoRemoved ? (
             <Button variant="outline" className="w-full" onClick={onMakeCarousel}>
               <Layers className="mr-2 h-4 w-4" />
               {isCarousel ? 'Edit carousel' : 'Make carousel'}
             </Button>
-          )}
+          ) : null}
         </div>
 
         <div className="space-y-1.5">

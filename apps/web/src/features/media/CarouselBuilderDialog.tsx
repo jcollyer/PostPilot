@@ -1,7 +1,16 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, ImageIcon, Loader2, Plus, X } from 'lucide-react';
+import {
+  Archive,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ImageIcon,
+  Loader2,
+  Plus,
+  X,
+} from 'lucide-react';
 
 import { MAX_CAROUSEL_ITEMS } from '@postpilot/types';
 
@@ -23,6 +32,8 @@ import type { ImageDto } from './types';
 interface Slide {
   id: string;
   cdnUrl: string | null;
+  /** The inactivity purge removed this photo; it has to come out to save. */
+  removed?: boolean;
 }
 
 /**
@@ -54,7 +65,11 @@ export function CarouselBuilderDialog({
   const current = useMemo<Slide[]>(
     () =>
       slides ??
-      (detail.data?.carouselChildren.map((c) => ({ id: c.id, cdnUrl: c.cdnUrl })) ?? []),
+      (detail.data?.carouselChildren.map((c) => ({
+        id: c.id,
+        cdnUrl: c.cdnUrl,
+        removed: Boolean(c.sourceDeletedAt),
+      })) ?? []),
     [slides, detail.data],
   );
 
@@ -92,6 +107,19 @@ export function CarouselBuilderDialog({
     setItems.mutate({ imageId: image.id, childImageIds: current.map((s) => s.id) });
 
   const parentUrl = detail.data?.cdnUrl ?? image.thumbnailUrl ?? null;
+
+  // A removed photo can't be posted, so the server refuses it as a slide.
+  // Removed children just need taking out; a removed slide 1 can't be, so the
+  // only save left is clearing the slides back to a single photo.
+  const parentRemoved = Boolean((detail.data ?? image).sourceDeletedAt);
+  const hasRemovedSlide = current.some((s) => s.removed);
+  const blockedReason = parentRemoved
+    ? current.length > 0
+      ? 'This photo was removed, so this carousel can’t be posted again. Take out every slide to turn it back into a single photo.'
+      : null
+    : hasRemovedSlide
+      ? 'Some photos in this carousel were removed. Take them out to save.'
+      : null;
 
   // The parent and current children can't be re-added in the picker.
   const excludeIds = useMemo(
@@ -131,7 +159,11 @@ export function CarouselBuilderDialog({
                 key={slide.id}
                 className="group relative aspect-square overflow-hidden rounded-md border"
               >
-                {slide.cdnUrl ? (
+                {slide.removed ? (
+                  <span className="text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-1 text-[11px]">
+                    <Archive className="h-5 w-5" /> Removed
+                  </span>
+                ) : slide.cdnUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={slide.cdnUrl}
@@ -176,7 +208,7 @@ export function CarouselBuilderDialog({
             ))}
 
             {/* Trailing "add" tile — always last. */}
-            {remaining > 0 ? (
+            {remaining > 0 && !parentRemoved ? (
               <button
                 type="button"
                 onClick={() => setPickerOpen(true)}
@@ -187,11 +219,18 @@ export function CarouselBuilderDialog({
             ) : null}
           </div>
 
+          {blockedReason ? (
+            <p className="text-muted-foreground flex items-start gap-2 text-xs">
+              <Archive className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              {blockedReason}
+            </p>
+          ) : null}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={setItems.isPending}>
               Cancel
             </Button>
-            <Button onClick={save} disabled={setItems.isPending}>
+            <Button onClick={save} disabled={setItems.isPending || Boolean(blockedReason)}>
               {setItems.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {current.length > 0 ? 'Save carousel' : 'Save'}
             </Button>

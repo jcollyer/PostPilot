@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 const videoAggregate = vi.fn();
 const videoCount = vi.fn();
 const imageAggregate = vi.fn();
+const imageCount = vi.fn();
 
 vi.mock('@postpilot/db', () => ({
   prisma: {
@@ -17,7 +18,10 @@ vi.mock('@postpilot/db', () => ({
       aggregate: (args: unknown) => videoAggregate(args),
       count: (args: unknown) => videoCount(args),
     },
-    image: { aggregate: (args: unknown) => imageAggregate(args) },
+    image: {
+      aggregate: (args: unknown) => imageAggregate(args),
+      count: (args: unknown) => imageCount(args),
+    },
   },
 }));
 
@@ -30,7 +34,8 @@ const GB = 1024 ** 3;
 beforeEach(() => {
   vi.clearAllMocks();
   videoAggregate.mockResolvedValue({ _sum: { fileSize: null } });
-  imageAggregate.mockResolvedValue({ _sum: { fileSize: null }, _count: 0 });
+  imageAggregate.mockResolvedValue({ _sum: { fileSize: null } });
+  imageCount.mockResolvedValue(0);
   videoCount.mockResolvedValue(0);
 });
 
@@ -42,7 +47,8 @@ function countWheres(): any[] {
 describe('computeUsage', () => {
   it('sums video and image bytes into one billable total', async () => {
     videoAggregate.mockResolvedValue({ _sum: { fileSize: BigInt(10 * GB) } });
-    imageAggregate.mockResolvedValue({ _sum: { fileSize: BigInt(2 * GB) }, _count: 40 });
+    imageAggregate.mockResolvedValue({ _sum: { fileSize: BigInt(2 * GB) } });
+    imageCount.mockResolvedValue(40);
     videoCount.mockResolvedValue(100);
 
     const usage = await computeUsage('u1');
@@ -63,6 +69,15 @@ describe('computeUsage', () => {
     );
   });
 
+  it('excludes photos the inactivity purge removed, but still counts them', async () => {
+    await computeUsage('u1');
+
+    expect(imageAggregate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { userId: 'u1', sourceDeletedAt: null } }),
+    );
+    expect(imageCount).toHaveBeenCalledWith({ where: { userId: 'u1' } });
+  });
+
   it('counts every video but only sources still stored', async () => {
     const wheres = (await computeUsage('u1'), countWheres());
 
@@ -74,7 +89,7 @@ describe('computeUsage', () => {
 
   it('treats a missing fileSize as zero rather than NaN', async () => {
     videoAggregate.mockResolvedValue({ _sum: { fileSize: null } });
-    imageAggregate.mockResolvedValue({ _sum: { fileSize: null }, _count: 0 });
+    imageAggregate.mockResolvedValue({ _sum: { fileSize: null } });
     videoCount.mockResolvedValue(3);
 
     const usage = await computeUsage('u1');

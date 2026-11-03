@@ -14,6 +14,8 @@ export interface SessionLike {
     image?: string | null;
     /** Set while the account is scheduled for deletion; see User.deletionScheduledFor. */
     deletionScheduledFor?: Date | string | null;
+    /** Last recorded activity; lets the API skip the write when it is from today. */
+    lastActiveAt?: Date | string | null;
   } | null;
   expires?: string;
 }
