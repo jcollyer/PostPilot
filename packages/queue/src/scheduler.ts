@@ -1,7 +1,8 @@
 import { type PrismaClient, Platform } from '@postpilot/db';
 import { tasks } from '@trigger.dev/sdk';
 
-import { generateSlots, type ScheduleRule, type Slot } from './slots';
+import { planSlots } from './planner';
+import { generateSlots, type ScheduleRule } from './slots';
 
 /**
  * Arm the `publish-task` run for the moment this task is actually due, so we
@@ -68,40 +69,6 @@ async function activeConnections(
   return map;
 }
 
-/** Resolve a slot's target platforms: explicit list, else all connected. */
-function resolvePlatforms(slot: Slot, connected: Platform[]): Platform[] {
-  return slot.platforms.length > 0 ? slot.platforms : connected;
-}
-
-/**
- * The platforms a queue item should actually publish to in a given slot.
- *
- * Combines two scopes:
- *   - the slot's scope (its schedule's `platforms`, or all connected when empty)
- *   - the video's own `targetPlatforms` (empty = "all connected", the default)
- *
- * When the video names explicit targets we honor exactly those (intersected
- * with the slot's scope if the slot is platform-specific), so a platform the
- * user picked but hasn't connected still yields a HELD task and stays visible
- * rather than being silently dropped. When the video leaves it default, we fall
- * back to the slot's resolved scope — i.e. the previous cross-post behavior.
- */
-function platformsForItem(
-  slot: Slot,
-  connectedPlatforms: Platform[],
-  videoTargets: Platform[],
-): Platform[] {
-  if (videoTargets.length === 0) {
-    return resolvePlatforms(slot, connectedPlatforms);
-  }
-  // Slot scoped to specific platforms: keep only targets the slot allows.
-  if (slot.platforms.length > 0) {
-    return videoTargets.filter((p) => slot.platforms.includes(p));
-  }
-  // Slot covers "all": the video's explicit choice wins outright.
-  return videoTargets;
-}
-
 /**
  * Every platform an item ultimately wants a task for, independent of any one
  * slot: its explicit targets, or all currently-connected platforms when left on
@@ -127,10 +94,10 @@ function targetsOf(item: {
 
 /**
  * Recompute the schedule for a queue. Idempotent: clears future SCHEDULED tasks
- * (leaving in-flight/published/held-by-publishing ones alone), then walks the
- * slots in time order, giving each to the earliest-positioned item that still
- * needs a task for one of that slot's platforms. A task whose platform has no
- * ACTIVE connection is created HELD so the UI can flag it.
+ * (leaving in-flight/published/held-by-publishing ones alone), then writes the
+ * plan from `planSlots`: each slot, in time order, goes to the earliest-positioned
+ * item that still needs a task for one of that slot's platforms. A task whose
+ * platform has no ACTIVE connection is created HELD so the UI can flag it.
  *
  * An item can span several slots — one per schedule scope it needs. That is what
  * makes a video targeting all three platforms take TikTok + YouTube from a
@@ -247,10 +214,7 @@ export async function recomputeSchedule(
   });
   if (schedules.length === 0) return { scheduledItems: 0, tasks: 0 };
 
-  const slots = generateSlots(schedules as ScheduleRule[], now).filter(
-    (s) => resolvePlatforms(s, connectedPlatforms).length > 0,
-  );
-  if (slots.length === 0) return { scheduledItems: 0, tasks: 0 };
+  const slots = generateSlots(schedules as ScheduleRule[], now);
 
   // PENDING items need a whole plan. PUBLISHING items are partly done — they've
   // posted to some platforms and still need a slot for the rest, which is a
@@ -269,79 +233,52 @@ export async function recomputeSchedule(
     },
   });
 
+  // What each item still needs: its wanted platforms minus any whose task
+  // survived the clear above (PUBLISHED, PROCESSING, or an in-flight upload).
+  // Those are already spoken for — that is what keeps a partly-published item
+  // from being handed a second task for a platform it has already posted to.
+  const plan = planSlots(
+    items.map((item) => {
+      const done = new Set(item.publishTasks.map((t) => t.platform));
+      const needs = wantedPlatforms(connectedPlatforms, targetsOf(item)).filter(
+        (p) => !done.has(p),
+      );
+      return { id: item.id, needs };
+    }),
+    slots,
+    connectedPlatforms,
+  );
+
+  const statusOf = new Map(items.map((i) => [i.id, i.status]));
   let scheduledItems = 0;
   let tasks = 0;
-
-  // Platforms each item still needs a task for, worked down as slots are handed
-  // out. An item is NOT spent on the first slot it fits: doing that silently
-  // reduced a cross-post video to whichever schedule reached it first — a video
-  // targeting all three platforms that landed in an Instagram-only slot got one
-  // Instagram task, published, rolled up to COMPLETED, and left the queue having
-  // never reached YouTube or TikTok. Tracking the remainder lets the same item
-  // take TikTok + YouTube from one schedule and Instagram from another.
-  //
-  // Platforms whose task survived the clear above (PUBLISHED, PROCESSING, or an
-  // in-flight upload) are already spoken for and are excluded — that is what
-  // keeps a partly-published item from being handed a second task for a platform
-  // it has already posted to.
-  const remaining = new Map<string, Set<Platform>>();
-  for (const item of items) {
-    const done = new Set(item.publishTasks.map((t) => t.platform));
-    const want = wantedPlatforms(connectedPlatforms, targetsOf(item)).filter((p) => !done.has(p));
-    if (want.length > 0) remaining.set(item.id, new Set(want));
-  }
 
   // Items already given a slot this pass, so a second slot adds tasks without
   // re-stamping the item's headline time.
   const started = new Set<string>();
-  // Items whose platforms are now fully covered, so the walk can stop early.
-  let covered = 0;
 
-  // Greedy assignment: walk slots in time order and give each to the
-  // earliest-positioned item that still needs ≥1 of that slot's platforms. This
-  // keeps queue order in the common case (one all-platforms schedule -> every
-  // item is compatible and fully covered by its first slot, so it degrades to
-  // 1:1 by index) while letting a platform-scoped item skip a slot it can't use
-  // rather than burning it on a no-op.
-  for (const slot of slots) {
-    let chosen: { id: string; status: string; platforms: Platform[] } | null = null;
-    for (const item of items) {
-      const need = remaining.get(item.id);
-      if (!need || need.size === 0) continue;
-      // What this item would publish here, minus what an earlier slot covered.
-      const platforms = platformsForItem(slot, connectedPlatforms, targetsOf(item)).filter((p) =>
-        need.has(p),
-      );
-      if (platforms.length === 0) continue;
-      chosen = { id: item.id, status: item.status, platforms };
-      break;
-    }
-    if (!chosen) continue;
-
-    const need = remaining.get(chosen.id)!;
-
+  for (const { slot, itemId, platforms } of plan) {
     // The item's own scheduledAt is the earliest time any of its tasks goes out.
-    // Slots are walked in time order, so that's this first assignment; later
+    // The plan is in slot time order, so that's this first assignment; later
     // slots add tasks without moving it. A partly-published item keeps both its
     // PUBLISHING status and the time it first went out — it is catching up on a
     // missing platform, not being scheduled afresh.
-    if (!started.has(chosen.id)) {
-      started.add(chosen.id);
-      if (chosen.status === 'PENDING') {
+    if (!started.has(itemId)) {
+      started.add(itemId);
+      if (statusOf.get(itemId) === 'PENDING') {
         await prisma.queueItem.update({
-          where: { id: chosen.id },
+          where: { id: itemId },
           data: { status: 'SCHEDULED', scheduledAt: slot.at },
         });
       }
       scheduledItems++;
     }
 
-    for (const platform of chosen.platforms) {
-      need.delete(platform);
+    for (const platform of platforms) {
       const connectionId = connected.get(platform) ?? null;
       const created = await prisma.publishTask.create({
         data: {
-          queueItemId: chosen.id,
+          queueItemId: itemId,
           platform,
           connectionId,
           status: connectionId ? 'SCHEDULED' : 'HELD',
@@ -353,11 +290,6 @@ export async function recomputeSchedule(
       // arm — they're resolved by a reconnect, which reschedules the queue.
       if (connectionId) await armPublish(created.id, slot.at);
       tasks++;
-    }
-
-    if (need.size === 0) {
-      covered++;
-      if (covered >= remaining.size) break;
     }
   }
 
