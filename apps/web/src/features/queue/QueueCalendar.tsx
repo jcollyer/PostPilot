@@ -109,7 +109,7 @@ function CalendarBody({
 
   return (
     <>
-      <DialogHeader className="border-line flex-row items-center justify-between gap-3 space-y-0 border-b px-4 py-3 pr-12 sm:px-6">
+      <DialogHeader className="border-line flex-row items-center justify-between gap-3 space-y-0 border-b py-3 pl-4 pr-12 sm:pl-6 sm:pr-14">
         <DialogTitle className="text-lg font-medium tabular-nums tracking-[-0.01em]">
           {formatMonth(month)}
         </DialogTitle>
