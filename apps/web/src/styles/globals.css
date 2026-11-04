@@ -280,6 +280,30 @@
     }
   }
 
+  /* A calendar chip a move just shifted: a lime ring that fades out, so the
+     knock-on effect of a drop is visible for a moment. Reduced motion gets the
+     ring held for the same moment, without the fade. */
+  .pp-shift-flash {
+    animation: pp-shift-flash 1.6s ease-out both;
+  }
+
+  @keyframes pp-shift-flash {
+    0%,
+    35% {
+      box-shadow: 0 0 0 2px hsl(var(--primary));
+    }
+    100% {
+      box-shadow: 0 0 0 2px hsl(var(--primary) / 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pp-shift-flash {
+      animation: none;
+      box-shadow: 0 0 0 2px hsl(var(--primary));
+    }
+  }
+
   /* The runway: days of content left, drawn as a strip that burns down.
      `--pp-run` is the filled fraction, `--pp-mark` the upload-by position. */
   .pp-runway {

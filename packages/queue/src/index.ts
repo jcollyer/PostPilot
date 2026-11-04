@@ -12,8 +12,16 @@ export {
   type CalendarChip,
   type CalendarPost,
   type CalendarRange,
+  type CalendarSlot,
   type CalendarState,
 } from './calendar';
+export {
+  moveItem,
+  moveToSlot,
+  QueueMoveError,
+  type MoveToSlotResult,
+  type QueueMoveErrorCode,
+} from './moves';
 export { generateSlots, type Slot, type ScheduleRule } from './slots';
 
 // Smart ordering

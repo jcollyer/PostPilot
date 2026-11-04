@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { scheduleRuleSchema } from './domain';
+import { platformSchema, scheduleRuleSchema } from './domain';
 
 /**
  * Queue + scheduling input validation, shared by the API and both clients.
@@ -32,6 +32,17 @@ export const moveQueueItemSchema = z.object({
   afterItemId: z.string().min(1).nullable(),
 });
 export type MoveQueueItemInput = z.infer<typeof moveQueueItemSchema>;
+
+/**
+ * Move an item so `platforms` go out in the slot at `slotAt` — a calendar drop.
+ * The server resolves it to a reorder against the queue as it stands.
+ */
+export const moveToSlotSchema = z.object({
+  itemId: z.string().min(1),
+  slotAt: z.date(),
+  platforms: z.array(platformSchema).min(1),
+});
+export type MoveToSlotInput = z.infer<typeof moveToSlotSchema>;
 
 /** Create a recurring schedule (days/times/timezone/platforms). */
 export const createScheduleSchema = scheduleRuleSchema;

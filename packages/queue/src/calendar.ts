@@ -1,7 +1,15 @@
 import { DateTime } from 'luxon';
 import type { Platform, PrismaClient, QueueStatus } from '@postpilot/db';
 
-import { planSlots, type SlotAssignment } from './planner';
+import {
+  freshPlanItems,
+  heldSlots,
+  IN_ROTATION,
+  isInFlight,
+  planUntil,
+  type ItemState,
+} from './fresh-plan';
+import type { SlotAssignment } from './planner';
 import { activeConnections, planItemOf } from './scheduler';
 import { generateSlots, type ScheduleRule } from './slots';
 
@@ -60,6 +68,12 @@ export interface CalendarChip {
   title: string | null;
   thumbnailUrl: string | null;
   state: CalendarState;
+  /**
+   * `moveToSlot` would take it: a post still waiting (scheduled, held or
+   * projected) on an item the runner isn't working on. An item mid-upload is
+   * left alone by the scheduler, so none of its chips move until that settles.
+   */
+  movable: boolean;
   /** The earliest post's time that day. */
   at: Date;
   posts: CalendarPost[];
@@ -73,11 +87,31 @@ export interface CalendarRange {
   timeZone: string;
 }
 
+/**
+ * A future slot time in range, and per platform it posts to, the item holding
+ * it — what a drop there displaces. Read from the plan as a fresh recompute
+ * would write it, so it agrees with `moveToSlot`.
+ */
+export interface CalendarSlot {
+  at: Date;
+  /** The viewer-local day, `YYYY-MM-DD`. */
+  day: string;
+  /** Platform -> holder item id; `null` once the queue has run out for it. */
+  holders: Partial<Record<Platform, string | null>>;
+  /**
+   * Past the live plan (or the queue is paused): nothing would be written for
+   * it yet, so its posts are an estimate.
+   */
+  projected: boolean;
+}
+
 export interface Calendar {
   /** The queue's own status, so a paused queue can say so. */
   status: QueueStatus;
   /** Soonest first. */
   chips: CalendarChip[];
+  /** Soonest first; only slots still to come. */
+  slots: CalendarSlot[];
 }
 
 /** The queue item's media, as a chip shows it. */
@@ -135,9 +169,6 @@ function mediaOf({ video, image, videoId, imageId }: ItemMedia) {
   };
 }
 
-/** Items `recomputeSchedule` plans (SCHEDULED ones are reset to PENDING and re-planned). */
-const IN_ROTATION = ['PENDING', 'SCHEDULED', 'PUBLISHING'] as const;
-
 /**
  * The queue on a month grid: one chip per queue item per viewer-local day,
  * carrying that day's platforms. Past days show what went out from items still
@@ -191,6 +222,7 @@ export async function getCalendar(
       orderBy: { position: 'asc' },
       select: {
         id: true,
+        status: true,
         ...MEDIA_SELECT,
         video: { select: { ...MEDIA_SELECT.video.select, targetPlatforms: true } },
         publishTasks: { select: { platform: true, status: true, scheduledAt: true } },
@@ -204,7 +236,16 @@ export async function getCalendar(
     const key = `${itemId}:${day}`;
     let chip = chips.get(key);
     if (!chip) {
-      chip = { key, day, itemId, ...mediaOf(media), state: post.state, at: post.at, posts: [] };
+      chip = {
+        key,
+        day,
+        itemId,
+        ...mediaOf(media),
+        state: post.state,
+        movable: false,
+        at: post.at,
+        posts: [],
+      };
       chips.set(key, chip);
     }
     chip.posts.push(post);
@@ -225,8 +266,24 @@ export async function getCalendar(
     });
   }
 
+  const [schedules, connected] = await Promise.all([
+    prisma.schedule.findMany({
+      where: { queueId, isActive: true },
+      select: { id: true, timezone: true, daysOfWeek: true, times: true, platforms: true },
+    }) as Promise<ScheduleRule[]>,
+    activeConnections(prisma, queue.userId),
+  ]);
+  const connectedPlatforms = [...connected.keys()];
+
   const itemsById = new Map(items.map((i) => [i.id, i]));
-  const projected = await projectBeyondPlan(prisma, { id: queueId, ...queue }, items, range, now);
+  const projected = projectBeyondPlan(
+    queue.status,
+    items,
+    schedules,
+    connectedPlatforms,
+    range,
+    now,
+  );
   for (const { slot, itemId, platforms } of projected) {
     for (const platform of platforms) {
       add(itemId, itemsById.get(itemId)!, {
@@ -239,10 +296,44 @@ export async function getCalendar(
     }
   }
 
+  const settled = new Set(items.filter((i) => !isInFlight(i, now)).map((i) => i.id));
+  for (const chip of chips.values()) {
+    chip.movable =
+      (chip.state === 'scheduled' || chip.state === 'held' || chip.state === 'projected') &&
+      settled.has(chip.itemId);
+  }
+
   return {
     status: queue.status,
     chips: [...chips.values()].sort((a, b) => a.at.getTime() - b.at.getTime()),
+    slots: slotsInRange(queue.status, items, schedules, connectedPlatforms, range, now),
   };
+}
+
+/** The future slots in `range` and who holds each, per platform. */
+function slotsInRange(
+  status: QueueStatus,
+  items: ItemState[],
+  schedules: ScheduleRule[],
+  connectedPlatforms: Platform[],
+  range: CalendarRange,
+  now: Date,
+): CalendarSlot[] {
+  if (range.to <= now) return [];
+  const planItems = freshPlanItems(items, connectedPlatforms, now);
+  const fresh = planUntil(planItems, schedules, connectedPlatforms, now, range.to);
+  // The slots `recomputeSchedule` materializes: its own horizon and cap.
+  const live = new Set(
+    status === 'PAUSED' ? [] : generateSlots(schedules, now).map((s) => s.at.getTime()),
+  );
+  return heldSlots(fresh, planItems, connectedPlatforms)
+    .filter((s) => s.at >= range.from)
+    .map((s) => ({
+      at: s.at,
+      day: DateTime.fromJSDate(s.at, { zone: range.timeZone }).toISODate()!,
+      holders: Object.fromEntries(s.holders),
+      projected: !live.has(s.at.getTime()),
+    }));
 }
 
 /**
@@ -258,29 +349,18 @@ export async function getCalendar(
  * - Items the runner is working on are left alone, as the scheduler leaves
  *   them; their remaining platforms get planned once that work settles.
  */
-async function projectBeyondPlan(
-  prisma: PrismaClient,
-  queue: { id: string; userId: string; status: QueueStatus },
-  items: {
-    id: string;
-    imageId: string | null;
-    video: { targetPlatforms: Platform[] } | null;
-    publishTasks: { platform: Platform; status: string; scheduledAt: Date }[];
-  }[],
+function projectBeyondPlan(
+  status: QueueStatus,
+  items: ItemState[],
+  schedules: ScheduleRule[],
+  connectedPlatforms: Platform[],
   range: CalendarRange,
   now: Date,
-): Promise<SlotAssignment[]> {
-  // The scheduler's own test for in-flight work: uploading, or due and not yet
-  // claimed (or waiting out a retry).
-  const settled = items.filter(
-    (item) =>
-      !item.publishTasks.some(
-        (t) => t.status === 'UPLOADING' || (t.status === 'SCHEDULED' && t.scheduledAt <= now),
-      ),
-  );
+): SlotAssignment[] {
+  const settled = items.filter((item) => !isInFlight(item, now));
 
   let start = now;
-  if (queue.status !== 'PAUSED') {
+  if (status !== 'PAUSED') {
     for (const item of settled) {
       for (const t of item.publishTasks) {
         if ((t.status === 'SCHEDULED' || t.status === 'HELD') && t.scheduledAt > start) {
@@ -289,37 +369,21 @@ async function projectBeyondPlan(
       }
     }
   }
-  if (settled.length === 0 || range.to <= start) return [];
-
-  const [schedules, connected] = await Promise.all([
-    prisma.schedule.findMany({
-      where: { queueId: queue.id, isActive: true },
-      select: { id: true, timezone: true, daysOfWeek: true, times: true, platforms: true },
-    }),
-    activeConnections(prisma, queue.userId),
-  ]);
-  if (schedules.length === 0) return [];
-  const connectedPlatforms = [...connected.keys()];
+  if (settled.length === 0 || range.to <= start || schedules.length === 0) return [];
 
   // Every slot from the plan's end to the end of the range. The walk has to
   // start at the plan's end even when the range is months later, because what
-  // lands in March depends on everything handed out before it. A day of slack
-  // covers schedule time zones ahead of the instant `start` falls on.
-  const horizonDays = Math.ceil((range.to.getTime() - start.getTime()) / DAY_MS) + 1;
-  const slots = generateSlots(schedules as ScheduleRule[], start, {
-    horizonDays,
-    max: Number.POSITIVE_INFINITY,
-  }).filter((s) => s.at < range.to);
-
+  // lands in March depends on everything handed out before it.
+  //
   // A FAILED task counts as covered, as it does for the scheduler until its
   // next pass drops it; that pass plans the platform again, near the front.
-  const plan = planSlots(
+  const { plan } = planUntil(
     settled.map((item) => planItemOf(item, connectedPlatforms)),
-    slots,
+    schedules,
     connectedPlatforms,
+    start,
+    range.to,
   );
 
   return plan.filter((a) => a.slot.at >= range.from);
 }
-
-const DAY_MS = 86_400_000;

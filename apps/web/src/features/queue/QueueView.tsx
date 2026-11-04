@@ -154,11 +154,13 @@ export function QueueView() {
 
   const accounts: Accounts = { tiktok, instagram, youtube };
 
-  const refresh = () => {
-    utils.queue.get.invalidate();
-    utils.queue.upcoming.invalidate();
-    utils.queue.calendar.invalidate();
-  };
+  /** Refetch every view of the queue; resolves once they're fresh. */
+  const refresh = () =>
+    Promise.all([
+      utils.queue.get.invalidate(),
+      utils.queue.upcoming.invalidate(),
+      utils.queue.calendar.invalidate(),
+    ]);
 
   const pause = trpc.queue.pause.useMutation({ onSuccess: refresh });
   const resume = trpc.queue.resume.useMutation({ onSuccess: refresh });
@@ -582,6 +584,7 @@ export function QueueView() {
         onOpenChange={setCalendarOpen}
         publishing={isPublishing(queue.data?.items)}
         onEdit={setEditTarget}
+        onChanged={refresh}
         onAddSchedule={() => {
           setCalendarOpen(false);
           schedulesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });

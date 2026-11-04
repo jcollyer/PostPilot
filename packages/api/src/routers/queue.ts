@@ -7,6 +7,7 @@ import {
   createScheduleSchema,
   evaluateTikTokRequirements,
   moveQueueItemSchema,
+  moveToSlotSchema,
   queueItemIdSchema,
   retryPublishSchema,
   scheduleIdSchema,
@@ -19,7 +20,9 @@ import {
   ensureQueue,
   getCalendar,
   getUpcoming,
-  positionBetween,
+  moveItem,
+  moveToSlot,
+  QueueMoveError,
   recomputeSchedule,
   smartArrangeQueue,
 } from '@postpilot/queue';
@@ -38,6 +41,22 @@ async function ownedItem(prisma: PrismaClient, queueId: string, itemId: string) 
   const item = await prisma.queueItem.findFirst({ where: { id: itemId, queueId } });
   if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'Queue item not found.' });
   return item;
+}
+
+/** A move the queue refused, as the matching tRPC error with its user-facing message. */
+async function mapQueueMoveError<T>(work: Promise<T>): Promise<T> {
+  try {
+    return await work;
+  } catch (err) {
+    if (err instanceof QueueMoveError) {
+      throw new TRPCError({
+        code: err.code === 'NOT_FOUND' ? 'NOT_FOUND' : 'BAD_REQUEST',
+        message: err.message,
+        cause: err,
+      });
+    }
+    throw err;
+  }
 }
 
 export const queueRouter = router({
@@ -315,30 +334,18 @@ export const queueRouter = router({
   /** Reorder: place `itemId` right after `afterItemId` (null = front). */
   move: protectedProcedure.input(moveQueueItemSchema).mutation(async ({ ctx, input }) => {
     const queue = await userQueue(ctx.prisma, ctx.userId);
-    await ownedItem(ctx.prisma, queue.id, input.itemId);
-
-    const items = await ctx.prisma.queueItem.findMany({
-      where: { queueId: queue.id },
-      orderBy: { position: 'asc' },
-      select: { id: true, position: true },
-    });
-    const others = items.filter((i) => i.id !== input.itemId);
-
-    let newPos: number;
-    if (input.afterItemId === null) {
-      newPos = positionBetween(null, others[0]?.position ?? null);
-    } else {
-      const idx = others.findIndex((i) => i.id === input.afterItemId);
-      if (idx < 0) throw new TRPCError({ code: 'NOT_FOUND', message: 'Anchor item not found.' });
-      newPos = positionBetween(others[idx]!.position, others[idx + 1]?.position ?? null);
-    }
-
-    await ctx.prisma.queueItem.update({
-      where: { id: input.itemId },
-      data: { position: newPos },
-    });
-    await recomputeSchedule(ctx.prisma, queue.id);
+    await mapQueueMoveError(moveItem(ctx.prisma, queue.id, input));
     return { success: true as const };
+  }),
+
+  /**
+   * A calendar drop: move the item so `platforms` go out in the slot at
+   * `slotAt`. Returns the anchor to undo it with (`move`), when the dragged
+   * platforms now go out, and which other items shifted.
+   */
+  moveToSlot: protectedProcedure.input(moveToSlotSchema).mutation(async ({ ctx, input }) => {
+    const queue = await userQueue(ctx.prisma, ctx.userId);
+    return mapQueueMoveError(moveToSlot(ctx.prisma, queue.id, input));
   }),
 
   /** Skip an item — it won't be published, and later items shift up a slot. */
