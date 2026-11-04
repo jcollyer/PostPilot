@@ -6,6 +6,14 @@ export {
   getUpcoming,
   type UpcomingPost,
 } from './scheduler';
+export {
+  getCalendar,
+  type Calendar,
+  type CalendarChip,
+  type CalendarPost,
+  type CalendarRange,
+  type CalendarState,
+} from './calendar';
 export { generateSlots, type Slot, type ScheduleRule } from './slots';
 
 // Smart ordering

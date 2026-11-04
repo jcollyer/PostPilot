@@ -18,10 +18,10 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
   AlertTriangle,
+  CalendarDays,
   Check,
   Copy,
   ExternalLink,
-  Film,
   GripVertical,
   Loader2,
   MoreHorizontal,
@@ -49,8 +49,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { trpc } from '@/lib/trpc/client';
+import { QueueCalendar } from './QueueCalendar';
 import { QueueItemEditDialog, type QueueEditTarget } from './QueueItemEditDialog';
 import { ScheduleEditor } from './ScheduleEditor';
+import { Thumb } from './Thumb';
 import { formatDayHeading, formatSlot, formatTime } from './format';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -100,6 +102,17 @@ function latestPublishedAt(item: QueueItem): number {
   }, 0);
 }
 
+/** Is anything mid-publish? The Queue page polls (every view of it) only then. */
+function isPublishing(items: QueueItem[] | undefined): boolean {
+  return (
+    items?.some(
+      (i) =>
+        i.status === 'PUBLISHING' ||
+        i.tasks.some((t) => t.status === 'UPLOADING' || t.status === 'PROCESSING'),
+    ) ?? false
+  );
+}
+
 function mediaTitle(item: QueueItem): string {
   return item.media.title ?? item.media.originalFilename ?? 'Untitled';
 }
@@ -108,14 +121,7 @@ export function QueueView() {
   const utils = trpc.useUtils();
   // Poll while anything is mid-publish so the UI tracks the worker.
   const queue = trpc.queue.get.useQuery(undefined, {
-    refetchInterval: (q) =>
-      q.state.data?.items.some(
-        (i) =>
-          i.status === 'PUBLISHING' ||
-          i.tasks.some((t) => t.status === 'UPLOADING' || t.status === 'PROCESSING'),
-      )
-        ? 15000
-        : false,
+    refetchInterval: (q) => (isPublishing(q.state.data?.items) ? 15000 : false),
   });
   const upcoming = trpc.queue.upcoming.useQuery({ limit: 50 });
 
@@ -151,6 +157,7 @@ export function QueueView() {
   const refresh = () => {
     utils.queue.get.invalidate();
     utils.queue.upcoming.invalidate();
+    utils.queue.calendar.invalidate();
   };
 
   const pause = trpc.queue.pause.useMutation({ onSuccess: refresh });
@@ -190,6 +197,8 @@ export function QueueView() {
   // The row whose "Edit details" panel is open (null = none). Both lists point
   // at the same library record, so either can open the editor.
   const [editTarget, setEditTarget] = useState<QueueEditTarget | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const schedulesRef = useRef<HTMLElement>(null);
 
   // Local mirror of the server order so drag feels instant.
   const serverItems = queue.data?.items ?? [];
@@ -533,12 +542,24 @@ export function QueueView() {
             the page ground rather than in a panel of its own — the working list
             is the only thing here that should read as a surface. */}
         <aside className="min-w-0 space-y-10">
-          <section>
+          <section ref={schedulesRef} className="scroll-mt-6">
             <ScheduleEditor onChanged={refresh} />
           </section>
 
           <section>
-            <h2 className="text-sm font-medium">Upcoming posts</h2>
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-sm font-medium">Upcoming posts</h2>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="-my-1 h-8 w-8 p-0"
+                onClick={() => setCalendarOpen(true)}
+                aria-label="Open calendar"
+                title="Calendar"
+              >
+                <CalendarDays className="h-4 w-4" aria-hidden />
+              </Button>
+            </div>
             <p className="text-muted-foreground mt-1 text-xs">
               The next slots your schedules produce.
             </p>
@@ -555,6 +576,17 @@ export function QueueView() {
           </section>
         </aside>
       </div>
+
+      <QueueCalendar
+        open={calendarOpen}
+        onOpenChange={setCalendarOpen}
+        publishing={isPublishing(queue.data?.items)}
+        onEdit={setEditTarget}
+        onAddSchedule={() => {
+          setCalendarOpen(false);
+          schedulesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+      />
 
       {editTarget ? (
         <QueueItemEditDialog
@@ -636,20 +668,6 @@ function Checkbox({
       aria-label={ariaLabel}
       className="border-input accent-primary focus-visible:ring-ring h-4 w-4 shrink-0 cursor-pointer rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
     />
-  );
-}
-
-/** Rendered as a span so it stays valid inside the clickable upcoming rows. */
-function Thumb({ url }: { url: string | null }) {
-  return (
-    <span className="bg-muted ring-line flex h-12 w-8 shrink-0 items-center justify-center overflow-hidden rounded ring-1">
-      {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" />
-      ) : (
-        <Film className="text-muted-foreground h-4 w-4" aria-hidden />
-      )}
-    </span>
   );
 }
 

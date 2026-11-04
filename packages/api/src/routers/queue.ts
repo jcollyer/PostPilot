@@ -3,6 +3,7 @@ import { Platform, type PrismaClient } from '@postpilot/db';
 import {
   addImagesToQueueSchema,
   addVideosToQueueSchema,
+  calendarSchema,
   createScheduleSchema,
   evaluateTikTokRequirements,
   moveQueueItemSchema,
@@ -16,6 +17,7 @@ import {
 import {
   appendPosition,
   ensureQueue,
+  getCalendar,
   getUpcoming,
   positionBetween,
   recomputeSchedule,
@@ -571,6 +573,12 @@ export const queueRouter = router({
   upcoming: protectedProcedure.input(upcomingSchema).query(async ({ ctx, input }) => {
     const queue = await userQueue(ctx.prisma, ctx.userId);
     return getUpcoming(ctx.prisma, queue.id, { limit: input.limit });
+  }),
+
+  /** One month grid of the queue: chips per item per local day, plus the queue status. */
+  calendar: protectedProcedure.input(calendarSchema).query(async ({ ctx, input }) => {
+    const queue = await userQueue(ctx.prisma, ctx.userId);
+    return getCalendar(ctx.prisma, queue.id, input);
   }),
 
   // --- Schedules -----------------------------------------------------------
