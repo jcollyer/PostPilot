@@ -29,7 +29,8 @@ type ChipState = Chip['state'];
 const CELL_CHIPS = 2;
 
 /** Upcoming chips open Edit details; history and in-flight work only select their day. */
-const isUpcoming = (state: ChipState) => state === 'scheduled' || state === 'held';
+const isUpcoming = (state: ChipState) =>
+  state === 'scheduled' || state === 'held' || state === 'projected';
 
 /**
  * The Upcoming posts calendar: a month grid of the queue in a large modal over
@@ -114,7 +115,8 @@ function CalendarBody({
           {formatMonth(month)}
         </DialogTitle>
         <DialogDescription className="sr-only">
-          Your queue by day: what went out and what&apos;s scheduled.
+          Your queue by day: what went out, what&apos;s scheduled, and what&apos;s projected to
+          follow.
         </DialogDescription>
         <div className="flex items-center gap-1">
           <Button
@@ -150,7 +152,8 @@ function CalendarBody({
         {calendar.data?.status === 'PAUSED' ? (
           <p className="bg-muted text-muted-foreground mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-sm">
             <Pause className="h-3.5 w-3.5 shrink-0" aria-hidden />
-            Your queue is paused. Nothing new posts until you resume it.
+            Your queue is paused. Nothing new posts until you resume it — projected posts show what
+            would go out if you resumed now.
           </p>
         ) : null}
         {!hasSchedule ? (
@@ -312,7 +315,7 @@ function MonthGrid({
  */
 const STATE_META: Record<
   ChipState,
-  { label: string; chip: string; dot: string; icon: React.ReactNode }
+  { label: string; hint?: string; chip: string; dot: string; icon: React.ReactNode }
 > = {
   scheduled: {
     label: 'Scheduled',
@@ -336,6 +339,14 @@ const STATE_META: Record<
     chip: 'bg-danger-soft ring-danger-line ring-1',
     dot: 'bg-danger',
     icon: <AlertTriangle className="text-danger h-3 w-3 shrink-0" aria-hidden />,
+  },
+  projected: {
+    label: 'Projected',
+    hint: 'What would post if nothing changes',
+    // An estimate past the live plan: the outline only, dashed.
+    chip: 'border-foreground/30 hover:bg-accent/60 border border-dashed',
+    dot: 'ring-foreground/70 ring-1 ring-inset',
+    icon: null,
   },
   published: {
     label: 'Published',
@@ -495,8 +506,8 @@ function platformList(platforms: Platform[]): string {
 function Legend() {
   return (
     <div className="text-muted-foreground mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
-      {(['scheduled', 'inFlight', 'published', 'held'] as const).map((state) => (
-        <span key={state} className="flex items-center gap-1.5">
+      {(['scheduled', 'projected', 'inFlight', 'published', 'held'] as const).map((state) => (
+        <span key={state} className="flex items-center gap-1.5" title={STATE_META[state].hint}>
           <span
             className={cn(
               'flex h-3 w-4 items-center justify-center rounded-sm [&_svg]:h-2.5 [&_svg]:w-2.5',

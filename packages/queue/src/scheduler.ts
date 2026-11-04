@@ -1,7 +1,7 @@
 import { type PrismaClient, Platform } from '@postpilot/db';
 import { tasks } from '@trigger.dev/sdk';
 
-import { planSlots } from './planner';
+import { planSlots, type PlanItem } from './planner';
 import { generateSlots, type ScheduleRule } from './slots';
 
 /**
@@ -56,7 +56,7 @@ export async function ensureQueue(prisma: PrismaClient, userId: string) {
 }
 
 /** ACTIVE connection id per platform (first wins if somehow duplicated). */
-async function activeConnections(
+export async function activeConnections(
   prisma: PrismaClient,
   userId: string,
 ): Promise<Map<Platform, string>> {
@@ -90,6 +90,30 @@ function targetsOf(item: {
   video: { targetPlatforms: Platform[] } | null;
 }): Platform[] {
   return item.imageId ? IMAGE_TARGET_PLATFORMS : (item.video?.targetPlatforms ?? []);
+}
+
+/**
+ * An item as the planner sees it: what it still needs, i.e. its wanted
+ * platforms minus any a task already speaks for (published, processing, in
+ * flight — or, for the calendar's projection, already in the plan). That is
+ * what keeps a partly-published item from being handed a second task for a
+ * platform it has already posted to. Shared with the projection so the two
+ * never disagree about what's left.
+ */
+export function planItemOf(
+  item: {
+    id: string;
+    imageId: string | null;
+    video: { targetPlatforms: Platform[] } | null;
+    publishTasks: { platform: Platform }[];
+  },
+  connectedPlatforms: Platform[],
+): PlanItem {
+  const done = new Set(item.publishTasks.map((t) => t.platform));
+  return {
+    id: item.id,
+    needs: wantedPlatforms(connectedPlatforms, targetsOf(item)).filter((p) => !done.has(p)),
+  };
 }
 
 /**
@@ -238,13 +262,7 @@ export async function recomputeSchedule(
   // Those are already spoken for — that is what keeps a partly-published item
   // from being handed a second task for a platform it has already posted to.
   const plan = planSlots(
-    items.map((item) => {
-      const done = new Set(item.publishTasks.map((t) => t.platform));
-      const needs = wantedPlatforms(connectedPlatforms, targetsOf(item)).filter(
-        (p) => !done.has(p),
-      );
-      return { id: item.id, needs };
-    }),
+    items.map((item) => planItemOf(item, connectedPlatforms)),
     slots,
     connectedPlatforms,
   );

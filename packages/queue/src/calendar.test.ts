@@ -10,7 +10,26 @@ import { getCalendar } from './calendar';
  */
 type Row = Record<string, any>;
 
-function makePrisma(seed: { queue: Row; queueItems: Row[]; publishTasks: Row[] }) {
+function makePrisma(seed: {
+  queue: Row;
+  queueItems: Row[];
+  publishTasks: Row[];
+  schedules?: Row[];
+  connections?: Row[];
+}) {
+  /** Every write the read attempted; a calendar read must leave this empty. */
+  const writes: string[] = [];
+  const write = (name: string) => async () => {
+    writes.push(name);
+    throw new Error(`calendar read wrote: ${name}`);
+  };
+  const writeMethods = (model: string) =>
+    Object.fromEntries(
+      ['create', 'createMany', 'update', 'updateMany', 'upsert', 'delete', 'deleteMany'].map(
+        (m) => [m, write(`${model}.${m}`)],
+      ),
+    );
+
   const inRange = (value: Date | null | undefined, range: Row | undefined): boolean => {
     if (!range) return true;
     if (!value) return false;
@@ -35,10 +54,48 @@ function makePrisma(seed: { queue: Row; queueItems: Row[]; publishTasks: Row[] }
   };
 
   return {
+    _writes: writes,
     queue: {
-      findUnique: async ({ where }: any) => (seed.queue.id === where.id ? seed.queue : null),
+      findUnique: async ({ where }: any) =>
+        seed.queue.id === where.id ? { userId: 'u1', ...seed.queue } : null,
+    },
+    queueItem: {
+      ...writeMethods('queueItem'),
+      // Items in rotation for the projection, in queue order, with their media
+      // and every task they already have.
+      findMany: async ({ where }: any) =>
+        seed.queueItems
+          .filter(
+            (i) =>
+              i.queueId === where.queueId &&
+              (!where.status?.in || where.status.in.includes(i.status)),
+          )
+          .sort((a, b) => a.position - b.position)
+          .map((i) => ({
+            videoId: null,
+            imageId: null,
+            video: null,
+            image: null,
+            ...i,
+            publishTasks: seed.publishTasks
+              .filter((t) => t.queueItemId === i.id)
+              .map((t) => ({ platform: t.platform, status: t.status, scheduledAt: t.scheduledAt })),
+          })),
+    },
+    schedule: {
+      findMany: async ({ where }: any) =>
+        (seed.schedules ?? []).filter(
+          (s) => s.queueId === where.queueId && (!where.isActive || s.isActive),
+        ),
+    },
+    platformConnection: {
+      findMany: async ({ where }: any) =>
+        (seed.connections ?? [])
+          .filter((c) => c.userId === where.userId && (!where.status || c.status === where.status))
+          .map((c) => ({ id: c.id, platform: c.platform })),
     },
     publishTask: {
+      ...writeMethods('publishTask'),
       // Returns whole rows with their queue item (and its media) joined; the
       // function reads only what it selected.
       findMany: async ({ where }: any) =>
@@ -413,5 +470,255 @@ describe('getCalendar', () => {
     );
 
     expect(cal.chips.map((c) => c.day)).toEqual(['2026-11-12']);
+  });
+});
+
+/** A video item in rotation; `targetPlatforms: []` means "all connected". */
+const item = (id: string, position: number, extra: Row = {}) => ({
+  id,
+  queueId: 'q1',
+  position,
+  status: 'PENDING',
+  videoId: `v_${id}`,
+  video: { ...video(id), targetPlatforms: [] },
+  ...extra,
+});
+
+const schedule = (extra: Row = {}) => ({
+  id: 'sch_daily',
+  queueId: 'q1',
+  isActive: true,
+  timezone: 'UTC',
+  daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
+  times: ['09:00'],
+  platforms: [],
+  ...extra,
+});
+
+const connections = (...platforms: string[]) =>
+  platforms.map((platform) => ({
+    id: `c_${platform}`,
+    userId: 'u1',
+    platform,
+    status: 'ACTIVE',
+  }));
+
+const task = (id: string, queueItemId: string, platform: string, iso: string, extra: Row = {}) => ({
+  id,
+  queueItemId,
+  platform,
+  status: 'SCHEDULED',
+  scheduledAt: at(iso),
+  ...extra,
+});
+
+/** Chips as `[day, itemId, state, platforms]`, for compact assertions. */
+const summary = (chips: { day: string; itemId: string; state: string; posts: Row[] }[]) =>
+  chips.map((c) => [c.day, c.itemId, c.state, c.posts.map((p) => p.platform).sort()]);
+
+describe('getCalendar — projection', () => {
+  it('continues after the materialized plan and stops when the queue runs out', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [
+        item('a', 1, { status: 'SCHEDULED' }),
+        item('b', 2, { status: 'SCHEDULED' }),
+        item('c', 3),
+        item('d', 4),
+      ],
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+      // The live plan (as if its horizon ended on the 12th).
+      publishTasks: [
+        task('t_a', 'a', 'TIKTOK', '2026-11-11T09:00:00Z'),
+        task('t_b', 'b', 'TIKTOK', '2026-11-12T09:00:00Z'),
+      ],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(summary(cal.chips)).toEqual([
+      ['2026-11-11', 'a', 'scheduled', ['TIKTOK']],
+      ['2026-11-12', 'b', 'scheduled', ['TIKTOK']],
+      ['2026-11-13', 'c', 'projected', ['TIKTOK']],
+      ['2026-11-14', 'd', 'projected', ['TIKTOK']],
+    ]);
+    expect(cal.chips[2]!.posts[0]).toMatchObject({
+      taskId: null,
+      state: 'projected',
+      at: at('2026-11-13T09:00:00Z'),
+      postUrl: null,
+    });
+  });
+
+  it('projects only the platforms an item still needs, never one the plan already covers', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [
+        // Cross-posts: TikTok is in the plan, Instagram isn't yet.
+        item('a', 1, { status: 'SCHEDULED' }),
+        item('b', 2),
+      ],
+      schedules: [
+        schedule({ id: 'sch_tt', platforms: ['TIKTOK'] }),
+        // Fridays at 18:00 — the first is the 13th, after the plan ends.
+        schedule({ id: 'sch_ig', platforms: ['INSTAGRAM'], daysOfWeek: [5], times: ['18:00'] }),
+      ],
+      connections: connections('TIKTOK', 'INSTAGRAM'),
+      publishTasks: [task('t_a', 'a', 'TIKTOK', '2026-11-12T09:00:00Z')],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(summary(cal.chips)).toEqual([
+      ['2026-11-12', 'a', 'scheduled', ['TIKTOK']],
+      ['2026-11-13', 'b', 'projected', ['TIKTOK']],
+      ['2026-11-13', 'a', 'projected', ['INSTAGRAM']],
+      ['2026-11-20', 'b', 'projected', ['INSTAGRAM']],
+    ]);
+  });
+
+  it('leaves out platforms an item already published to or failed on', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [
+        // Posted to TikTok, failed on Instagram; YouTube is still to come.
+        item('a', 1, { status: 'PUBLISHING' }),
+        item('b', 2),
+      ],
+      schedules: [schedule()],
+      connections: connections('TIKTOK', 'YOUTUBE', 'INSTAGRAM'),
+      publishTasks: [
+        task('p_a', 'a', 'TIKTOK', '2026-11-09T09:00:00Z', {
+          status: 'PUBLISHED',
+          publishedAt: at('2026-11-09T09:01:00Z'),
+        }),
+        task('f_a', 'a', 'INSTAGRAM', '2026-11-09T09:00:00Z', { status: 'FAILED' }),
+      ],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(summary(cal.chips)).toEqual([
+      ['2026-11-09', 'a', 'published', ['TIKTOK']],
+      ['2026-11-11', 'a', 'projected', ['YOUTUBE']],
+      ['2026-11-12', 'b', 'projected', ['INSTAGRAM', 'TIKTOK', 'YOUTUBE']],
+    ]);
+  });
+
+  it('leaves an item the runner is working on out of the projection, as the scheduler does', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [
+        // Uploading to TikTok now; the scheduler won't touch it until that settles.
+        item('a', 1, { status: 'PUBLISHING' }),
+        item('b', 2, { status: 'SCHEDULED' }),
+        item('c', 3),
+      ],
+      schedules: [schedule()],
+      connections: connections('TIKTOK', 'YOUTUBE'),
+      publishTasks: [
+        task('u_a', 'a', 'TIKTOK', '2026-11-10T11:55:00Z', { status: 'UPLOADING' }),
+        task('t_b', 'b', 'TIKTOK', '2026-11-11T09:00:00Z'),
+        task('y_b', 'b', 'YOUTUBE', '2026-11-11T09:00:00Z'),
+      ],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(summary(cal.chips)).toEqual([
+      ['2026-11-10', 'a', 'inFlight', ['TIKTOK']],
+      ['2026-11-11', 'b', 'scheduled', ['TIKTOK', 'YOUTUBE']],
+      ['2026-11-12', 'c', 'projected', ['TIKTOK', 'YOUTUBE']],
+    ]);
+  });
+
+  it('shows a paused queue its history plus the whole future as projected from now', async () => {
+    const prisma = makePrisma({
+      // Pausing cleared the plan; nothing is scheduled.
+      queue: { id: 'q1', status: 'PAUSED' },
+      queueItems: [
+        item('done', 1, { status: 'COMPLETED' }),
+        // Mid-upload when the queue was paused, so its later Instagram task was kept.
+        item('busy', 2, { status: 'PUBLISHING' }),
+        item('a', 3),
+        item('b', 4),
+      ],
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+      publishTasks: [
+        task('p_done', 'done', 'TIKTOK', '2026-11-05T09:00:00Z', {
+          status: 'PUBLISHED',
+          publishedAt: at('2026-11-05T09:02:00Z'),
+        }),
+        task('u_busy', 'busy', 'TIKTOK', '2026-11-10T11:55:00Z', { status: 'UPLOADING' }),
+        task('ig_busy', 'busy', 'INSTAGRAM', '2026-11-20T09:00:00Z'),
+      ],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(cal.status).toBe('PAUSED');
+    expect(summary(cal.chips)).toEqual([
+      ['2026-11-05', 'done', 'published', ['TIKTOK']],
+      ['2026-11-10', 'busy', 'inFlight', ['TIKTOK']],
+      // NOW is 12:00 on the 10th, so the 10th's 09:00 slot has gone.
+      ['2026-11-11', 'a', 'projected', ['TIKTOK']],
+      ['2026-11-12', 'b', 'projected', ['TIKTOK']],
+      ['2026-11-20', 'busy', 'scheduled', ['INSTAGRAM']],
+    ]);
+  });
+
+  it('pages months ahead for a queue that long, returning only that grid', async () => {
+    // 150 items, one a day from the 11th: the 113th lands on March 3, 2027 and
+    // the last on April 9.
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: Array.from({ length: 150 }, (_, n) => item(`i${n + 1}`, n + 1)),
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+      publishTasks: [],
+    });
+
+    // March 2027's grid: Sun Feb 28 .. Sat Apr 10.
+    const MARCH = {
+      from: at('2027-02-28T00:00:00Z'),
+      to: at('2027-04-11T00:00:00Z'),
+      timeZone: 'UTC',
+    };
+    const cal = await getCalendar(prisma, 'q1', MARCH, NOW);
+
+    expect(cal.chips[0]).toMatchObject({ day: '2027-02-28', itemId: 'i110', state: 'projected' });
+    expect(cal.chips.find((c) => c.day === '2027-03-03')?.itemId).toBe('i113');
+    // The queue runs dry on April 9; the 10th is empty.
+    expect(cal.chips.at(-1)).toMatchObject({ day: '2027-04-09', itemId: 'i150' });
+    expect(cal.chips).toHaveLength(41);
+  });
+
+  it('projects nothing without an active schedule', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [item('a', 1)],
+      schedules: [schedule({ isActive: false })],
+      connections: connections('TIKTOK'),
+      publishTasks: [],
+    });
+
+    expect((await getCalendar(prisma, 'q1', NOV, NOW)).chips).toEqual([]);
+  });
+
+  it('writes nothing', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [item('a', 1, { status: 'SCHEDULED' }), item('b', 2), item('c', 3)],
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+      publishTasks: [task('t_a', 'a', 'TIKTOK', '2026-11-11T09:00:00Z')],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(cal.chips.filter((c) => c.state === 'projected')).toHaveLength(2);
+    expect(prisma._writes).toEqual([]);
   });
 });
