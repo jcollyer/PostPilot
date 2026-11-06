@@ -395,7 +395,11 @@ describe('getCalendar', () => {
       publishTasks: [],
     });
 
-    expect(await getCalendar(prisma, 'q1', NOV, NOW)).toEqual({ status: 'PAUSED', chips: [] });
+    expect(await getCalendar(prisma, 'q1', NOV, NOW)).toEqual({
+      status: 'PAUSED',
+      chips: [],
+      slots: [],
+    });
   });
 
   it('shows images and carousels as such, with no thumbnail once the photo was removed', async () => {
@@ -633,6 +637,40 @@ describe('getCalendar — projection', () => {
     ]);
   });
 
+  it('lets only waiting posts of items the runner has left alone be moved', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [
+        // Uploading to TikTok now, with Instagram still to come: the scheduler
+        // won't reorder it until the upload settles, so neither chip moves.
+        item('a', 1, { status: 'PUBLISHING' }),
+        item('b', 2, { status: 'SCHEDULED' }),
+        item('done', 0, { status: 'COMPLETED' }),
+      ],
+      schedules: [schedule()],
+      connections: connections('TIKTOK', 'INSTAGRAM'),
+      publishTasks: [
+        task('u_a', 'a', 'TIKTOK', '2026-11-10T11:55:00Z', { status: 'UPLOADING' }),
+        task('i_a', 'a', 'INSTAGRAM', '2026-11-12T09:00:00Z'),
+        task('t_b', 'b', 'TIKTOK', '2026-11-11T09:00:00Z'),
+        task('i_b', 'b', 'INSTAGRAM', '2026-11-11T09:00:00Z', { status: 'HELD' }),
+        task('p_done', 'done', 'TIKTOK', '2026-11-05T09:00:00Z', {
+          status: 'PUBLISHED',
+          publishedAt: at('2026-11-05T09:00:00Z'),
+        }),
+      ],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    expect(cal.chips.map((c) => [c.day, c.itemId, c.state, c.movable])).toEqual([
+      ['2026-11-05', 'done', 'published', false],
+      ['2026-11-10', 'a', 'inFlight', false],
+      ['2026-11-11', 'b', 'held', true],
+      ['2026-11-12', 'a', 'scheduled', false],
+    ]);
+  });
+
   it('shows a paused queue its history plus the whole future as projected from now', async () => {
     const prisma = makePrisma({
       // Pausing cleared the plan; nothing is scheduled.
@@ -705,6 +743,100 @@ describe('getCalendar — projection', () => {
     });
 
     expect((await getCalendar(prisma, 'q1', NOV, NOW)).chips).toEqual([]);
+  });
+
+  it('lists the future slots in range with their holder, null once the queue runs out', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [item('a', 1), item('b', 2)],
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+      publishTasks: [],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    // NOW is 12:00 on the 10th: the first future slot is the 11th, the last the
+    // grid's final day, Dec 5.
+    expect(cal.slots.slice(0, 3)).toEqual([
+      {
+        at: at('2026-11-11T09:00:00Z'),
+        day: '2026-11-11',
+        holders: { TIKTOK: 'a' },
+        projected: false,
+      },
+      {
+        at: at('2026-11-12T09:00:00Z'),
+        day: '2026-11-12',
+        holders: { TIKTOK: 'b' },
+        projected: false,
+      },
+      {
+        at: at('2026-11-13T09:00:00Z'),
+        day: '2026-11-13',
+        holders: { TIKTOK: null },
+        projected: false,
+      },
+    ]);
+    expect(cal.slots.at(-1)).toMatchObject({ day: '2026-12-05', holders: { TIKTOK: null } });
+    expect(cal.slots).toHaveLength(25);
+  });
+
+  it('gives each platform of a shared slot time its own holder', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'ACTIVE' },
+      queueItems: [item('a', 1), item('b', 2)],
+      schedules: [
+        schedule({ id: 'sch_tt', platforms: ['TIKTOK'] }),
+        // Fridays at 09:00 too — the first is the 13th.
+        schedule({ id: 'sch_ig', platforms: ['INSTAGRAM'], daysOfWeek: [5] }),
+      ],
+      connections: connections('TIKTOK', 'INSTAGRAM'),
+      publishTasks: [],
+    });
+
+    const cal = await getCalendar(prisma, 'q1', NOV, NOW);
+
+    // TikTok has run out by the 13th (a on the 11th, b the 12th); Instagram
+    // reaches a first.
+    expect(cal.slots.find((s) => s.day === '2026-11-13')).toMatchObject({
+      at: at('2026-11-13T09:00:00Z'),
+      holders: { TIKTOK: null, INSTAGRAM: 'a' },
+    });
+    expect(cal.slots.find((s) => s.day === '2026-11-20')?.holders).toEqual({
+      TIKTOK: null,
+      INSTAGRAM: 'b',
+    });
+  });
+
+  it('marks slots past the live plan, and every slot of a paused queue, as projected', async () => {
+    const seed = {
+      queueItems: [item('a', 1)],
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+      publishTasks: [],
+    };
+    const projectedDays = (cal: { slots: { day: string; projected: boolean }[] }) =>
+      cal.slots.filter((s) => s.projected).map((s) => s.day);
+
+    // The live plan reaches 21 days out from NOW: through Dec 1.
+    const active = await getCalendar(
+      makePrisma({ queue: { id: 'q1', status: 'ACTIVE' }, ...seed }),
+      'q1',
+      NOV,
+      NOW,
+    );
+    expect(projectedDays(active)).toEqual(['2026-12-02', '2026-12-03', '2026-12-04', '2026-12-05']);
+
+    // Paused, nothing is planned: it's all "if you resumed now".
+    const paused = await getCalendar(
+      makePrisma({ queue: { id: 'q1', status: 'PAUSED' }, ...seed }),
+      'q1',
+      NOV,
+      NOW,
+    );
+    expect(paused.slots.every((s) => s.projected)).toBe(true);
+    expect(paused.slots[0]).toMatchObject({ day: '2026-11-11', holders: { TIKTOK: 'a' } });
   });
 
   it('writes nothing', async () => {

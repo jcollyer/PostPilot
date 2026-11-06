@@ -39,6 +39,15 @@ export function formatLongDay(date: Date): string {
   }).format(date);
 }
 
+/** "Thu, Nov 12" — a day named briefly. */
+export function formatShortDay(date: Date): string {
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
 /** "9:00 AM" time-only. */
 export function formatTime(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date;
