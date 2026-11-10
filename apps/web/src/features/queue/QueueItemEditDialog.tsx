@@ -19,6 +19,8 @@ import { ImageEditPanel } from '@/features/media/ImageEditDialog';
 export interface QueueEditTarget {
   mediaId: string;
   mediaType: 'VIDEO' | 'IMAGE' | 'CAROUSEL';
+  /** Part of it has already gone out, which an edit here doesn't touch: say so. */
+  hasLivePost?: boolean;
 }
 
 /**
@@ -76,6 +78,11 @@ export function QueueItemEditDialog({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="gap-0 p-0">
+        {target.hasLivePost ? (
+          <p className="bg-muted text-muted-foreground py-2.5 pl-6 pr-12 text-xs">
+            This edits your library. It won&apos;t change the live post.
+          </p>
+        ) : null}
         {isVideo && video.data ? (
           <EditMetadataPanel video={video.data} onClose={close} onSaved={onSaved} />
         ) : !isVideo && image.data ? (

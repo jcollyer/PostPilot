@@ -14,7 +14,17 @@ import {
   type CollisionDetection,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Loader2, Pause, X } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Loader2,
+  Pause,
+  Pencil,
+  X,
+} from 'lucide-react';
 import type { inferRouterOutputs } from '@trpc/server';
 import type { AppRouter } from '@postpilot/api';
 import { PLATFORM_LABELS, type Platform } from '@postpilot/types';
@@ -27,22 +37,33 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { trpc } from '@/lib/trpc/client';
 import { cn } from '@/lib/utils';
 import { addMonths, dayKey, formatMonth, monthGrid, monthOf, type Month } from './calendar-month';
-import { DAY_LABELS, formatLongDay, formatShortDay, formatTime } from './format';
+import { DAY_LABELS, formatLongDay, formatShortDay, formatTime, PLATFORM_SHORT } from './format';
 import type { QueueEditTarget } from './QueueItemEditDialog';
 import { Thumb } from './Thumb';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type Chip = RouterOutputs['queue']['calendar']['chips'][number];
 type ChipState = Chip['state'];
+type Post = Chip['posts'][number];
 type Slot = RouterOutputs['queue']['calendar']['slots'][number];
 
 /** How many chips a day cell shows before "+N more". */
 const CELL_CHIPS = 2;
 
-/** Upcoming chips open Edit details; history and in-flight work only select their day. */
+/**
+ * Upcoming chips open Edit details and published ones their menu of live links;
+ * in-flight work only selects its day.
+ */
 const isUpcoming = (state: ChipState) =>
   state === 'scheduled' || state === 'held' || state === 'projected';
 
@@ -284,7 +305,12 @@ function CalendarBody({
     );
   };
 
-  const edit = (chip: Chip) => onEdit({ mediaId: chip.mediaId, mediaType: chip.mediaType });
+  const edit = (chip: Chip) =>
+    onEdit({
+      mediaId: chip.mediaId,
+      mediaType: chip.mediaType,
+      hasLivePost: chip.posts.some((p) => p.state === 'published'),
+    });
 
   return (
     <>
@@ -584,6 +610,7 @@ function DayCell({
             dropTarget={slotFits(chip)}
             // Only its posts still to come can have shifted.
             flashing={flashing.has(chip.itemId) && isUpcoming(chip.state)}
+            onEdit={() => onEdit(chip)}
             onClick={() => (isUpcoming(chip.state) ? onEdit(chip) : onSelect(date))}
           />
         ))}
@@ -647,7 +674,7 @@ const STATE_META: Record<
   },
   published: {
     label: 'Published',
-    chip: 'bg-muted text-muted-foreground',
+    chip: 'bg-muted text-muted-foreground hover:bg-accent/60 hover:text-foreground',
     dot: 'bg-muted-foreground/50',
     icon: <Check className="h-3 w-3 shrink-0" aria-hidden />,
   },
@@ -687,6 +714,7 @@ function CalendarChip({
   draggable,
   dropTarget,
   flashing,
+  onEdit,
   onClick,
 }: {
   chip: Chip;
@@ -696,12 +724,15 @@ function CalendarChip({
   dropTarget: boolean;
   /** A move just shifted it. */
   flashing: boolean;
+  /** The published menu's "Edit library details". */
+  onEdit: () => void;
   onClick: () => void;
 }) {
   const meta = STATE_META[chip.state];
+  const published = chip.state === 'published';
   const drag = useDraggable({ id: `drag:${chip.key}`, data: { chip }, disabled: !draggable });
   const drop = useDroppable({ id: `chip:${chip.key}`, data: { chip }, disabled: !dropTarget });
-  return (
+  const button = (
     <button
       type="button"
       ref={(node) => {
@@ -711,11 +742,13 @@ function CalendarChip({
       title={chipTooltip(chip)}
       {...drag.listeners}
       {...drag.attributes}
-      // dnd-kit's attributes call it a draggable; it is a button that opens the post.
+      // dnd-kit's attributes call it a draggable, disabled when it can't be
+      // dragged; either way it is a working button that opens the post.
       aria-roledescription={undefined}
+      aria-disabled={undefined}
       onClick={(e) => {
         e.stopPropagation();
-        onClick();
+        if (!published) onClick();
       }}
       className={cn(
         CHIP_CLASS,
@@ -730,6 +763,75 @@ function CalendarChip({
       <ChipContent chip={chip} />
       {meta.icon ? <span className="sr-only">{meta.label}</span> : null}
     </button>
+  );
+  return published ? (
+    <PublishedMenu posts={chip.posts} onEdit={onEdit}>
+      {button}
+    </PublishedMenu>
+  ) : (
+    button
+  );
+}
+
+/**
+ * What a click on a published post offers: its live posts, and the library
+ * record behind them. `children` is the button that opens it.
+ */
+function PublishedMenu({
+  posts,
+  onEdit,
+  children,
+}: {
+  posts: Post[];
+  onEdit: () => void;
+  children: React.ReactElement;
+}) {
+  const [open, setOpen] = useState(false);
+  // One link per platform. A platform can come back without a URL; then there's
+  // nothing to link to.
+  const live = new Map(
+    posts.flatMap((p) =>
+      p.state === 'published' && p.postUrl ? [[p.platform, p.postUrl]] : [],
+    ) as [Platform, string][],
+  );
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      {/* A trigger opens on pointer-down by default, so starting a scroll on a
+          row would pop the menu on a phone. Wait for a real click; Enter, Space
+          and the arrow keys still go through onOpenChange. */}
+      <DropdownMenuTrigger
+        asChild
+        onPointerDown={(e) => e.preventDefault()}
+        onClick={() => setOpen(true)}
+      >
+        {children}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="w-56"
+        // React events bubble through the portal: a click here isn't a click on the day.
+        onClick={(e) => e.stopPropagation()}
+      >
+        {[...live].map(([platform, url]) => (
+          <DropdownMenuItem key={platform} asChild className="cursor-pointer">
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4 shrink-0" aria-hidden />
+              View on {PLATFORM_SHORT[platform]}
+            </a>
+          </DropdownMenuItem>
+        ))}
+        {live.size > 0 ? <DropdownMenuSeparator /> : null}
+        <DropdownMenuItem onSelect={onEdit} className="cursor-pointer items-start">
+          <Pencil className="mr-2 mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <span>
+            Edit library details
+            <span className="text-muted-foreground block text-xs">
+              Won&apos;t change the live post
+            </span>
+          </span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -786,6 +888,9 @@ function StateLabel({ state, platforms }: { state: ChipState; platforms: Platfor
   );
 }
 
+const DAY_ROW_BUTTON =
+  'hover:bg-accent/60 focus-visible:ring-ring flex w-full items-center gap-3 rounded-md px-1.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2';
+
 function DayList({
   day,
   chips,
@@ -833,10 +938,18 @@ function DayList({
                     type="button"
                     onClick={() => onEdit(row.chip)}
                     title="Edit details"
-                    className="hover:bg-accent/60 focus-visible:ring-ring flex w-full items-center gap-3 rounded-md px-1.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2"
+                    className={DAY_ROW_BUTTON}
                   >
                     {body}
                   </button>
+                ) : row.state === 'published' ? (
+                  // The whole video's links, not just this row's: platforms publish
+                  // seconds apart, so a cross-post usually splits across rows.
+                  <PublishedMenu posts={row.chip.posts} onEdit={() => onEdit(row.chip)}>
+                    <button type="button" className={DAY_ROW_BUTTON}>
+                      {body}
+                    </button>
+                  </PublishedMenu>
                 ) : (
                   <div className="flex items-center gap-3 px-1.5 py-2">{body}</div>
                 )}
