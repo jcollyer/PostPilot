@@ -53,7 +53,7 @@ import { QueueCalendar } from './QueueCalendar';
 import { QueueItemEditDialog, type QueueEditTarget } from './QueueItemEditDialog';
 import { ScheduleEditor } from './ScheduleEditor';
 import { Thumb } from './Thumb';
-import { formatDayHeading, formatSlot, formatTime } from './format';
+import { formatDayHeading, formatSlot, formatTime, PLATFORM_SHORT } from './format';
 
 type RouterOutputs = inferRouterOutputs<AppRouter>;
 type QueueItem = RouterOutputs['queue']['get']['items'][number];
@@ -83,12 +83,6 @@ type Accounts = {
   tiktok: TikTokAccount | null;
   instagram: InstagramAccount | null;
   youtube: YouTubeAccount | null;
-};
-
-const PLATFORM_SHORT: Record<Platform, string> = {
-  TIKTOK: 'TikTok',
-  INSTAGRAM: 'Instagram',
-  YOUTUBE: 'YouTube',
 };
 
 /** How many published items to show before the "Show more" toggle. */

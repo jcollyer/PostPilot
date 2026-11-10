@@ -1,3 +1,12 @@
+import type { Platform } from '@postpilot/types';
+
+/** A platform named briefly, where `PLATFORM_LABELS`' full names don't fit or read wrong. */
+export const PLATFORM_SHORT: Record<Platform, string> = {
+  TIKTOK: 'TikTok',
+  INSTAGRAM: 'Instagram',
+  YOUTUBE: 'YouTube',
+};
+
 /** "Mon, Jun 23 · 9:00 AM" in the viewer's locale/timezone. */
 export function formatSlot(date: Date | string | null | undefined): string {
   if (!date) return 'Not scheduled';
