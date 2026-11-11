@@ -6,12 +6,13 @@ import {
   heldSlots,
   IN_ROTATION,
   isInFlight,
+  liveSlotTimes,
   planUntil,
   type ItemState,
 } from './fresh-plan';
 import type { SlotAssignment } from './planner';
 import { activeConnections, planItemOf } from './scheduler';
-import { generateSlots, type ScheduleRule } from './slots';
+import type { ScheduleRule } from './slots';
 
 /**
  * - `published`: went out (history, placed by `publishedAt`).
@@ -322,10 +323,7 @@ function slotsInRange(
   if (range.to <= now) return [];
   const planItems = freshPlanItems(items, connectedPlatforms, now);
   const fresh = planUntil(planItems, schedules, connectedPlatforms, now, range.to);
-  // The slots `recomputeSchedule` materializes: its own horizon and cap.
-  const live = new Set(
-    status === 'PAUSED' ? [] : generateSlots(schedules, now).map((s) => s.at.getTime()),
-  );
+  const live = liveSlotTimes(status, schedules, now);
   return heldSlots(fresh, planItems, connectedPlatforms)
     .filter((s) => s.at >= range.from)
     .map((s) => ({

@@ -222,6 +222,7 @@ describe('moveToSlot', () => {
     expect(res).toEqual({
       previousAfterItemId: 'c',
       landedAt: at('2026-11-12T09:00:00Z'),
+      projected: false,
       shifted: 2,
       shiftedItemIds: ['b', 'c'],
       movedToEnd: false,
@@ -248,6 +249,7 @@ describe('moveToSlot', () => {
     expect(res).toEqual({
       previousAfterItemId: 'a',
       landedAt: at('2026-11-14T09:00:00Z'),
+      projected: false,
       shifted: 2,
       shiftedItemIds: ['c', 'd'],
       movedToEnd: false,
@@ -328,6 +330,7 @@ describe('moveToSlot', () => {
     expect(res).toEqual({
       previousAfterItemId: 'a',
       landedAt: at('2026-11-15T09:00:00Z'),
+      projected: false,
       shifted: 3,
       shiftedItemIds: ['c', 'd', 'e'],
       movedToEnd: true,
@@ -346,6 +349,7 @@ describe('moveToSlot', () => {
     });
 
     expect(res.landedAt).toEqual(at('2026-12-05T09:00:00Z'));
+    expect(res.projected).toBe(true);
     // i4 .. i25 each move a day earlier.
     expect(res.shifted).toBe(22);
     expect(res.shiftedItemIds[0]).toBe('i4');
@@ -354,6 +358,30 @@ describe('moveToSlot', () => {
     const live = await plan(prisma);
     expect(live.find(([, id]) => id === 'i3')).toBeUndefined();
     expect(live[2]).toEqual(['2026-11-13T09:00', 'i4', 'TIKTOK']);
+  });
+
+  it('moves earlier between projected slots, and says the landing is projected', async () => {
+    // i25 is projected for Dec 5, i28 for Dec 8.
+    const prisma = await dailyQueue(Array.from({ length: 30 }, (_, n) => `i${n + 1}`));
+    const live = await plan(prisma);
+
+    const res = await moveToSlot(prisma, 'q1', {
+      itemId: 'i28',
+      slotAt: at('2026-12-05T09:00:00Z'),
+      platforms: ['TIKTOK'],
+    });
+
+    expect(res).toEqual({
+      previousAfterItemId: 'i27',
+      landedAt: at('2026-12-05T09:00:00Z'),
+      projected: true,
+      movedToEnd: false,
+      // i25 .. i27 each move a day later.
+      shifted: 3,
+      shiftedItemIds: ['i25', 'i26', 'i27'],
+    });
+    // Nothing in the live plan moved.
+    expect(await plan(prisma)).toEqual(live);
   });
 
   it("places the dragged platforms on the slot and re-flows the video's others", async () => {
@@ -385,6 +413,78 @@ describe('moveToSlot', () => {
       ['2026-11-27T18:00', 'b', 'INSTAGRAM'],
     ]);
     expect(res).toMatchObject({ landedAt: at('2026-11-13T18:00:00Z'), shifted: 2 });
+  });
+});
+
+describe('moveToSlot — a paused queue', () => {
+  /** The queue's order, front first. */
+  const order = async (prisma: any) =>
+    (await prisma.queueItem.findMany({ where: { queueId: 'q1' }, select: { id: true } })).map(
+      (i: Row) => i.id,
+    );
+
+  it('rearranges against the projection from now, and stays paused', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'PAUSED' },
+      queueItems: ['a', 'b', 'c', 'd', 'e'].map((id, n) => item(id, (n + 1) * 1000)),
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+    });
+    await recomputeSchedule(prisma, 'q1');
+
+    // Resumed now, a would go on the 11th, b the 12th, ... d the 14th.
+    // d onto b's slot on the 12th.
+    const res = await moveToSlot(prisma, 'q1', {
+      itemId: 'd',
+      slotAt: at('2026-11-12T09:00:00Z'),
+      platforms: ['TIKTOK'],
+    });
+
+    expect(res).toEqual({
+      previousAfterItemId: 'c',
+      landedAt: at('2026-11-12T09:00:00Z'),
+      projected: true,
+      movedToEnd: false,
+      shifted: 2,
+      shiftedItemIds: ['b', 'c'],
+    });
+    expect(await order(prisma)).toEqual(['a', 'd', 'b', 'c', 'e']);
+    // Still paused: nothing is scheduled.
+    expect(prisma._db.queue[0].status).toBe('PAUSED');
+    expect(await plan(prisma)).toEqual([]);
+  });
+
+  it('moves later, and to the end, the same way', async () => {
+    const prisma = makePrisma({
+      queue: { id: 'q1', status: 'PAUSED' },
+      queueItems: ['a', 'b', 'c'].map((id, n) => item(id, (n + 1) * 1000)),
+      schedules: [schedule()],
+      connections: connections('TIKTOK'),
+    });
+
+    // a onto c's slot on the 13th.
+    await expect(
+      moveToSlot(prisma, 'q1', {
+        itemId: 'a',
+        slotAt: at('2026-11-13T09:00:00Z'),
+        platforms: ['TIKTOK'],
+      }),
+    ).resolves.toMatchObject({ projected: true, previousAfterItemId: null, shifted: 2 });
+    expect(await order(prisma)).toEqual(['b', 'c', 'a']);
+
+    // b onto the 20th, past the end of the queue.
+    await expect(
+      moveToSlot(prisma, 'q1', {
+        itemId: 'b',
+        slotAt: at('2026-11-20T09:00:00Z'),
+        platforms: ['TIKTOK'],
+      }),
+    ).resolves.toMatchObject({
+      projected: true,
+      movedToEnd: true,
+      landedAt: at('2026-11-13T09:00:00Z'),
+    });
+    expect(await order(prisma)).toEqual(['c', 'a', 'b']);
   });
 });
 

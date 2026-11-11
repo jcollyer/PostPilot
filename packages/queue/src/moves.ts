@@ -1,6 +1,13 @@
 import type { Platform, PrismaClient } from '@postpilot/db';
 
-import { freshPlanItems, heldSlots, IN_ROTATION, planToEnd, type FreshPlan } from './fresh-plan';
+import {
+  freshPlanItems,
+  heldSlots,
+  IN_ROTATION,
+  liveSlotTimes,
+  planToEnd,
+  type FreshPlan,
+} from './fresh-plan';
 import type { PlanItem } from './planner';
 import { positionBetween } from './positions';
 import { activeConnections, recomputeSchedule } from './scheduler';
@@ -68,6 +75,11 @@ export interface MoveToSlotResult {
    * schedule reaches them.
    */
   landedAt: Date | null;
+  /**
+   * `landedAt` is past the live plan (or the queue is paused): no task is
+   * written for it yet, so it's where the post would go if nothing changes.
+   */
+  projected: boolean;
   /** The slot was past the end of the queue, so the item went to the end instead. */
   movedToEnd: boolean;
   /** How many other items' posts moved because of it. */
@@ -91,7 +103,7 @@ export async function moveToSlot(
 ): Promise<MoveToSlotResult> {
   const queue = await prisma.queue.findUnique({
     where: { id: queueId },
-    select: { userId: true },
+    select: { userId: true, status: true },
   });
   if (!queue) throw new QueueMoveError('NOT_FOUND', 'Queue not found.');
 
@@ -114,6 +126,8 @@ export async function moveToSlot(
     activeConnections(prisma, queue.userId),
   ]);
   const connectedPlatforms = [...connected.keys()];
+  const live = liveSlotTimes(queue.status, schedules, now);
+  const isProjected = (at: Date | null) => at !== null && !live.has(at.getTime());
 
   const index = all.findIndex((i) => i.id === itemId);
   if (index < 0) throw new QueueMoveError('NOT_FOUND', 'Queue item not found.');
@@ -154,6 +168,7 @@ export async function moveToSlot(
     return {
       previousAfterItemId,
       landedAt: slotAt,
+      projected: isProjected(slotAt),
       movedToEnd: false,
       shifted: 0,
       shiftedItemIds: [],
@@ -188,9 +203,11 @@ export async function moveToSlot(
     (a) => a.itemId === itemId && a.platforms.some((p) => platforms.includes(p)),
   );
   const shiftedItemIds = itemsShifted(before, after, items, itemId);
+  const landedAt = landing?.slot.at ?? null;
   return {
     previousAfterItemId,
-    landedAt: landing?.slot.at ?? null,
+    landedAt,
+    projected: isProjected(landedAt),
     movedToEnd: target === undefined,
     shifted: shiftedItemIds.length,
     shiftedItemIds,

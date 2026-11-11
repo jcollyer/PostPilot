@@ -68,16 +68,10 @@ const isUpcoming = (state: ChipState) =>
   state === 'scheduled' || state === 'held' || state === 'projected';
 
 /**
- * Posts still waiting in the live plan can be dragged. Published and in-flight
- * posts are fixed; projected ones take drops in a later step.
+ * Posts still waiting — in the live plan or projected past it — can be
+ * dragged. Published and in-flight posts are fixed.
  */
-const isMovable = (state: ChipState) => state === 'scheduled' || state === 'held';
-
-/**
- * Can this chip be picked up? The server says whether a move would take it;
- * drags of projected posts come in a later step.
- */
-const isDraggable = (chip: Chip) => chip.movable && chip.state !== 'projected';
+const isMovable = isUpcoming;
 
 /** Why a fixed chip won't drag, for its tooltip. */
 function fixedReason(chip: Chip): string | null {
@@ -99,11 +93,14 @@ function dragPlatforms(chip: Chip): Platform[] {
   return waiting.filter((p) => p.at.getTime() === first).map((p) => p.platform);
 }
 
-/** Live-plan slots that post to every one of `platforms`, by day. */
+/**
+ * Slots that post to every one of `platforms`, by day — live and projected
+ * alike, since a drop on either is the same reorder.
+ */
 function targetsByDay(slots: Slot[], platforms: Platform[]): Map<string, Slot[]> {
   const byDay = new Map<string, Slot[]>();
   for (const slot of slots) {
-    if (slot.projected || !platforms.every((p) => p in slot.holders)) continue;
+    if (!platforms.every((p) => p in slot.holders)) continue;
     byDay.set(slot.day, [...(byDay.get(slot.day) ?? []), slot]);
   }
   return byDay;
@@ -123,6 +120,20 @@ const TOAST_MS = 8000;
 type Toast =
   | { kind: 'moved'; text: string; undo: { itemId: string; afterItemId: string | null } }
   | { kind: 'info' | 'error'; text: string };
+
+/**
+ * A Move to… in progress (pick-a-day mode): the post, the platforms its day-list
+ * row places, and that row, whose Move to… gets focus back on Cancel.
+ */
+interface Picking {
+  chip: Chip;
+  platforms: Platform[];
+  rowKey: string;
+}
+
+/** Can this day-list row be moved? Published and in-flight rows are fixed. */
+const rowMovable = (row: { state: ChipState; chip: Chip }) =>
+  isMovable(row.state) && row.chip.movable;
 
 /**
  * The Upcoming posts calendar: a month grid of the queue in a large modal over
@@ -147,9 +158,16 @@ export function QueueCalendar({
   /** Refetch every view of the queue after a move; resolves once they're fresh. */
   onChanged: () => Promise<unknown>;
 }) {
+  // Escape backs out of pick-a-day mode before it closes the calendar.
+  const onEscape = useRef<(() => boolean) | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[100dvh] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh]">
+      <DialogContent
+        className="flex h-[100dvh] max-w-6xl flex-col gap-0 overflow-hidden p-0 sm:h-auto sm:max-h-[92vh]"
+        onEscapeKeyDown={(e) => {
+          if (onEscape.current?.()) e.preventDefault();
+        }}
+      >
         {/* Mounted only while open, so it starts on today each time and costs
             nothing while closed. */}
         <CalendarBody
@@ -157,6 +175,7 @@ export function QueueCalendar({
           onEdit={onEdit}
           onAddSchedule={onAddSchedule}
           onChanged={onChanged}
+          onEscape={onEscape}
         />
       </DialogContent>
     </Dialog>
@@ -168,11 +187,14 @@ function CalendarBody({
   onEdit,
   onAddSchedule,
   onChanged,
+  onEscape,
 }: {
   publishing: boolean;
   onEdit: (target: QueueEditTarget) => void;
   onAddSchedule: () => void;
   onChanged: () => Promise<unknown>;
+  /** Set to a handler that takes Escape, returning whether it did. */
+  onEscape: React.RefObject<(() => boolean) | null>;
 }) {
   const todayKey = dayKey(new Date());
   const [month, setMonth] = useState<Month>(() => monthOf(new Date()));
@@ -192,6 +214,7 @@ function CalendarBody({
   // --- Moving posts --------------------------------------------------------
 
   const [dragging, setDragging] = useState<Chip | null>(null);
+  const [picking, setPicking] = useState<Picking | null>(null);
   // A drop on its way to the server: the chip shows on its new day meanwhile.
   const [landing, setLanding] = useState<{ chipKey: string; day: string } | null>(null);
   const [flashing, setFlashing] = useState<Set<string>>(() => new Set());
@@ -210,11 +233,11 @@ function CalendarBody({
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  /** While dragging: the days it can land on, and each day's slots for it. */
-  const targets = useMemo(
-    () => (dragging ? targetsByDay(calendar.data?.slots ?? [], dragPlatforms(dragging)) : null),
-    [dragging, calendar.data],
-  );
+  /** While dragging or picking a day: the days it can land on, and each day's slots for it. */
+  const targets = useMemo(() => {
+    const platforms = dragging ? dragPlatforms(dragging) : picking?.platforms;
+    return platforms ? targetsByDay(calendar.data?.slots ?? [], platforms) : null;
+  }, [dragging, picking, calendar.data]);
 
   const flash = (itemIds: string[]) => {
     clearTimeout(flashTimer.current);
@@ -238,8 +261,79 @@ function CalendarBody({
 
     const platforms = dragPlatforms(chip);
     if (platforms.every((p) => slot.holders[p] === chip.itemId)) return; // already there
-    const title = chip.title ?? 'Untitled';
+    moveTo(chip, slot, platforms, day);
+  };
 
+  // --- Move to… (pick-a-day mode) -------------------------------------------
+
+  const pickBar = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  const startPicking = (picked: Picking) => {
+    setToast(null);
+    setPicking(picked);
+  };
+
+  // The row to hand focus back to once a cancelled pick has re-rendered.
+  const refocusRow = useRef<string | null>(null);
+  const cancelPicking = () => {
+    refocusRow.current = picking?.rowKey ?? null;
+    setPicking(null);
+  };
+  useEffect(() => {
+    const rowKey = refocusRow.current;
+    if (picking || rowKey === null) return;
+    refocusRow.current = null;
+    // Its Move to…, or the selected day if paging months took the row off the list.
+    const target =
+      document.querySelector<HTMLElement>(`[data-move-row="${CSS.escape(rowKey)}"]`) ??
+      gridRef.current?.querySelector<HTMLElement>('button[aria-pressed="true"]');
+    target?.focus();
+  }, [picking]);
+
+  useEffect(() => {
+    onEscape.current = picking
+      ? () => {
+          cancelPicking();
+          return true;
+        }
+      : null;
+    return () => {
+      onEscape.current = null;
+    };
+  });
+
+  // Entering pick-a-day mode: bring the instructions into view (the day list
+  // sits below the grid on a phone) and focus the first day that takes it.
+  useEffect(() => {
+    if (!picking) return;
+    pickBar.current?.scrollIntoView({ block: 'nearest' });
+    const first = gridRef.current?.querySelector<HTMLElement>('[data-pick-target]');
+    (first ?? pickBar.current?.querySelector('button'))?.focus({ preventScroll: true });
+  }, [picking]);
+
+  /** Picking a day: the same move as a drop on that day's empty space. */
+  const pickDay = (date: Date) => {
+    if (!picking || !targets) return;
+    const day = dayKey(date);
+    const slot = targets.get(day)?.[0];
+    if (!slot) return;
+    const { chip, platforms } = picking;
+    setPicking(null);
+    setSelected(date);
+    if (platforms.every((p) => slot.holders[p] === chip.itemId)) {
+      setToast({
+        kind: 'info',
+        text: `'${chip.title ?? 'Untitled'}' already posts on ${formatShortDay(slot.at)}.`,
+      });
+      return;
+    }
+    moveTo(chip, slot, platforms, day);
+  };
+
+  /** Move `chip`'s video so `platforms` take `slot`, showing it on `day` meanwhile. */
+  const moveTo = (chip: Chip, slot: Slot, platforms: Platform[], day: string) => {
+    const title = chip.title ?? 'Untitled';
     setToast(null);
     setLanding({ chipKey: chip.key, day });
     moveToSlot.mutate(
@@ -249,7 +343,10 @@ function CalendarBody({
           await onChanged();
           setLanding(null);
           flash(res.shiftedItemIds);
-          const where = res.landedAt ? formatShortDay(res.landedAt) : null;
+          // A landing past the live plan (or in a paused queue) is an estimate.
+          const where = res.landedAt
+            ? `${formatShortDay(res.landedAt)}${res.projected ? ' (projected)' : ''}`
+            : null;
           const shifted =
             res.shifted > 0
               ? ` · ${res.shifted} ${res.shifted === 1 ? 'post' : 'posts'} shifted`
@@ -357,7 +454,7 @@ function CalendarBody({
           <p className="bg-muted text-muted-foreground mb-4 flex items-center gap-2 rounded-md px-3 py-2 text-sm">
             <Pause className="h-3.5 w-3.5 shrink-0" aria-hidden />
             Your queue is paused. Nothing new posts until you resume it — projected posts show what
-            would go out if you resumed now.
+            would go out if you resumed now. You can rearrange them before you resume.
           </p>
         ) : null}
         {!hasSchedule ? (
@@ -372,7 +469,28 @@ function CalendarBody({
         ) : null}
 
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem] lg:gap-6">
-          <div className="min-w-0">
+          <div className="min-w-0" ref={gridRef}>
+            {picking ? (
+              <div
+                ref={pickBar}
+                role="status"
+                className="bg-primary/10 ring-primary/40 mb-3 flex scroll-mt-4 flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-md px-3 py-2 text-sm ring-1"
+              >
+                <p className="min-w-0">
+                  Pick a day for{' '}
+                  <span className="font-medium">&lsquo;{picking.chip.title ?? 'Untitled'}&rsquo;</span>{' '}
+                  on {platformList(picking.platforms)}.{' '}
+                  <span className="text-muted-foreground">
+                    {targets && targets.size > 0
+                      ? 'Highlighted days have a slot for it.'
+                      : 'No day this month has a slot for it — try another month.'}
+                  </span>
+                </p>
+                <Button size="sm" variant="outline" className="h-8" onClick={cancelPicking}>
+                  Cancel
+                </Button>
+              </div>
+            ) : null}
             <DndContext
               sensors={sensors}
               collisionDetection={chipsFirst}
@@ -390,7 +508,9 @@ function CalendarBody({
                 loading={calendar.isLoading}
                 onEdit={edit}
                 targets={targets}
-                canDrag={!busy}
+                picking={picking !== null}
+                onPick={pickDay}
+                canDrag={!busy && !picking}
                 flashing={flashing}
               />
               {/* The dialog is centred with a transform, which would offset a
@@ -416,6 +536,10 @@ function CalendarBody({
             chips={chipsByDay.get(selectedKey) ?? []}
             loading={calendar.isLoading}
             onEdit={edit}
+            pickingRow={picking?.rowKey ?? null}
+            canMove={!busy}
+            onMove={startPicking}
+            onCancelMove={cancelPicking}
           />
         </div>
       </div>
@@ -470,6 +594,8 @@ function MonthGrid({
   loading,
   onEdit,
   targets,
+  picking,
+  onPick,
   canDrag,
   flashing,
 }: {
@@ -481,8 +607,11 @@ function MonthGrid({
   chipsByDay: Map<string, Chip[]>;
   loading: boolean;
   onEdit: (chip: Chip) => void;
-  /** While dragging, the days that take the drop; null otherwise. */
+  /** While dragging or picking a day, the days that take the post; null otherwise. */
   targets: Map<string, Slot[]> | null;
+  /** Pick-a-day mode: a day click picks it instead of selecting it. */
+  picking: boolean;
+  onPick: (day: Date) => void;
   canDrag: boolean;
   /** Items a move just shifted. */
   flashing: Set<string>;
@@ -517,6 +646,8 @@ function MonthGrid({
               onSelect={onSelect}
               onEdit={onEdit}
               dropSlots={targets ? (targets.get(key) ?? []) : null}
+              picking={picking}
+              onPick={onPick}
               canDrag={canDrag}
               flashing={flashing}
             />
@@ -545,6 +676,8 @@ function DayCell({
   onSelect,
   onEdit,
   dropSlots,
+  picking,
+  onPick,
   canDrag,
   flashing,
 }: {
@@ -557,8 +690,13 @@ function DayCell({
   isSelected: boolean;
   onSelect: (day: Date) => void;
   onEdit: (chip: Chip) => void;
-  /** During a drag, this day's slots that take it (none: an invalid day); null otherwise. */
+  /**
+   * During a drag or a day pick, this day's slots that take it (none: an
+   * invalid day); null otherwise.
+   */
   dropSlots: Slot[] | null;
+  picking: boolean;
+  onPick: (day: Date) => void;
   canDrag: boolean;
   flashing: Set<string>;
 }) {
@@ -567,16 +705,25 @@ function DayCell({
   /** A chip takes the drop itself only when its own slot fits; otherwise the day does. */
   const slotFits = (chip: Chip) =>
     dropSlots?.some((s) => chip.posts.some((p) => p.at.getTime() === s.at.getTime())) ?? false;
+  /** A click on the day: picks it in pick-a-day mode (if it takes the post), else selects it. */
+  const choose = () => {
+    if (!picking) onSelect(date);
+    else if (drop === 'valid') onPick(date);
+  };
   const label = formatLongDay(date);
+  const count =
+    chips.length === 0 ? 'no posts' : `${chips.length} ${chips.length === 1 ? 'post' : 'posts'}`;
   return (
     <div
       ref={setNodeRef}
-      onClick={() => onSelect(date)}
+      onClick={choose}
       className={cn(
-        'border-line relative flex min-h-14 cursor-pointer flex-col gap-1 border-b border-r p-1 transition-[opacity,background-color] sm:min-h-[6.75rem] sm:p-1.5',
+        'border-line relative flex min-h-14 flex-col gap-1 border-b border-r p-1 transition-[opacity,background-color] sm:min-h-[6.75rem] sm:p-1.5',
+        picking && drop !== 'valid' ? 'cursor-not-allowed' : 'cursor-pointer',
         isPast && 'bg-muted/50',
-        isSelected && 'ring-foreground/60 ring-2 ring-inset',
-        drop === 'valid' && (isOver ? 'bg-primary/30' : 'bg-primary/10'),
+        isSelected && !picking && 'ring-foreground/60 ring-2 ring-inset',
+        drop === 'valid' &&
+          (isOver ? 'bg-primary/30' : picking ? 'bg-primary/10 hover:bg-primary/25' : 'bg-primary/10'),
         drop === 'invalid' && 'opacity-40',
       )}
     >
@@ -584,10 +731,13 @@ function DayCell({
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          onSelect(date);
+          choose();
         }}
-        aria-label={`${label}, ${chips.length === 0 ? 'no posts' : `${chips.length} ${chips.length === 1 ? 'post' : 'posts'}`}`}
-        aria-pressed={isSelected}
+        // Pick-a-day mode: only the days that take the post are reachable.
+        disabled={picking && drop !== 'valid'}
+        data-pick-target={picking && drop === 'valid' ? '' : undefined}
+        aria-label={picking ? `Move here: ${label}, ${count}` : `${label}, ${count}`}
+        aria-pressed={picking ? undefined : isSelected}
         className={cn(
           'focus-visible:ring-ring mx-auto flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums focus-visible:outline-none focus-visible:ring-2 sm:mx-0',
           isToday
@@ -600,13 +750,21 @@ function DayCell({
         {date.getDate()}
       </button>
 
-      {/* Chips from sm up… */}
-      <div className={cn('hidden min-w-0 flex-col gap-1 sm:flex', outside && 'opacity-50')}>
+      {/* Chips from sm up… While picking a day, a click anywhere in it picks
+          the day, so its chips step aside. */}
+      <div
+        inert={picking}
+        className={cn(
+          'hidden min-w-0 flex-col gap-1 sm:flex',
+          outside && 'opacity-50',
+          picking && 'pointer-events-none',
+        )}
+      >
         {chips.slice(0, CELL_CHIPS).map((chip) => (
           <CalendarChip
             key={chip.key}
             chip={chip}
-            draggable={canDrag && isDraggable(chip)}
+            draggable={canDrag && chip.movable}
             dropTarget={slotFits(chip)}
             // Only its posts still to come can have shifted.
             flashing={flashing.has(chip.itemId) && isUpcoming(chip.state)}
@@ -896,11 +1054,22 @@ function DayList({
   chips,
   loading,
   onEdit,
+  pickingRow,
+  canMove,
+  onMove,
+  onCancelMove,
 }: {
   day: Date;
   chips: Chip[];
   loading: boolean;
   onEdit: (chip: Chip) => void;
+  /** The row whose Move to… is picking a day, if any. */
+  pickingRow: string | null;
+  /** No move is in progress, so Move to… can start one. */
+  canMove: boolean;
+  onMove: (picking: Picking) => void;
+  /** Its Move to… again: a toggle, so it backs out. */
+  onCancelMove: () => void;
 }) {
   const heading = formatLongDay(day);
   const rows = chips
@@ -932,13 +1101,13 @@ function DayList({
               </>
             );
             return (
-              <li key={row.key}>
+              <li key={row.key} className={cn(rowMovable(row) && 'flex items-center gap-1')}>
                 {isUpcoming(row.state) ? (
                   <button
                     type="button"
                     onClick={() => onEdit(row.chip)}
                     title="Edit details"
-                    className={DAY_ROW_BUTTON}
+                    className={cn(DAY_ROW_BUTTON, 'min-w-0')}
                   >
                     {body}
                   </button>
@@ -953,6 +1122,30 @@ function DayList({
                 ) : (
                   <div className="flex items-center gap-3 px-1.5 py-2">{body}</div>
                 )}
+                {rowMovable(row) ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={!canMove}
+                    aria-pressed={pickingRow === row.key}
+                    data-move-row={row.key}
+                    onClick={() =>
+                      pickingRow === row.key
+                        ? onCancelMove()
+                        : onMove({ chip: row.chip, platforms: row.platforms, rowKey: row.key })
+                    }
+                    className={cn(
+                      'h-8 shrink-0 px-2 text-xs',
+                      pickingRow === row.key && 'bg-primary/15 hover:bg-primary/25',
+                    )}
+                  >
+                    Move to…
+                    <span className="sr-only">
+                      {' '}
+                      {row.chip.title ?? 'Untitled'}, {formatTime(row.at)}
+                    </span>
+                  </Button>
+                ) : null}
               </li>
             );
           })}

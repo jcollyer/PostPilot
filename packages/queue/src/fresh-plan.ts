@@ -1,4 +1,4 @@
-import type { Platform } from '@postpilot/db';
+import type { Platform, QueueStatus } from '@postpilot/db';
 
 import { planSlots, type PlanItem, type SlotAssignment } from './planner';
 import { planItemOf } from './scheduler';
@@ -159,6 +159,19 @@ export function heldSlots(
     }
   }
   return [...byTime.values()];
+}
+
+/**
+ * The slot times `recomputeSchedule` materializes (its own horizon and cap),
+ * so anything else is projected. A paused queue materializes none.
+ */
+export function liveSlotTimes(
+  status: QueueStatus,
+  schedules: ScheduleRule[],
+  now: Date,
+): Set<number> {
+  if (status === 'PAUSED') return new Set();
+  return new Set(generateSlots(schedules, now).map((s) => s.at.getTime()));
 }
 
 export const DAY_MS = 86_400_000;
