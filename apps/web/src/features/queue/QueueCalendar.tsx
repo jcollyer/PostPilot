@@ -123,14 +123,12 @@ type Toast =
 
 /**
  * A Move to… in progress (pick-a-day mode): the post, the platforms its day-list
- * row places, that row, and the button that started it, to hand focus back on
- * Cancel.
+ * row places, and that row, whose Move to… gets focus back on Cancel.
  */
 interface Picking {
   chip: Chip;
   platforms: Platform[];
   rowKey: string;
-  trigger: HTMLElement | null;
 }
 
 /** Can this day-list row be moved? Published and in-flight rows are fixed. */
@@ -276,11 +274,22 @@ function CalendarBody({
     setPicking(picked);
   };
 
+  // The row to hand focus back to once a cancelled pick has re-rendered.
+  const refocusRow = useRef<string | null>(null);
   const cancelPicking = () => {
-    const trigger = picking?.trigger;
+    refocusRow.current = picking?.rowKey ?? null;
     setPicking(null);
-    if (trigger?.isConnected) trigger.focus();
   };
+  useEffect(() => {
+    const rowKey = refocusRow.current;
+    if (picking || rowKey === null) return;
+    refocusRow.current = null;
+    // Its Move to…, or the selected day if paging months took the row off the list.
+    const target =
+      document.querySelector<HTMLElement>(`[data-move-row="${CSS.escape(rowKey)}"]`) ??
+      gridRef.current?.querySelector<HTMLElement>('button[aria-pressed="true"]');
+    target?.focus();
+  }, [picking]);
 
   useEffect(() => {
     onEscape.current = picking
@@ -530,6 +539,7 @@ function CalendarBody({
             pickingRow={picking?.rowKey ?? null}
             canMove={!busy}
             onMove={startPicking}
+            onCancelMove={cancelPicking}
           />
         </div>
       </div>
@@ -1047,6 +1057,7 @@ function DayList({
   pickingRow,
   canMove,
   onMove,
+  onCancelMove,
 }: {
   day: Date;
   chips: Chip[];
@@ -1057,6 +1068,8 @@ function DayList({
   /** No move is in progress, so Move to… can start one. */
   canMove: boolean;
   onMove: (picking: Picking) => void;
+  /** Its Move to… again: a toggle, so it backs out. */
+  onCancelMove: () => void;
 }) {
   const heading = formatLongDay(day);
   const rows = chips
@@ -1115,13 +1128,11 @@ function DayList({
                     variant="ghost"
                     disabled={!canMove}
                     aria-pressed={pickingRow === row.key}
-                    onClick={(e) =>
-                      onMove({
-                        chip: row.chip,
-                        platforms: row.platforms,
-                        rowKey: row.key,
-                        trigger: e.currentTarget,
-                      })
+                    data-move-row={row.key}
+                    onClick={() =>
+                      pickingRow === row.key
+                        ? onCancelMove()
+                        : onMove({ chip: row.chip, platforms: row.platforms, rowKey: row.key })
                     }
                     className={cn(
                       'h-8 shrink-0 px-2 text-xs',
