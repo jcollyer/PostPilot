@@ -74,6 +74,13 @@ export async function persistMetadata(
     [Platform.YOUTUBE, metadata.platforms.YOUTUBE],
   ];
 
+  // New TikTok rows start with comments set from the user's Settings default.
+  const owner = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tiktokAllowCommentsDefault: true },
+  });
+  const tiktokAllowComment = owner?.tiktokAllowCommentsDefault ?? false;
+
   for (const [platform, meta] of platforms) {
     const existing = await prisma.videoPlatformMeta.findUnique({
       where: { videoId_platform: { videoId, platform } },
@@ -91,6 +98,7 @@ export async function persistMetadata(
         hashtags: meta.hashtags,
         aiGenerated: true,
         edited: false,
+        ...(platform === Platform.TIKTOK ? { tiktokAllowComment } : {}),
       },
       update: {
         title: meta.title || null,

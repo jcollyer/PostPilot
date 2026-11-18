@@ -172,9 +172,30 @@ export async function hasActiveTikTok(prisma: PrismaClient, userId: string): Pro
   return Boolean(conn);
 }
 
-/** Map a stored TikTok platform-meta row (or none) to the shared options shape. */
-function tiktokOptionsFromMeta(meta: PlatformMetaRecord | undefined): TikTokPostOptions {
-  if (!meta) return { ...DEFAULT_TIKTOK_OPTIONS };
+/**
+ * The comment setting a video's TikTok options start with when it has no
+ * TikTok row yet: the user's Settings default (off unless they opted in).
+ */
+export async function tiktokAllowCommentDefault(
+  prisma: PrismaClient,
+  userId: string,
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { tiktokAllowCommentsDefault: true },
+  });
+  return user?.tiktokAllowCommentsDefault ?? false;
+}
+
+/**
+ * Map a stored TikTok platform-meta row (or none) to the shared options shape.
+ * With no row, comments start from `allowCommentDefault` (the user's setting).
+ */
+function tiktokOptionsFromMeta(
+  meta: PlatformMetaRecord | undefined,
+  allowCommentDefault = false,
+): TikTokPostOptions {
+  if (!meta) return { ...DEFAULT_TIKTOK_OPTIONS, allowComment: allowCommentDefault };
   return {
     privacy: (meta.tiktokPrivacy as TikTokPrivacyLevel | null) ?? null,
     allowComment: meta.tiktokAllowComment,
@@ -972,7 +993,10 @@ export const mediaRouter = router({
       // Whether TikTok is connected at all (drives whether the editor enforces
       // TikTok requirements) and the current stored TikTok options.
       tiktokConnected,
-      tiktok: tiktokOptionsFromMeta(tiktokMeta),
+      tiktok: tiktokOptionsFromMeta(
+        tiktokMeta,
+        tiktokMeta ? false : await tiktokAllowCommentDefault(ctx.prisma, ctx.userId),
+      ),
       platformMeta: video.platformMeta.map((m) => ({
         platform: m.platform,
         title: m.title,
@@ -1271,9 +1295,20 @@ export const mediaRouter = router({
           : {}),
         ...(input.license !== undefined ? { youtubeLicense: input.license } : {}),
       };
+      // A TikTok row created here starts with the user's comment default.
+      const tiktokCreate =
+        input.platform === Platform.TIKTOK
+          ? { tiktokAllowComment: await tiktokAllowCommentDefault(ctx.prisma, ctx.userId) }
+          : {};
       await ctx.prisma.videoPlatformMeta.upsert({
         where: { videoId_platform: { videoId: input.videoId, platform: input.platform } },
-        create: { videoId: input.videoId, platform: input.platform, aiGenerated: false, ...data },
+        create: {
+          videoId: input.videoId,
+          platform: input.platform,
+          aiGenerated: false,
+          ...tiktokCreate,
+          ...data,
+        },
         update: data,
       });
       return { success: true as const };
@@ -1374,8 +1409,9 @@ export const mediaRouter = router({
       });
 
       // Upsert per video: existing TikTok rows only get the new privacy; missing
-      // rows are created with privacy set and the interaction toggles left at
-      // their DB defaults (all false).
+      // rows are created with privacy set, comments from the user's default,
+      // and duet/stitch at their DB defaults (off).
+      const allowComment = await tiktokAllowCommentDefault(ctx.prisma, ctx.userId);
       await ctx.prisma.$transaction(
         owned.map((v) =>
           ctx.prisma.videoPlatformMeta.upsert({
@@ -1386,6 +1422,7 @@ export const mediaRouter = router({
               aiGenerated: false,
               hashtags: [],
               tiktokPrivacy: input.privacy,
+              tiktokAllowComment: allowComment,
               edited: true,
             },
             update: { tiktokPrivacy: input.privacy, edited: true },

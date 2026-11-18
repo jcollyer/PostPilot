@@ -34,6 +34,16 @@ export const updateStorageSettingsSchema = z.object({
 export type UpdateStorageSettingsInput = z.infer<typeof updateStorageSettingsSchema>;
 
 /**
+ * Payload for the signed-in user's TikTok posting defaults. Turning comments
+ * on makes newly created TikTok options start with comments allowed; videos
+ * that already have TikTok options keep them.
+ */
+export const updateTiktokDefaultsSchema = z.object({
+  tiktokAllowCommentsDefault: z.boolean(),
+});
+export type UpdateTiktokDefaultsInput = z.infer<typeof updateTiktokDefaultsSchema>;
+
+/**
  * Full-replace payload for the signed-in user's CreatorProfile — explicit
  * voice/context instructions injected into every AI metadata generation run
  * (see @postpilot/ai-pipeline's steps/metadata.ts). Every field is nullable

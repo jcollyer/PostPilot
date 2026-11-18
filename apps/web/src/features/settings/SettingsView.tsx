@@ -17,6 +17,7 @@ import { CreatorProfileSettings } from './CreatorProfileSettings';
 import { DeleteAccountDialog } from './DeleteAccountDialog';
 import { NotificationsSettings } from './NotificationsSettings';
 import { StorageSettings } from './StorageSettings';
+import { TikTokDefaultsSettings } from './TikTokDefaultsSettings';
 import { signOutAfterAccountDelete } from './actions';
 
 /**
@@ -184,6 +185,16 @@ export function SettingsView() {
           <Button variant="outline" asChild>
             <Link href="/settings/connections">Manage platform connections</Link>
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card id="tiktok" className="scroll-mt-20">
+        <CardHeader>
+          <CardTitle>TikTok</CardTitle>
+          <CardDescription>Defaults for the TikTok options on new videos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TikTokDefaultsSettings />
         </CardContent>
       </Card>
 
