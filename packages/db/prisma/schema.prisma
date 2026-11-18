@@ -49,6 +49,12 @@ model User {
   // onboarding); older accounts keep whatever they had. Always the user's to
   // change in Settings.
   deleteSourceAfterPublish     Boolean   @default(true)
+  // Whether a video's TikTok options start with comments allowed. TikTok's
+  // Direct Post guidelines say interactions must not be pre-checked on the
+  // user's behalf, so this is off until the user turns it on in Settings —
+  // that's them opting in once instead of per video. Only seeds TikTok rows
+  // created after it's set; existing videos keep what they have.
+  tiktokAllowCommentsDefault   Boolean   @default(false)
   // When the creator-profile onboarding modal was completed or explicitly
   // skipped. Null means "never shown a decision" — the modal keeps
   // appearing. Set on both save and skip, so it's a dismissal marker, not a

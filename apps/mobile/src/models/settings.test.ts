@@ -83,6 +83,7 @@ function input(overrides: Partial<SettingsInput> = {}): SettingsInput {
       image: null,
       createdAt: new Date('2026-09-01T12:00:00Z'),
       deleteSourceAfterPublish: false,
+      tiktokAllowCommentsDefault: false,
     },
     connections: [conn('TIKTOK', 'ACTIVE'), conn('INSTAGRAM', 'ACTIVE'), conn('YOUTUBE', 'ACTIVE')],
     billing: billing(),

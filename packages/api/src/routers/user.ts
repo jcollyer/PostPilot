@@ -5,6 +5,7 @@ import {
   deleteAccountSchema,
   updateProfileSchema,
   updateStorageSettingsSchema,
+  updateTiktokDefaultsSchema,
 } from '@postpilot/types';
 
 import { pendingDeletionProcedure, protectedProcedure, publicProcedure, router } from '../trpc';
@@ -16,6 +17,7 @@ const userSelect = {
   image: true,
   createdAt: true,
   deleteSourceAfterPublish: true,
+  tiktokAllowCommentsDefault: true,
 } as const;
 
 export const userRouter = router({
@@ -56,6 +58,20 @@ export const userRouter = router({
       ctx.prisma.user.update({
         where: { id: ctx.userId },
         data: { deleteSourceAfterPublish: input.deleteSourceAfterPublish },
+        select: userSelect,
+      }),
+    ),
+
+  /**
+   * Update the signed-in user's TikTok posting defaults. Only affects TikTok
+   * options created afterwards (see User.tiktokAllowCommentsDefault).
+   */
+  updateTiktokDefaults: protectedProcedure
+    .input(updateTiktokDefaultsSchema)
+    .mutation(({ ctx, input }) =>
+      ctx.prisma.user.update({
+        where: { id: ctx.userId },
+        data: { tiktokAllowCommentsDefault: input.tiktokAllowCommentsDefault },
         select: userSelect,
       }),
     ),
