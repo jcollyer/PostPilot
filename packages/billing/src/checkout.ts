@@ -132,7 +132,14 @@ export async function createCheckoutSession(params: CheckoutParams): Promise<str
     cancel_url: `${base}${params.cancelPath ?? '/settings?checkout=canceled'}#billing`,
     // Lets Stripe collect the address it needs for tax where applicable.
     billing_address_collection: 'auto',
+    // Promotion codes double as comp plans for friends and family: a 100%-off
+    // code with duration "forever" makes the subscription free for good.
     allow_promotion_codes: true,
+    // So a $0 checkout (that comp code) doesn't ask for a card. A paid checkout
+    // still requires one. Pair this only with "forever" codes: when a "once" or
+    // "repeating" discount runs out, a cardless subscription has nothing to
+    // charge, goes past_due, and is cancelled when retries run out.
+    payment_method_collection: 'if_required',
   });
 
   if (!session.url) throw new Error('Stripe did not return a Checkout URL.');

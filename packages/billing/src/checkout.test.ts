@@ -7,6 +7,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  */
 
 const list = vi.fn();
+const createSession = vi.fn();
 const findUnique = vi.fn();
 
 vi.mock('@postpilot/db', () => ({
@@ -17,11 +18,17 @@ vi.mock('./config', async () => {
   const actual = await vi.importActual<typeof import('./config')>('./config');
   return {
     ...actual,
-    getStripe: () => ({ subscriptions: { list: (params: unknown) => list(params) } }),
+    getStripe: () => ({
+      subscriptions: { list: (params: unknown) => list(params) },
+      checkout: { sessions: { create: (params: unknown) => createSession(params) } },
+    }),
+    priceIdFor: () => 'price_test',
   };
 });
 
-const { hasLiveSubscription, isLiveSubscriptionStatus } = await import('./checkout');
+const { createCheckoutSession, hasLiveSubscription, isLiveSubscriptionStatus } = await import(
+  './checkout'
+);
 
 /** A page of subscriptions with these statuses, as subscriptions.list returns it. */
 function page(...statuses: string[]) {
@@ -32,6 +39,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   findUnique.mockResolvedValue({ stripeCustomerId: 'cus_1' });
   list.mockResolvedValue(page());
+  createSession.mockResolvedValue({ url: 'https://checkout.stripe.test/s' });
 });
 
 describe('hasLiveSubscription', () => {
@@ -67,5 +75,22 @@ describe('isLiveSubscriptionStatus', () => {
   it('treats a missing stored status as no subscription', () => {
     expect(isLiveSubscriptionStatus(null)).toBe(false);
     expect(isLiveSubscriptionStatus(undefined)).toBe(false);
+  });
+});
+
+describe('createCheckoutSession', () => {
+  // Friends and family get a 100%-off promotion code; entering it must leave a
+  // $0 checkout that doesn't stop them for a card.
+  it('accepts promotion codes and only asks for a card when there is something to pay', async () => {
+    expect(await createCheckoutSession({ userId: 'u1', plan: 'CREATOR', period: 'monthly' })).toBe(
+      'https://checkout.stripe.test/s',
+    );
+    expect(createSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: 'cus_1',
+        allow_promotion_codes: true,
+        payment_method_collection: 'if_required',
+      }),
+    );
   });
 });
