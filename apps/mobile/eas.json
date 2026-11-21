@@ -11,13 +11,13 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.42:3000"
+        "EXPO_PUBLIC_API_URL": "https://post-pilot.app"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://your-domain.com"
+        "EXPO_PUBLIC_API_URL": "https://post-pilot.app"
       }
     }
   }
