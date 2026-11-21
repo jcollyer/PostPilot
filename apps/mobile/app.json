@@ -7,7 +7,6 @@
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
     "scheme": "postpilot",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.postpilot.app",
@@ -30,7 +29,17 @@
       "expo-secure-store",
       "expo-web-browser",
       "./plugins/withPodDeploymentTarget",
-      "expo-video"
+      "expo-video",
+      "expo-image",
+      "expo-status-bar",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
@@ -38,7 +47,11 @@
     "extra": {
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "35221249-ca38-40fb-8485-d162260f2e2b"
       }
-    }
+    },
+    "owner": "jcollyer"
   }
 }
